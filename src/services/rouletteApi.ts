@@ -1,4 +1,4 @@
-import { RouletteSpin, RouletteHistoryResponse } from "../types";
+import { RouletteHistoryResponse } from "../types";
 
 const API_BASE = "https://sortenabet.bet.br";
 

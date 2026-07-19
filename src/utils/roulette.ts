@@ -82,7 +82,7 @@ export const STRATEGIES: Strategy[] = [
   { id: "paroli", name: "Paroli", assertiveness: 70, color: "#10b981", description: "Dobrar após vitória" },
 ];
 
-export function generateAISignal(history: number[]): Signal {
+export function generateAISignal(_history: number[]): Signal {
   const strategy = STRATEGIES[Math.floor(Math.random() * STRATEGIES.length)];
   const numbers = Array.from({ length: 3 }, () => Math.floor(Math.random() * 37));
   const assertiveness = 60 + Math.floor(Math.random() * 35);

@@ -1,9 +1,17 @@
 import CryptoJS from 'crypto-js';
 
+// ========== CONFIGURAÇÕES ==========
 const SITE_KEY = "0x4AAAAAAADmr68KUqpnEKo-9";
 const SECRET_KEY = "0x4AAAAAAADmr62kWZNpTLxzKtYOYbpw7wzY";
-const API_BASE = "https://sortenabet.bet.br";
 
+// Detectar ambiente para usar proxy ou URL direta
+const API_BASE = window.location.hostname === 'localhost' || 
+                 window.location.hostname.includes('trycloudflare.com') || 
+                 window.location.hostname.includes('ngrok.io')
+  ? '' // Usa o proxy do Vite (relativo)
+  : 'https://sortenabet.bet.br';
+
+// ========== TIPOS ==========
 export interface LoginResponse {
   access_token: string;
   token_type: string;
@@ -33,6 +41,7 @@ export interface JogoInfo {
   emoji: string;
 }
 
+// ========== LISTA DE JOGOS ==========
 export const JOGOS: Record<string, JogoInfo> = {
   aviator: {
     id: "aviator",
@@ -71,6 +80,7 @@ export const JOGOS: Record<string, JogoInfo> = {
   }
 };
 
+// ========== GERADOR DE TOKEN TURNSTILE ==========
 export class TurnstileTokenGenerator {
   private siteKey: string;
   private secretKey: string;
@@ -113,13 +123,14 @@ export class TurnstileTokenGenerator {
   }
 }
 
+// ========== CLIENTE API ==========
 class ApiClient {
   private baseUrl: string;
   private accessToken: string | null = null;
   private captchaToken: string | null = null;
 
   constructor() {
-    this.baseUrl = API_BASE;
+    this.baseUrl = API_BASE || 'https://sortenabet.bet.br';
     this.accessToken = localStorage.getItem('access_token');
   }
 
@@ -159,7 +170,8 @@ class ApiClient {
       captcha_token: this.captchaToken
     };
 
-    const response = await fetch(`${this.baseUrl}/api/auth/login`, {
+    const url = `${this.baseUrl}/api/auth/login`;
+    const response = await fetch(url, {
       method: 'POST',
       headers: this.getHeaders(false),
       body: JSON.stringify(payload)
@@ -187,13 +199,11 @@ class ApiClient {
     }
 
     try {
-      const response = await fetch(
-        `${this.baseUrl}/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`,
-        {
-          method: 'GET',
-          headers: this.getHeaders(true)
-        }
-      );
+      const url = `${this.baseUrl}/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.getHeaders(true)
+      });
 
       if (!response.ok) {
         return null;
@@ -244,4 +254,6 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient();
+
+// ========== RE-EXPORT ==========
 export { rouletteApi } from './rouletteApi';
