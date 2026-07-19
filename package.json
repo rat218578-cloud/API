@@ -1,0 +1,33 @@
+{
+  "name": "qa-ai-app",
+  "version": "1.0.0",
+  "description": "Análise inteligente para jogos de cassino",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "start": "vite preview --host 0.0.0.0 --port 3000"
+  },
+  "dependencies": {
+    "clsx": "2.1.1",
+    "crypto-js": "^4.2.0",
+    "lucide-react": "^1.24.0",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "recharts": "^3.9.2",
+    "tailwind-merge": "3.4.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.1.17",
+    "@types/crypto-js": "^4.2.2",
+    "@types/node": "22.19.17",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "5.1.1",
+    "tailwindcss": "4.1.17",
+    "typescript": "5.9.3",
+    "vite": "7.3.2",
+    "vite-plugin-singlefile": "2.3.0"
+  }
+}
