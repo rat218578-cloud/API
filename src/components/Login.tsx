@@ -3,6 +3,9 @@ import {
   Sparkles, Mail, Lock, Eye, EyeOff, Shield, Chrome, Github, User, AlertCircle
 } from 'lucide-react';
 
+// NOTA: Se Chrome e Github não existirem, use alternativas:
+// Chrome -> Globe, Github -> Code
+
 interface LoginProps {
   onLogin: (loginValue: string, password: string) => Promise<boolean>;
   loading?: boolean;

@@ -7,7 +7,7 @@ interface SignalGeneratorProps {
   history: number[];
 }
 
-export function SignalGenerator({ history: _history }: SignalGeneratorProps) {
+export function SignalGenerator({ history }: SignalGeneratorProps) {
   const [loading, setLoading] = useState(false);
   const [signals, setSignals] = useState<Signal[]>([]);
   const [activeTab, setActiveTab] = useState<"all" | "favorites">("all");
@@ -17,7 +17,7 @@ export function SignalGenerator({ history: _history }: SignalGeneratorProps) {
     setTimeout(() => {
       const newSignals: Signal[] = [];
       for (let i = 0; i < 3; i++) {
-        newSignals.push(generateAISignal());
+        newSignals.push(generateAISignal(history)); // <-- PASSA history
       }
       setSignals((prev) => [...newSignals, ...prev].slice(0, 10));
       setLoading(false);
