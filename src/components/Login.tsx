@@ -6,7 +6,7 @@ import {
   Eye,
   EyeOff,
   Shield,
-  Chrome,
+  Globe,
   Github,
   User,
   AlertCircle
@@ -243,7 +243,7 @@ export function Login({ onLogin, loading: externalLoading, error: externalError 
 
           <div className="grid grid-cols-2 gap-3">
             <button className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-bg-tertiary border border-border-default text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors">
-              <Chrome className="w-4 h-4" />
+              <Globe className="w-4 h-4" />
               <span className="text-sm">Google</span>
             </button>
             <button className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-bg-tertiary border border-border-default text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors">
