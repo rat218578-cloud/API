@@ -5,7 +5,6 @@ import { ROLETAS } from "../services/gameLinkService";
 import {
   STRATEGIES,
   getNumberInfo,
-  calculateDistribution,
   getColorClass,
   generateRandomHistory,
   sanitizeHistory
