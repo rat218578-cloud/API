@@ -7,7 +7,7 @@ import {
   EyeOff,
   Shield,
   Globe,
-  Github,
+  GitBranch,
   User,
   AlertCircle
 } from 'lucide-react';
@@ -247,7 +247,7 @@ export function Login({ onLogin, loading: externalLoading, error: externalError 
               <span className="text-sm">Google</span>
             </button>
             <button className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-bg-tertiary border border-border-default text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors">
-              <Github className="w-4 h-4" />
+              <GitBranch className="w-4 h-4" />
               <span className="text-sm">GitHub</span>
             </button>
           </div>
