@@ -27,9 +27,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const userData = apiClient.getUserData();
         if (userData && apiClient.isAuthenticated()) {
           setUser({
-            id: String(userData.id),
-            email: userData.email,
-            name: userData.name,
+            id: String(userData.id || '1'),
+            email: userData.email || '',
+            name: userData.name || 'Usuário',
             cpf: userData.cpf,
             plan: 'pro'
           });
@@ -79,15 +79,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const getGameLink = async (slug: string) => {
-    return apiClient.getGameLink(slug);
+    try {
+      return await apiClient.getGameLink(slug);
+    } catch (error) {
+      console.error('Erro ao obter link do jogo:', error);
+      return null;
+    }
   };
 
   const getAllGameLinks = async () => {
-    return apiClient.getAllGameLinks();
+    try {
+      return await apiClient.getAllGameLinks();
+    } catch (error) {
+      console.error('Erro ao obter links dos jogos:', error);
+      return {};
+    }
   };
 
   const refreshRouletteData = async (roomId: string, limit: number = 50) => {
-    return rouletteApi.getLiveRouletteHistory(roomId, limit);
+    try {
+      return await rouletteApi.getLiveRouletteHistory(roomId, limit);
+    } catch (error) {
+      console.error('Erro ao atualizar dados da roleta:', error);
+      return { spins: [], total: 0, room: roomId };
+    }
   };
 
   return (

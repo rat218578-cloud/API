@@ -1,4 +1,4 @@
-import { RouletteHistoryResponse } from "../types";
+import { RouletteSpin, RouletteHistoryResponse } from "../types";
 
 const API_BASE = "https://sortenabet.bet.br";
 
@@ -24,6 +24,11 @@ class RouletteApiService {
 
   async getLiveRouletteHistory(roomId: string = "brasileira", limit: number = 50): Promise<RouletteHistoryResponse> {
     try {
+      if (!this.accessToken) {
+        console.warn('Sem token de acesso para buscar histórico da roleta');
+        return { spins: [], total: 0, room: roomId };
+      }
+
       const roomSlugs: Record<string, string> = {
         "brasileira": "evolution/brasileira",
         "immersive": "evolution/immersive-roulette",
@@ -31,7 +36,7 @@ class RouletteApiService {
       };
 
       const slug = roomSlugs[roomId] || roomSlugs["brasileira"];
-      
+
       const response = await fetch(
         `${API_BASE}/api/roulette/history?slug=${slug}&limit=${limit}`,
         {
@@ -53,11 +58,7 @@ class RouletteApiService {
       };
     } catch (error) {
       console.error('Erro ao buscar histórico da roleta:', error);
-      return {
-        spins: [],
-        total: 0,
-        room: roomId
-      };
+      return { spins: [], total: 0, room: roomId };
     }
   }
 
