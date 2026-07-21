@@ -84,10 +84,18 @@ app.get('/api/roulette/history', async (req, res) => {
   }
 });
 
-app.get('/health', (req, res) => res.send('healthy'));
+// Health check
+app.get('/health', (req, res) => {
+  res.send('healthy');
+});
 
+// Servir arquivos estáticos (frontend)
 app.use(express.static('dist'));
-app.get('*', (req, res) => res.sendFile('index.html', { root: 'dist' }));
+
+// Fallback para SPA
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Proxy rodando na porta ${PORT}`);
