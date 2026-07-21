@@ -3,116 +3,110 @@ import { apiClient, rouletteApi } from "../services/api";
 import type { User } from "../types";
 
 interface AuthContextType {
-user: User | null;
-loading: boolean;
-error: string | null;
-login: (loginValue: string, password: string) => Promise<boolean>;
-logout: () => void;
-isAuthenticated: boolean;
-getGameLink: (slug: string) => Promise<string | null>;
-getGameLink: () => Promise<Record<string, string | null>>;
-refreshRouletteData: (roomId: string, limit?: number) => Promise<any>;
+  user: User | null;
+  loading: boolean;
+  error: string | null;
+  login: (loginValue: string, password: string) => Promise<boolean>;
+  logout: () => void;
+  isAuthenticated: boolean;
+  getGameLink: (slug: string) => Promise<string | null>;
+  refreshRouletteData: (roomId: string, limit?: number) => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-const [user, setUser] = useState<User | null>(null);
-const [loading, setLoading] = useState(true);
-const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-useEffect(() => {
-const checkAuth = async () => {
-try {
-const userData = apiClient.getUserData();
-if (userData && apiClient.isAuthenticated()) {
-setUser({
-id: String(userData.id),
-email: userData.email,
-name: userData.name,
-cpf: userData.cpf,
-plan: 'pro'
-});
-const token = localStorage.getItem('access_token');
-if (token) rouletteApi.setToken(token);
-}
-} catch (err) {
-console.error('Erro ao verificar autenticação:', err);
-} finally {
-setLoading(false);
-}
-};
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const userData = apiClient.getUserData();
+        if (userData && apiClient.isAuthenticated()) {
+          setUser({
+            id: String(userData.id),
+            email: userData.email,
+            name: userData.name,
+            cpf: userData.cpf,
+            plan: 'pro'
+          });
+          const token = localStorage.getItem('access_token');
+          if (token) rouletteApi.setToken(token);
+        }
+      } catch (err) {
+        console.error('Erro ao verificar autenticação:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-checkAuth();
-}, []);
+    checkAuth();
+  }, []);
 
-const login = async (loginValue: string, password: string): Promise<boolean> => {
-setLoading(true);
-setError(null);
+  const login = async (loginValue: string, password: string): Promise<boolean> => {
+    setLoading(true);
+    setError(null);
 
-try {
-const response = await apiClient.login(loginValue, password);
+    try {
+      const response = await apiClient.login(loginValue, password);
+      
+      setUser({
+        id: String(response.user.id),
+        email: response.user.email,
+        name: response.user.name,
+        cpf: response.user.cpf,
+        plan: 'pro'
+      });
 
-setUser({
-id: String(response.user.id),
-email: response.user.email,
-name: response.user.name,
-cpf: response.user.cpf,
-plan: 'pro'
-});
+      const token = localStorage.getItem('access_token');
+      if (token) rouletteApi.setToken(token);
 
-const token = localStorage.getItem('access_token');
-if (token) rouletteApi.setToken(token);
+      return true;
+    } catch (err: any) {
+      setError(err.message || 'Erro ao fazer login');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
 
-return true;
-} catch (err: any) {
-setError(err.message || 'Erro ao fazer login');
-return false;
-} finally {
-setLoading(false);
-}
-};
+  const logout = () => {
+    apiClient.logout();
+    setUser(null);
+  };
 
-const logout = () => {
-apiClient.logout();
-setUser(null);
-};
+  const getGameLink = async (slug: string) => {
+    return apiClient.getGameLink(slug);
+  };
 
-const getGameLink = async (slug: string) => {
-return apiClient.getGameLink(slug);
-};
+  const refreshRouletteData = async (roomId: string, limit: number = 50) => {
+    return rouletteApi.getLiveRouletteHistory(roomId, limit);
+  };
 
-const getGameLink = async () => {
-return apiClient.getGameLink();
-};
-
-const refreshRouletteData = async (roomId: string, limit: number = 50) => {
-return rouletteApi.getLiveRouletteHistory(roomId, limit);
-};
-
-return (
-<AuthContext.Provider
-value={{
-user,
-loading,
-error,
-login,
-logout,
-isAuthenticated: !!user && apiClient.isAuthenticated(),
-getGameLink,
-getGameLink,
-refreshRouletteData
-}}
->
-{children}
-</AuthContext.Provider>
-);
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        error,
+        login,
+        logout,
+        isAuthenticated: !!user && apiClient.isAuthenticated(),
+        getGameLink,
+        refreshRouletteData
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
-const context = useContext(AuthContext);
-if (context === undefined) {
-throw new Error("useAuth must be used within an AuthProvider");
-}
-return context;
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
 }
