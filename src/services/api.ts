@@ -3,7 +3,9 @@ import CryptoJS from 'crypto-js';
 // ========== CONFIGURAÇÕES ==========
 const SITE_KEY = "0x4AAAAAAADmr68KUqpnEKo-9";
 const SECRET_KEY = "0x4AAAAAAADmr62kWZNpTLxzKtYOYbpw7wzY";
-const API_BASE = "https://sortenabet.bet.br";
+
+// Usa o proxy local (evita CORS)
+const API_BASE = '/api';
 
 // ========== TIPOS ==========
 export interface LoginResponse {
@@ -18,13 +20,6 @@ export interface LoginResponse {
     verified: boolean;
     balance: number;
   };
-}
-
-export interface GameLinkResponse {
-  gameURL: string;
-  iframe_url: string;
-  game_id: string;
-  status: string;
 }
 
 export interface JogoInfo {
@@ -136,9 +131,6 @@ class ApiClient {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'User-Agent': navigator.userAgent || 'Mozilla/5.0',
-      'Origin': window.location.origin,
-      'Referer': window.location.href,
     };
 
     if (includeAuth && this.accessToken) {
@@ -152,6 +144,7 @@ class ApiClient {
     if (!this.captchaToken) {
       const generator = new TurnstileTokenGenerator(SITE_KEY, SECRET_KEY);
       this.captchaToken = generator.generateToken();
+      console.log('🔑 Token gerado:', this.captchaToken.substring(0, 50) + '...');
     }
 
     const isEmail = loginValue.includes('@');
@@ -164,26 +157,45 @@ class ApiClient {
       captcha_token: this.captchaToken
     };
 
-    const response = await fetch(`${this.baseUrl}/api/auth/login`, {
-      method: 'POST',
-      headers: this.getHeaders(false),
-      body: JSON.stringify(payload)
-    });
+    console.log('📤 Enviando login para:', `${this.baseUrl}/auth/login`);
+    console.log('📦 Payload:', { ...payload, password: '***' });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Erro ao fazer login');
+    try {
+      const response = await fetch(`${this.baseUrl}/auth/login`, {
+        method: 'POST',
+        headers: this.getHeaders(false),
+        body: JSON.stringify(payload)
+      });
+
+      console.log('📥 Status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Erro:', errorText);
+        let errorMessage = 'Erro ao fazer login';
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.message || errorMessage;
+        } catch {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      this.accessToken = data.access_token;
+      console.log('✅ Login bem-sucedido! Token:', this.accessToken?.substring(0, 30) + '...');
+
+      if (this.accessToken) {
+        localStorage.setItem('access_token', this.accessToken);
+        localStorage.setItem('user_data', JSON.stringify(data.user));
+      }
+
+      return data;
+    } catch (error) {
+      console.error('❌ Erro no login:', error);
+      throw error;
     }
-
-    const data = await response.json();
-    this.accessToken = data.access_token;
-
-    if (this.accessToken) {
-      localStorage.setItem('access_token', this.accessToken);
-      localStorage.setItem('user_data', JSON.stringify(data.user));
-    }
-
-    return data;
   }
 
   async getGameLink(slug: string): Promise<string | null> {
@@ -193,7 +205,7 @@ class ApiClient {
 
     try {
       const response = await fetch(
-        `${this.baseUrl}/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`,
+        `${this.baseUrl}/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`,
         {
           method: 'GET',
           headers: this.getHeaders(true)
