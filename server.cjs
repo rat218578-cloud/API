@@ -13,11 +13,11 @@ app.use(cors({
 
 app.use(express.json());
 
-// Proxy para login
+// ========== PROXY PARA API DA SORTE NA BET ==========
+// Login
 app.post('/api/auth/login', async (req, res) => {
   try {
-    console.log('📤 Proxy login:', req.body.login);
-    
+    console.log('📤 Login:', req.body.login);
     const response = await fetch('https://sortenabet.bet.br/api/auth/login', {
       method: 'POST',
       headers: {
@@ -27,7 +27,6 @@ app.post('/api/auth/login', async (req, res) => {
       },
       body: JSON.stringify(req.body)
     });
-    
     const data = await response.json();
     console.log('📥 Status:', response.status);
     res.status(response.status).json(data);
@@ -37,24 +36,33 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Proxy para jogos
+// Start Game V2 - GERA O LINK DO JOGO
 app.get('/api/start-game-v2', async (req, res) => {
   try {
     const { slug, platform, use_demo, source } = req.query;
     const authHeader = req.headers.authorization;
     
-    const response = await fetch(
-      `https://sortenabet.bet.br/api/start-game-v2?slug=${slug}&platform=${platform || 'WEB'}&use_demo=${use_demo || 0}&source=${source || 'watchIsAuthenticated'}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          ...(authHeader && { 'Authorization': authHeader })
-        }
+    console.log('🎮 Iniciando jogo:', slug);
+    console.log('🔑 Auth:', authHeader ? '✅ Presente' : '❌ Ausente');
+    
+    // Constrói a URL
+    const targetUrl = `https://sortenabet.bet.br/api/start-game-v2?slug=${slug}&platform=${platform || 'WEB'}&use_demo=${use_demo || 0}&source=${source || 'watchIsAuthenticated'}`;
+    console.log('📤 GET:', targetUrl);
+    
+    const response = await fetch(targetUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        ...(authHeader && { 'Authorization': authHeader })
       }
-    );
+    });
+    
+    console.log('📥 Status:', response.status);
+    
     const data = await response.json();
+    console.log('📦 Resposta:', data);
+    
     res.status(response.status).json(data);
   } catch (error) {
     console.error('❌ Erro:', error.message);
@@ -62,7 +70,7 @@ app.get('/api/start-game-v2', async (req, res) => {
   }
 });
 
-// Proxy para roleta
+// Roulette History
 app.get('/api/roulette/history', async (req, res) => {
   try {
     const { slug, limit } = req.query;
@@ -82,20 +90,15 @@ app.get('/api/roulette/history', async (req, res) => {
     const data = await response.json();
     res.status(response.status).json(data);
   } catch (error) {
-    console.error('❌ Erro:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Health check
-app.get('/health', (req, res) => {
-  res.send('healthy');
-});
+// Health
+app.get('/health', (req, res) => res.send('healthy'));
 
-// Servir arquivos estáticos
+// Frontend
 app.use(express.static('dist'));
-
-// Fallback para SPA
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });

@@ -9,7 +9,6 @@ interface RouletteVideoProps {
   onClose: () => void;
 }
 
-// MAPEAMENTO CORRETO DOS SLUGS
 const ROOM_SLUGS: Record<string, string> = {
   'brasileira': 'evolution/brasileira',
   'immersive': 'evolution/immersive-roulette',
@@ -31,7 +30,6 @@ export function RouletteVideo({ isOpen, roomId, onClose }: RouletteVideoProps) {
 
   useEffect(() => {
     if (isOpen && isAuthenticated && roomId) {
-      console.log('🎬 Abrindo vídeo para:', roomId);
       loadGameToken();
     }
   }, [isOpen, roomId]);
@@ -43,94 +41,61 @@ export function RouletteVideo({ isOpen, roomId, onClose }: RouletteVideoProps) {
     
     try {
       const slug = ROOM_SLUGS[roomId];
-      console.log('📤 Usando slug:', slug);
-      
       if (!slug) {
-        setError(`Slug não encontrado para: ${roomId}`);
+        setError(`Slug não encontrado`);
         setLoading(false);
         return;
       }
       
       const data = await gameTokenService.getGameToken(slug);
       
-      if (data) {
-        console.log('✅ Dados recebidos!');
-        console.log('🔗 URL:', data.gameURL?.substring(0, 80) + '...');
+      if (data?.gameURL) {
         setGameData(data);
       } else {
-        setError('Não foi possível carregar o jogo. Tente novamente.');
+        setError('Não foi possível carregar o jogo');
       }
     } catch (err) {
-      console.error('❌ Erro:', err);
       setError('Erro ao carregar o jogo');
     } finally {
       setLoading(false);
     }
   };
 
-  const copyToken = () => {
-    if (gameData?.token) {
-      navigator.clipboard.writeText(gameData.token);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-bg-card border border-border-default rounded-2xl w-full max-w-6xl max-h-[95vh] overflow-hidden shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between p-3 sm:p-4 border-b border-border-default flex-wrap gap-2">
+    <div className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center p-2">
+      <div className="relative w-full max-w-7xl h-[92vh] bg-bg-card border border-border-default rounded-2xl overflow-hidden shadow-2xl">
+        {/* Header - Minimalista */}
+        <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-3 bg-gradient-to-b from-black/80 to-transparent">
           <div className="flex items-center gap-3">
-            <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
-            <h2 className="text-base sm:text-lg font-bold text-text-primary">
-              {ROOM_NAMES[roomId] || 'Roleta'} - AO VIVO
-            </h2>
-            {gameData?.token && (
-              <span className="text-[10px] px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-400 font-mono">
-                Token ✓
-              </span>
-            )}
+            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-sm font-bold text-white">
+              {ROOM_NAMES[roomId] || 'Roleta'} AO VIVO
+            </span>
           </div>
-          <div className="flex items-center gap-2">
-            {gameData?.token && (
-              <button
-                onClick={copyToken}
-                className="flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg bg-bg-tertiary border border-border-default text-xs text-text-secondary hover:text-text-primary transition-colors"
-              >
-                {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                <span className="hidden sm:inline">{copied ? 'Copiado!' : 'Copiar Token'}</span>
-              </button>
-            )}
-            <button
-              onClick={onClose}
-              className="p-2 rounded-lg hover:bg-bg-tertiary text-text-secondary transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg bg-black/50 hover:bg-black/70 text-white transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        {/* Video Player */}
-        <div className="w-full h-[75vh] sm:h-[80vh] bg-black flex items-center justify-center relative">
+        {/* Conteúdo Principal - CENTRALIZADO */}
+        <div className="w-full h-full flex items-center justify-center">
           {loading ? (
             <div className="text-center">
               <Loader2 className="w-12 h-12 animate-spin text-accent-pink mx-auto mb-4" />
               <p className="text-text-muted">Gerando link do jogo...</p>
-              <p className="text-xs text-text-muted mt-1">Aguarde...</p>
             </div>
           ) : error ? (
-            <div className="text-center max-w-md">
-              <div className="text-5xl mb-4">🎰</div>
-              <p className="text-red-400 mb-2">{error}</p>
-              <p className="text-text-muted text-sm mb-4">
-                Verifique se você está logado e tem permissão para acessar este jogo.
-              </p>
+            <div className="text-center max-w-md p-8">
+              <div className="text-6xl mb-4">🎰</div>
+              <p className="text-red-400 mb-2 text-lg">{error}</p>
               <button
                 onClick={loadGameToken}
-                className="btn-primary px-6 py-2 rounded-xl text-sm flex items-center gap-2 mx-auto"
+                className="btn-primary px-6 py-3 rounded-xl text-sm flex items-center gap-2 mx-auto"
               >
                 <Play className="w-4 h-4" /> Tentar novamente
               </button>
@@ -145,26 +110,29 @@ export function RouletteVideo({ isOpen, roomId, onClose }: RouletteVideoProps) {
             />
           ) : (
             <div className="text-center">
-              <div className="text-5xl mb-4">🎰</div>
-              <p className="text-text-muted">Selecione uma roleta para assistir</p>
-              <button
-                onClick={loadGameToken}
-                className="btn-primary px-6 py-2 rounded-xl text-sm flex items-center gap-2 mx-auto mt-4"
-              >
-                <Key className="w-4 h-4" /> Gerar Token
-              </button>
+              <div className="text-6xl mb-4">🎰</div>
+              <p className="text-text-muted">Selecione uma roleta</p>
             </div>
           )}
         </div>
 
-        {/* Informações do token */}
+        {/* Rodapé com Token */}
         {gameData?.token && (
-          <div className="p-2 sm:p-3 border-t border-border-default bg-bg-secondary/50">
-            <div className="flex items-center gap-2 text-xs text-text-muted">
-              <Key className="w-3 h-3" />
-              <span className="font-mono truncate">
-                Token: {gameData.token.substring(0, 30)}...
+          <div className="absolute bottom-0 left-0 right-0 z-10 p-2 bg-gradient-to-t from-black/80 to-transparent">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-text-muted font-mono truncate">
+                Token: {gameData.token.substring(0, 40)}...
               </span>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(gameData.token);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className="text-xs text-text-muted hover:text-white transition-colors"
+              >
+                {copied ? '✅ Copiado' : '📋 Copiar'}
+              </button>
             </div>
           </div>
         )}

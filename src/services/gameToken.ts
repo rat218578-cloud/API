@@ -21,24 +21,23 @@ export class GameTokenService {
     try {
       // Verifica cache
       if (this.cachedTokens[slug]) {
-        console.log('📦 Token em cache para:', slug);
+        console.log('📦 Cache hit para:', slug);
         return this.cachedTokens[slug];
       }
 
-      console.log('🎮 Gerando link para:', slug);
-      
-      // Usa o mesmo método do Flask - chama a API diretamente
+      console.log('🎮 Chamando API para:', slug);
+
+      // Tenta obter o link via API
       const url = await apiClient.getGameLink(slug);
       
       if (!url) {
-        console.error('❌ Nenhuma URL retornada para:', slug);
+        console.error('❌ API retornou null para:', slug);
         return null;
       }
 
       console.log('✅ URL obtida com sucesso!');
-      console.log('🔗 URL:', url.substring(0, 80) + '...');
 
-      // Extrai o token da URL
+      // Extrai token da URL
       const tokenMatch = url.match(/[?&]token=([^&]+)/);
       const token = tokenMatch ? tokenMatch[1] : '';
 
@@ -53,7 +52,7 @@ export class GameTokenService {
       
       return response;
     } catch (error) {
-      console.error('❌ Erro ao gerar token:', error);
+      console.error('❌ Erro:', error);
       return null;
     }
   }
