@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const fetch = require('node-fetch');
 const path = require('path');
 
 const app = express();
@@ -18,6 +17,7 @@ app.use(express.json());
 app.post('/api/auth/login', async (req, res) => {
   try {
     console.log('📤 Proxy login:', req.body.login);
+    
     const response = await fetch('https://sortenabet.bet.br/api/auth/login', {
       method: 'POST',
       headers: {
@@ -27,11 +27,12 @@ app.post('/api/auth/login', async (req, res) => {
       },
       body: JSON.stringify(req.body)
     });
+    
     const data = await response.json();
     console.log('📥 Status:', response.status);
     res.status(response.status).json(data);
   } catch (error) {
-    console.error('❌ Erro:', error);
+    console.error('❌ Erro:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -56,6 +57,7 @@ app.get('/api/start-game-v2', async (req, res) => {
     const data = await response.json();
     res.status(response.status).json(data);
   } catch (error) {
+    console.error('❌ Erro:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -80,6 +82,7 @@ app.get('/api/roulette/history', async (req, res) => {
     const data = await response.json();
     res.status(response.status).json(data);
   } catch (error) {
+    console.error('❌ Erro:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -89,7 +92,7 @@ app.get('/health', (req, res) => {
   res.send('healthy');
 });
 
-// Servir arquivos estáticos (frontend)
+// Servir arquivos estáticos
 app.use(express.static('dist'));
 
 // Fallback para SPA
