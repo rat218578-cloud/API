@@ -69,13 +69,13 @@ export function RouletteVideo({ isOpen, roomId, onClose }: RouletteVideoProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-bg-card border border-border-default rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden slide-in">
+    <div className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-bg-card border border-border-default rounded-2xl w-full max-w-6xl max-h-[95vh] overflow-hidden shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border-default flex-wrap gap-2">
+        <div className="flex items-center justify-between p-3 sm:p-4 border-b border-border-default flex-wrap gap-2">
           <div className="flex items-center gap-3">
             <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
-            <h2 className="text-lg font-bold text-text-primary">
+            <h2 className="text-base sm:text-lg font-bold text-text-primary">
               {ROOM_NAMES[roomId as keyof typeof ROOM_NAMES] || 'Roleta'} - AO VIVO
             </h2>
             {gameData?.token && (
@@ -88,10 +88,10 @@ export function RouletteVideo({ isOpen, roomId, onClose }: RouletteVideoProps) {
             {gameData?.token && (
               <button
                 onClick={copyToken}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-bg-tertiary border border-border-default text-xs text-text-secondary hover:text-text-primary transition-colors"
+                className="flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg bg-bg-tertiary border border-border-default text-xs text-text-secondary hover:text-text-primary transition-colors"
               >
                 {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                {copied ? 'Copiado!' : 'Copiar Token'}
+                <span className="hidden sm:inline">{copied ? 'Copiado!' : 'Copiar Token'}</span>
               </button>
             )}
             <button
@@ -103,8 +103,8 @@ export function RouletteVideo({ isOpen, roomId, onClose }: RouletteVideoProps) {
           </div>
         </div>
 
-        {/* Video Player / Token Info */}
-        <div className="w-full h-[calc(85vh-80px)] bg-black/50 flex items-center justify-center">
+        {/* Video Player - CENTRALIZADO */}
+        <div className="w-full h-[75vh] sm:h-[80vh] bg-black flex items-center justify-center relative">
           {loading ? (
             <div className="text-center">
               <Loader2 className="w-12 h-12 animate-spin text-accent-pink mx-auto mb-4" />
@@ -143,6 +143,18 @@ export function RouletteVideo({ isOpen, roomId, onClose }: RouletteVideoProps) {
             </div>
           )}
         </div>
+
+        {/* Informações do token - Rodapé */}
+        {gameData?.token && (
+          <div className="p-2 sm:p-3 border-t border-border-default bg-bg-secondary/50">
+            <div className="flex items-center gap-2 text-xs text-text-muted">
+              <Key className="w-3 h-3" />
+              <span className="font-mono truncate">
+                Token: {gameData.token.substring(0, 30)}...
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
