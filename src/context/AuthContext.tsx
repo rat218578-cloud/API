@@ -10,7 +10,7 @@ login: (loginValue: string, password: string) => Promise<boolean>;
 logout: () => void;
 isAuthenticated: boolean;
 getGameLink: (slug: string) => Promise<string | null>;
-getAllGameLinks: () => Promise<Record<string, string | null>>;
+getGameLink: () => Promise<Record<string, string | null>>;
 refreshRouletteData: (roomId: string, limit?: number) => Promise<any>;
 }
 
@@ -82,8 +82,8 @@ const getGameLink = async (slug: string) => {
 return apiClient.getGameLink(slug);
 };
 
-const getAllGameLinks = async () => {
-return apiClient.getAllGameLinks();
+const getGameLink = async () => {
+return apiClient.getGameLink();
 };
 
 const refreshRouletteData = async (roomId: string, limit: number = 50) => {
@@ -100,7 +100,7 @@ login,
 logout,
 isAuthenticated: !!user && apiClient.isAuthenticated(),
 getGameLink,
-getAllGameLinks,
+getGameLink,
 refreshRouletteData
 }}
 >
