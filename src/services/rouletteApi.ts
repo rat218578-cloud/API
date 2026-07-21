@@ -16,7 +16,7 @@ const headers: HeadersInit = {
 };
 
 if (this.accessToken) {
-  headers['Authorization'] = \`Bearer \${this.accessToken}\`;
+  headers['Authorization'] = `Bearer \${this.accessToken}`;
 }
 
 return headers;
@@ -33,7 +33,7 @@ const roomSlugs: Record<string, string> = {
 const slug = roomSlugs[roomId] || roomSlugs["brasileira"];
 
 const response = await fetch(
-\`\${API_BASE}/api/roulette/history?slug=\${slug}&limit=\${limit}\`,
+`\${API_BASE}/api/roulette/history?slug=\${slug}&limit=\${limit}`,
 {
 method: 'GET',
 headers: this.getHeaders()
@@ -41,7 +41,7 @@ headers: this.getHeaders()
 );
 
 if (!response.ok) {
-throw new Error(\`Erro ao buscar histórico: \${response.status}\`);
+throw new Error(`Erro ao buscar histórico: \${response.status}`);
 }
 
 const data = await response.json();
