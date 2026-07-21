@@ -43,44 +43,73 @@ class GameLinkService {
   }
 
   async getGameUrl(slug: string): Promise<string | null> {
+    // Verifica cache
     const cached = this.cache[slug];
     if (cached && (Date.now() - cached.timestamp) < this.cacheTTL) {
+      console.log(`📦 Cache hit para ${slug}`);
       return cached.url;
     }
 
+    console.log(`🎮 Gerando link para: ${slug}`);
+
     try {
+      // ===== VERIFICA TOKEN =====
       const token = localStorage.getItem('access_token');
-      if (!token) return null;
-
-      const response = await fetch(
-        `/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': `Bearer ${token}`
-          }
-        }
-      );
-
-      if (!response.ok) return null;
+      console.log('🔑 Token:', token ? `${token.substring(0, 30)}...` : '❌ NÃO ENCONTRADO');
       
+      if (!token) {
+        console.error('❌ Token não encontrado no localStorage');
+        return null;
+      }
+
+      // ===== FAZ REQUISIÇÃO =====
+      const url = `/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`;
+      console.log(`📤 GET: ${url}`);
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      console.log(`📥 Status: ${response.status}`);
+
+      if (!response.ok) {
+        console.error(`❌ HTTP ${response.status}`);
+        const errorText = await response.text();
+        console.error(`📄 Erro: ${errorText}`);
+        return null;
+      }
+
       const data = await response.json();
+      console.log('📦 Resposta:', data);
+
+      // ===== PEGA A URL =====
       const gameUrl = data.iframe_url || data.gameURL || null;
       
       if (gameUrl) {
-        this.cache[slug] = { url: gameUrl, timestamp: Date.now() };
+        this.cache[slug] = {
+          url: gameUrl,
+          timestamp: Date.now()
+        };
+        console.log(`✅ Link gerado para ${slug}`);
         return gameUrl;
       }
+
+      console.warn(`⚠️ Sem URL para ${slug}`);
       return null;
-    } catch {
+    } catch (error) {
+      console.error(`❌ Erro:`, error);
       return null;
     }
   }
 
   clearCache(): void {
     this.cache = {};
+    console.log('🗑️ Cache limpo');
   }
 }
 
