@@ -9,13 +9,14 @@ interface RouletteVideoProps {
   onClose: () => void;
 }
 
-const ROOM_SLUGS = {
+// MAPEAMENTO CORRETO DOS SLUGS
+const ROOM_SLUGS: Record<string, string> = {
   'brasileira': 'evolution/brasileira',
   'immersive': 'evolution/immersive-roulette',
   'lightning': 'evolution/lightning-roulette',
 };
 
-const ROOM_NAMES = {
+const ROOM_NAMES: Record<string, string> = {
   'brasileira': '🇧🇷 Roleta Brasileira',
   'immersive': '🎥 Roleta Imersiva',
   'lightning': '⚡ Lightning Roulette',
@@ -30,6 +31,7 @@ export function RouletteVideo({ isOpen, roomId, onClose }: RouletteVideoProps) {
 
   useEffect(() => {
     if (isOpen && isAuthenticated && roomId) {
+      console.log('🎬 Abrindo vídeo para:', roomId);
       loadGameToken();
     }
   }, [isOpen, roomId]);
@@ -40,19 +42,27 @@ export function RouletteVideo({ isOpen, roomId, onClose }: RouletteVideoProps) {
     setGameData(null);
     
     try {
-      const slug = ROOM_SLUGS[roomId as keyof typeof ROOM_SLUGS] || ROOM_SLUGS['brasileira'];
+      const slug = ROOM_SLUGS[roomId];
+      console.log('📤 Usando slug:', slug);
+      
+      if (!slug) {
+        setError(`Slug não encontrado para: ${roomId}`);
+        setLoading(false);
+        return;
+      }
+      
       const data = await gameTokenService.getGameToken(slug);
       
       if (data) {
+        console.log('✅ Dados recebidos!');
+        console.log('🔗 URL:', data.gameURL?.substring(0, 80) + '...');
         setGameData(data);
-        console.log('🎰 Token JWT do cassino gerado!');
-        console.log('🔑 Token:', data.token.substring(0, 50) + '...');
       } else {
-        setError('Não foi possível gerar o token do jogo');
+        setError('Não foi possível carregar o jogo. Tente novamente.');
       }
     } catch (err) {
+      console.error('❌ Erro:', err);
       setError('Erro ao carregar o jogo');
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -76,7 +86,7 @@ export function RouletteVideo({ isOpen, roomId, onClose }: RouletteVideoProps) {
           <div className="flex items-center gap-3">
             <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
             <h2 className="text-base sm:text-lg font-bold text-text-primary">
-              {ROOM_NAMES[roomId as keyof typeof ROOM_NAMES] || 'Roleta'} - AO VIVO
+              {ROOM_NAMES[roomId] || 'Roleta'} - AO VIVO
             </h2>
             {gameData?.token && (
               <span className="text-[10px] px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-400 font-mono">
@@ -103,18 +113,21 @@ export function RouletteVideo({ isOpen, roomId, onClose }: RouletteVideoProps) {
           </div>
         </div>
 
-        {/* Video Player - CENTRALIZADO */}
+        {/* Video Player */}
         <div className="w-full h-[75vh] sm:h-[80vh] bg-black flex items-center justify-center relative">
           {loading ? (
             <div className="text-center">
               <Loader2 className="w-12 h-12 animate-spin text-accent-pink mx-auto mb-4" />
-              <p className="text-text-muted">Gerando token do cassino...</p>
-              <p className="text-xs text-text-muted mt-1">Aguarde, isso pode levar alguns segundos</p>
+              <p className="text-text-muted">Gerando link do jogo...</p>
+              <p className="text-xs text-text-muted mt-1">Aguarde...</p>
             </div>
           ) : error ? (
-            <div className="text-center">
+            <div className="text-center max-w-md">
               <div className="text-5xl mb-4">🎰</div>
               <p className="text-red-400 mb-2">{error}</p>
+              <p className="text-text-muted text-sm mb-4">
+                Verifique se você está logado e tem permissão para acessar este jogo.
+              </p>
               <button
                 onClick={loadGameToken}
                 className="btn-primary px-6 py-2 rounded-xl text-sm flex items-center gap-2 mx-auto"
@@ -144,7 +157,7 @@ export function RouletteVideo({ isOpen, roomId, onClose }: RouletteVideoProps) {
           )}
         </div>
 
-        {/* Informações do token - Rodapé */}
+        {/* Informações do token */}
         {gameData?.token && (
           <div className="p-2 sm:p-3 border-t border-border-default bg-bg-secondary/50">
             <div className="flex items-center gap-2 text-xs text-text-muted">

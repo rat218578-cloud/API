@@ -3,8 +3,6 @@ import CryptoJS from 'crypto-js';
 // ========== CONFIGURAÇÕES ==========
 const SITE_KEY = "0x4AAAAAAADmr68KUqpnEKo-9";
 const SECRET_KEY = "0x4AAAAAAADmr62kWZNpTLxzKtYOYbpw7wzY";
-
-// Usa o proxy local (evita CORS)
 const API_BASE = '/api';
 
 // ========== TIPOS ==========
@@ -57,7 +55,7 @@ export const JOGOS: Record<string, JogoInfo> = {
     nome: "Lightning Roulette",
     slug: "evolution/lightning-roulette",
     provedor: "Evolution",
-    emoji: "🎰"
+    emoji: "⚡"
   },
   mega_ball: {
     id: "mega_ball",
@@ -65,9 +63,25 @@ export const JOGOS: Record<string, JogoInfo> = {
     slug: "evolution/mega-ball",
     provedor: "Evolution",
     emoji: "🎱"
+  },
+  // NOVOS SLUGS PARA ROLETAS
+  brasileira: {
+    id: "brasileira",
+    nome: "Roleta Brasileira",
+    slug: "evolution/brasileira",
+    provedor: "Evolution",
+    emoji: "🇧🇷"
+  },
+  immersive: {
+    id: "immersive",
+    nome: "Roleta Imersiva",
+    slug: "evolution/immersive-roulette",
+    provedor: "Evolution",
+    emoji: "🎥"
   }
 };
 
+// ========== GERADOR DE TOKEN TURNSTILE ==========
 export class TurnstileTokenGenerator {
   private siteKey: string;
   private secretKey: string;
@@ -110,6 +124,7 @@ export class TurnstileTokenGenerator {
   }
 }
 
+// ========== CLIENTE API ==========
 class ApiClient {
   private baseUrl: string;
   private accessToken: string | null = null;
@@ -118,6 +133,7 @@ class ApiClient {
   constructor() {
     this.baseUrl = API_BASE;
     this.accessToken = localStorage.getItem('access_token');
+    console.log('🔑 Token inicial:', this.accessToken ? this.accessToken.substring(0, 30) + '...' : 'Nenhum');
   }
 
   setCaptchaToken(token: string) {
@@ -141,6 +157,7 @@ class ApiClient {
     if (!this.captchaToken) {
       const generator = new TurnstileTokenGenerator(SITE_KEY, SECRET_KEY);
       this.captchaToken = generator.generateToken();
+      console.log('🔑 Token Turnstile gerado');
     }
 
     const isEmail = loginValue.includes('@');
@@ -153,46 +170,81 @@ class ApiClient {
       captcha_token: this.captchaToken
     };
 
-    const response = await fetch(`${this.baseUrl}/auth/login`, {
-      method: 'POST',
-      headers: this.getHeaders(false),
-      body: JSON.stringify(payload)
-    });
+    console.log('📤 Tentando login em:', `${this.baseUrl}/auth/login`);
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Erro ao fazer login');
+    try {
+      const response = await fetch(`${this.baseUrl}/auth/login`, {
+        method: 'POST',
+        headers: this.getHeaders(false),
+        body: JSON.stringify(payload)
+      });
+
+      console.log('📥 Status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Erro:', errorText);
+        throw new Error(`Erro ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      this.accessToken = data.access_token;
+
+      if (this.accessToken) {
+        localStorage.setItem('access_token', this.accessToken);
+        localStorage.setItem('user_data', JSON.stringify(data.user));
+        console.log('✅ Login bem-sucedido! Token:', this.accessToken.substring(0, 30) + '...');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('❌ Erro no login:', error);
+      throw error;
     }
-
-    const data = await response.json();
-    this.accessToken = data.access_token;
-
-    if (this.accessToken) {
-      localStorage.setItem('access_token', this.accessToken);
-      localStorage.setItem('user_data', JSON.stringify(data.user));
-    }
-
-    return data;
   }
 
   async getGameLink(slug: string): Promise<string | null> {
+    console.log('🎮 Buscando link para:', slug);
+    console.log('🔑 Token atual:', this.accessToken ? this.accessToken.substring(0, 30) + '...' : 'Nenhum');
+    
+    // Se não tiver token, tenta recuperar do localStorage
     if (!this.accessToken) {
-      throw new Error('Usuário não autenticado');
+      const storedToken = localStorage.getItem('access_token');
+      if (storedToken) {
+        this.accessToken = storedToken;
+        console.log('🔄 Token recuperado do localStorage');
+      } else {
+        console.error('❌ Sem token de autenticação');
+        return null;
+      }
     }
 
     try {
-      const response = await fetch(
-        `${this.baseUrl}/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`,
-        {
-          method: 'GET',
-          headers: this.getHeaders(true)
-        }
-      );
+      const url = `${this.baseUrl}/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`;
+      console.log('📤 GET:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.getHeaders(true)
+      });
 
-      if (!response.ok) return null;
+      console.log('📥 Status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Erro ao buscar jogo:', errorText);
+        return null;
+      }
+
       const data = await response.json();
-      return data.gameURL || data.iframe_url || null;
-    } catch {
+      console.log('📦 Resposta da API:', data);
+      
+      const gameUrl = data.gameURL || data.iframe_url || null;
+      console.log('🔗 URL do jogo:', gameUrl ? gameUrl.substring(0, 80) + '...' : 'Nenhuma');
+      
+      return gameUrl;
+    } catch (error) {
+      console.error('❌ Erro no getGameLink:', error);
       return null;
     }
   }
@@ -204,7 +256,7 @@ class ApiClient {
   }
 
   isAuthenticated(): boolean {
-    return !!this.accessToken;
+    return !!this.accessToken || !!localStorage.getItem('access_token');
   }
 
   getUserData(): any {
@@ -218,4 +270,6 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient();
+
+// ========== RE-EXPORT ==========
 export { rouletteApi } from './rouletteApi';

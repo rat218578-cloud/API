@@ -19,47 +19,48 @@ export class GameTokenService {
 
   async getGameToken(slug: string): Promise<GameTokenResponse | null> {
     try {
-      // Se já temos o token em cache, retorna
+      // Verifica cache
       if (this.cachedTokens[slug]) {
-        console.log('📦 Token do jogo em cache:', slug);
+        console.log('📦 Token em cache para:', slug);
         return this.cachedTokens[slug];
       }
 
-      console.log('🎮 Gerando token do jogo:', slug);
+      console.log('🎮 Gerando link para:', slug);
       
-      // Usa o apiClient para obter o link do jogo
+      // Usa o mesmo método do Flask - chama a API diretamente
       const url = await apiClient.getGameLink(slug);
       
       if (!url) {
-        throw new Error('Não foi possível obter o link do jogo');
+        console.error('❌ Nenhuma URL retornada para:', slug);
+        return null;
       }
+
+      console.log('✅ URL obtida com sucesso!');
+      console.log('🔗 URL:', url.substring(0, 80) + '...');
 
       // Extrai o token da URL
       const tokenMatch = url.match(/[?&]token=([^&]+)/);
       const token = tokenMatch ? tokenMatch[1] : '';
-      
+
       const response: GameTokenResponse = {
         token: token,
         gameURL: url,
         iframe_url: url
       };
 
-      // Cacheia o token
+      // Cacheia
       this.cachedTokens[slug] = response;
-      
-      console.log('✅ Token do jogo gerado com sucesso!');
-      console.log('🔑 Token:', token.substring(0, 30) + '...');
       
       return response;
     } catch (error) {
-      console.error('❌ Erro ao gerar token do jogo:', error);
+      console.error('❌ Erro ao gerar token:', error);
       return null;
     }
   }
 
   clearCache() {
     this.cachedTokens = {};
-    console.log('🗑️ Cache de tokens limpo');
+    console.log('🗑️ Cache limpo');
   }
 }
 
