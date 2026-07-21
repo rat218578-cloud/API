@@ -4,8 +4,8 @@ import CryptoJS from 'crypto-js';
 const SITE_KEY = "0x4AAAAAAADmr68KUqpnEKo-9";
 const SECRET_KEY = "0x4AAAAAAADmr62kWZNpTLxzKtYOYbpw7wzY";
 
-// Usa o proxy local (evita CORS)
-const API_BASE = '/api';
+// Usa a API diretamente (sem proxy)
+const API_BASE = "https://sortenabet.bet.br";
 
 // ========== TIPOS ==========
 export interface LoginResponse {
@@ -30,7 +30,6 @@ export interface JogoInfo {
   emoji: string;
 }
 
-// ========== LISTA DE JOGOS ==========
 export const JOGOS: Record<string, JogoInfo> = {
   aviator: {
     id: "aviator",
@@ -144,7 +143,7 @@ class ApiClient {
     if (!this.captchaToken) {
       const generator = new TurnstileTokenGenerator(SITE_KEY, SECRET_KEY);
       this.captchaToken = generator.generateToken();
-      console.log('🔑 Token gerado:', this.captchaToken.substring(0, 50) + '...');
+      console.log('🔑 Token Turnstile gerado');
     }
 
     const isEmail = loginValue.includes('@');
@@ -157,11 +156,11 @@ class ApiClient {
       captcha_token: this.captchaToken
     };
 
-    console.log('📤 Enviando login para:', `${this.baseUrl}/auth/login`);
-    console.log('📦 Payload:', { ...payload, password: '***' });
+    console.log('📤 Tentando login em:', `${this.baseUrl}/api/auth/login`);
+    console.log('📧 Email:', loginValue);
 
     try {
-      const response = await fetch(`${this.baseUrl}/auth/login`, {
+      const response = await fetch(`${this.baseUrl}/api/auth/login`, {
         method: 'POST',
         headers: this.getHeaders(false),
         body: JSON.stringify(payload)
@@ -172,23 +171,16 @@ class ApiClient {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('❌ Erro:', errorText);
-        let errorMessage = 'Erro ao fazer login';
-        try {
-          const errorJson = JSON.parse(errorText);
-          errorMessage = errorJson.message || errorMessage;
-        } catch {
-          errorMessage = errorText || errorMessage;
-        }
-        throw new Error(errorMessage);
+        throw new Error(`Erro ${response.status}: ${errorText}`);
       }
 
       const data = await response.json();
       this.accessToken = data.access_token;
-      console.log('✅ Login bem-sucedido! Token:', this.accessToken?.substring(0, 30) + '...');
 
       if (this.accessToken) {
         localStorage.setItem('access_token', this.accessToken);
         localStorage.setItem('user_data', JSON.stringify(data.user));
+        console.log('✅ Login bem-sucedido!');
       }
 
       return data;
@@ -205,17 +197,14 @@ class ApiClient {
 
     try {
       const response = await fetch(
-        `${this.baseUrl}/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`,
+        `${this.baseUrl}/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`,
         {
           method: 'GET',
           headers: this.getHeaders(true)
         }
       );
 
-      if (!response.ok) {
-        return null;
-      }
-
+      if (!response.ok) return null;
       const data = await response.json();
       return data.gameURL || data.iframe_url || null;
     } catch (error) {
@@ -226,17 +215,14 @@ class ApiClient {
 
   async getAllGameLinks(): Promise<Record<string, string | null>> {
     const links: Record<string, string | null> = {};
-
     for (const [key, jogo] of Object.entries(JOGOS)) {
       try {
-        const url = await this.getGameLink(jogo.slug);
-        links[key] = url;
+        links[key] = await this.getGameLink(jogo.slug);
         await new Promise(resolve => setTimeout(resolve, 500));
-      } catch (error) {
+      } catch {
         links[key] = null;
       }
     }
-
     return links;
   }
 
