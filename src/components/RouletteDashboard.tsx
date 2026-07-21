@@ -11,7 +11,7 @@ import {
 } from "../utils/roulette";
 import { rouletteApi } from "../services/api";
 import { gameTokenService } from "../services/gameToken";
-import { RefreshCw, Play, Loader2, Tv, Key, Copy, Check } from "lucide-react";
+import { RefreshCw, Play, Loader2, Key } from "lucide-react";
 
 const ROOMS = [
   { id: "brasileira", name: "🇧🇷 Brasileira", type: "live" as const },
@@ -25,8 +25,6 @@ export function RouletteDashboard() {
   const [history, setHistory] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [roomSpins, setRoomSpins] = useState<Record<string, number>>({});
-  const [lastNumbers, setLastNumbers] = useState<Record<string, number | null>>({});
   const [initialLoad, setInitialLoad] = useState(true);
   const [videoOpen, setVideoOpen] = useState(false);
 
@@ -39,8 +37,6 @@ export function RouletteDashboard() {
       if (!token) {
         const fallbackNumbers = generateRandomHistory(30);
         setHistory(fallbackNumbers);
-        setLastNumbers(prev => ({ ...prev, [roomId]: fallbackNumbers[0] || null }));
-        setRoomSpins(prev => ({ ...prev, [roomId]: 30 }));
         setError('Usando dados simulados');
         setLoading(false);
         return;
@@ -52,20 +48,14 @@ export function RouletteDashboard() {
         const numbers = historyData.spins.map(spin => spin.number);
         const sanitized = sanitizeHistory(numbers);
         setHistory(sanitized);
-        setRoomSpins(prev => ({ ...prev, [roomId]: historyData.total || sanitized.length }));
-        setLastNumbers(prev => ({ ...prev, [roomId]: sanitized[0] || null }));
       } else {
         const fallbackNumbers = generateRandomHistory(30);
         setHistory(fallbackNumbers);
-        setLastNumbers(prev => ({ ...prev, [roomId]: fallbackNumbers[0] || null }));
-        setRoomSpins(prev => ({ ...prev, [roomId]: 30 }));
       }
     } catch (err) {
       console.error('Erro ao buscar dados:', err);
       const fallbackNumbers = generateRandomHistory(30);
       setHistory(fallbackNumbers);
-      setLastNumbers(prev => ({ ...prev, [roomId]: fallbackNumbers[0] || null }));
-      setRoomSpins(prev => ({ ...prev, [roomId]: 30 }));
       setError('Erro ao carregar dados');
     } finally {
       setLoading(false);
@@ -76,14 +66,6 @@ export function RouletteDashboard() {
   useEffect(() => {
     fetchRouletteData(activeRoom);
   }, [activeRoom, fetchRouletteData]);
-
-  const room = ROOMS.find((r) => r.id === activeRoom) || ROOMS[0];
-
-  const roomInfo = {
-    ...room,
-    spins: roomSpins[activeRoom] || 0,
-    lastNumber: lastNumbers[activeRoom] !== undefined ? lastNumbers[activeRoom] : null
-  };
 
   const topNumbers = useMemo(() => {
     const validHistory = sanitizeHistory(history);
@@ -108,7 +90,6 @@ export function RouletteDashboard() {
     fetchRouletteData(activeRoom);
   };
 
-  // Limpa o cache de tokens (força novo token)
   const clearTokenCache = () => {
     gameTokenService.clearCache();
     alert('Cache de tokens limpo! O próximo jogo vai gerar um novo token.');
@@ -134,7 +115,6 @@ export function RouletteDashboard() {
           </div>
         )}
 
-        {/* Tabs e Botões */}
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2 overflow-x-auto pb-2">
             {ROOMS.map((r) => (
@@ -156,16 +136,13 @@ export function RouletteDashboard() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Botão LIMPAR CACHE - força novo token */}
             <button
               onClick={clearTokenCache}
               className="px-3 py-2 rounded-xl bg-bg-tertiary border border-border-default text-xs text-text-muted hover:text-text-primary transition-colors"
-              title="Limpa cache de tokens - força gerar novo token"
             >
               🔄 Novo Token
             </button>
 
-            {/* Botão AO VIVO - gera token do cassino */}
             <button
               onClick={() => setVideoOpen(true)}
               className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-red-500 to-orange-500 text-white font-bold hover:scale-105 transition-transform shadow-lg shadow-red-500/30"
@@ -177,9 +154,7 @@ export function RouletteDashboard() {
           </div>
         </div>
 
-        {/* Grid Principal - igual ao anterior */}
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-          {/* CATALOGAÇÃO */}
           <div className="xl:col-span-3 bg-bg-card border border-border-default rounded-2xl p-4">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -231,7 +206,6 @@ export function RouletteDashboard() {
             </div>
           </div>
 
-          {/* ANÁLISE ISOLADA */}
           <div className="xl:col-span-6 bg-bg-card border border-border-default rounded-2xl p-4">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -288,7 +262,6 @@ export function RouletteDashboard() {
             </div>
           </div>
 
-          {/* GRUPOS + ASSERTIVIDADE */}
           <div className="xl:col-span-3 space-y-4">
             <div className="bg-bg-card border border-border-default rounded-2xl p-4">
               <h3 className="font-bold text-text-primary text-sm mb-4">GRUPOS</h3>
@@ -339,7 +312,6 @@ export function RouletteDashboard() {
         <SignalGenerator history={history} />
       </div>
 
-      {/* Modal do Vídeo - GERAR TOKEN DO CASINO */}
       <RouletteVideo
         isOpen={videoOpen}
         roomId={activeRoom}
