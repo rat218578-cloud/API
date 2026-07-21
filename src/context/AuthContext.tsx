@@ -42,17 +42,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
       }
     };
-
     checkAuth();
   }, []);
 
   const login = async (loginValue: string, password: string): Promise<boolean> => {
     setLoading(true);
     setError(null);
-
     try {
       const response = await apiClient.login(loginValue, password);
-      
       setUser({
         id: String(response.user.id),
         email: response.user.email,
@@ -60,10 +57,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         cpf: response.user.cpf,
         plan: 'pro'
       });
-
       const token = localStorage.getItem('access_token');
       if (token) rouletteApi.setToken(token);
-
       return true;
     } catch (err: any) {
       setError(err.message || 'Erro ao fazer login');
@@ -79,46 +74,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const getGameLink = async (slug: string) => {
-    try {
-      return await apiClient.getGameLink(slug);
-    } catch (error) {
-      console.error('Erro ao obter link do jogo:', error);
-      return null;
-    }
+    try { return await apiClient.getGameLink(slug); } 
+    catch (error) { console.error('Erro ao obter link do jogo:', error); return null; }
   };
 
   const getAllGameLinks = async () => {
-    try {
-      return await apiClient.getAllGameLinks();
-    } catch (error) {
-      console.error('Erro ao obter links dos jogos:', error);
-      return {};
-    }
+    try { return await apiClient.getAllGameLinks(); } 
+    catch (error) { console.error('Erro ao obter links dos jogos:', error); return {}; }
   };
 
   const refreshRouletteData = async (roomId: string, limit: number = 50) => {
-    try {
-      return await rouletteApi.getLiveRouletteHistory(roomId, limit);
-    } catch (error) {
-      console.error('Erro ao atualizar dados da roleta:', error);
-      return { spins: [], total: 0, room: roomId };
-    }
+    try { return await rouletteApi.getLiveRouletteHistory(roomId, limit); } 
+    catch (error) { console.error('Erro ao atualizar dados da roleta:', error); return { spins: [], total: 0, room: roomId }; }
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        error,
-        login,
-        logout,
-        isAuthenticated: !!user && apiClient.isAuthenticated(),
-        getGameLink,
-        getAllGameLinks,
-        refreshRouletteData
-      }}
-    >
+    <AuthContext.Provider value={{ user, loading, error, login, logout, isAuthenticated: !!user && apiClient.isAuthenticated(), getGameLink, getAllGameLinks, refreshRouletteData }}>
       {children}
     </AuthContext.Provider>
   );
@@ -126,8 +97,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
+  if (context === undefined) throw new Error("useAuth must be used within an AuthProvider");
   return context;
 }

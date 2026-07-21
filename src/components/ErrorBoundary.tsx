@@ -11,10 +11,7 @@ interface State {
 }
 
 export class ErrorBoundary extends Component<Props, State> {
-  public state: State = {
-    hasError: false,
-    error: null
-  };
+  public state: State = { hasError: false, error: null };
 
   public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
@@ -31,20 +28,14 @@ export class ErrorBoundary extends Component<Props, State> {
           <div className="bg-bg-card border border-border-default rounded-2xl p-8 max-w-md w-full text-center">
             <div className="text-4xl mb-4">😅</div>
             <h2 className="text-xl font-bold text-text-primary mb-2">Ops! Algo deu errado</h2>
-            <p className="text-text-muted text-sm mb-4">
-              {this.state.error?.message || 'Erro desconhecido'}
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="btn-primary px-6 py-2 rounded-xl text-sm"
-            >
+            <p className="text-text-muted text-sm mb-4">{this.state.error?.message || 'Erro desconhecido'}</p>
+            <button onClick={() => window.location.reload()} className="btn-primary px-6 py-2 rounded-xl text-sm">
               Recarregar página
             </button>
           </div>
         </div>
       );
     }
-
     return this.props.children;
   }
 }
