@@ -8,10 +8,15 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ✅ Servir arquivos estáticos da pasta dist
+// Log para debug
+console.log('🚀 Iniciando servidor...');
+console.log(`📁 Diretório atual: ${__dirname}`);
+console.log(`📁 Dist path: ${path.join(__dirname, 'dist')}`);
+
+// Servir arquivos estáticos
 app.use(express.static(path.join(__dirname, 'dist'), {
+  index: 'index.html',
   setHeaders: (res, filePath) => {
-    // Garantir MIME types corretos
     if (filePath.endsWith('.js')) {
       res.setHeader('Content-Type', 'application/javascript');
     } else if (filePath.endsWith('.css')) {
@@ -22,17 +27,22 @@ app.use(express.static(path.join(__dirname, 'dist'), {
   }
 }));
 
-// ✅ Healthcheck
+// Healthcheck - DEVE SER A PRIMEIRA ROTA
 app.get('/health', (req, res) => {
+  console.log('✅ Healthcheck OK');
   res.status(200).send('healthy');
 });
 
-// ✅ Todas as outras rotas -> index.html (SPA)
+// Rota raiz
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+// Todas as outras rotas - SPA
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Servidor rodando em http://0.0.0.0:${PORT}`);
-  console.log(`📁 Servindo arquivos de: ${path.join(__dirname, 'dist')}`);
+  console.log(`✅ Servidor rodando em http://0.0.0.0:${PORT}`);
 });
