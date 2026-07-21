@@ -5,6 +5,9 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ===== DOMÍNIO CORRETO DA API =====
+const API_BASE = 'https://api-sortenabet-betbr.bs2bet.com';
+
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -13,12 +16,11 @@ app.use(cors({
 
 app.use(express.json());
 
-// ========== PROXY PARA API DA SORTE NA BET ==========
-// Login
+// ========== LOGIN ==========
 app.post('/api/auth/login', async (req, res) => {
   try {
-    console.log('📤 Login:', req.body.login);
-    const response = await fetch('https://sortenabet.bet.br/api/auth/login', {
+    console.log('📤 Login:', req.body.login || req.body.email);
+    const response = await fetch(`${API_BASE}/v2/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -36,7 +38,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Start Game V2 - GERA O LINK DO JOGO
+// ========== START-GAME-V2 - USANDO DOMÍNIO CORRETO ==========
 app.get('/api/start-game-v2', async (req, res) => {
   try {
     const { slug, platform, use_demo, source } = req.query;
@@ -45,8 +47,8 @@ app.get('/api/start-game-v2', async (req, res) => {
     console.log('🎮 Iniciando jogo:', slug);
     console.log('🔑 Auth:', authHeader ? '✅ Presente' : '❌ Ausente');
     
-    // Constrói a URL
-    const targetUrl = `https://sortenabet.bet.br/api/start-game-v2?slug=${slug}&platform=${platform || 'WEB'}&use_demo=${use_demo || 0}&source=${source || 'watchIsAuthenticated'}`;
+    // Usa o mesmo domínio da API
+    const targetUrl = `${API_BASE}/v2/start-game?slug=${slug}&platform=${platform || 'WEB'}&use_demo=${use_demo || 0}&source=${source || 'watchIsAuthenticated'}`;
     console.log('📤 GET:', targetUrl);
     
     const response = await fetch(targetUrl, {
@@ -54,6 +56,7 @@ app.get('/api/start-game-v2', async (req, res) => {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         ...(authHeader && { 'Authorization': authHeader })
       }
     });
@@ -61,7 +64,7 @@ app.get('/api/start-game-v2', async (req, res) => {
     console.log('📥 Status:', response.status);
     
     const data = await response.json();
-    console.log('📦 Resposta:', data);
+    console.log('📦 Resposta:', JSON.stringify(data).substring(0, 300));
     
     res.status(response.status).json(data);
   } catch (error) {
@@ -70,14 +73,14 @@ app.get('/api/start-game-v2', async (req, res) => {
   }
 });
 
-// Roulette History
+// ========== ROLETAS - HISTÓRICO ==========
 app.get('/api/roulette/history', async (req, res) => {
   try {
     const { slug, limit } = req.query;
     const authHeader = req.headers.authorization;
     
     const response = await fetch(
-      `https://sortenabet.bet.br/api/roulette/history?slug=${slug}&limit=${limit || 50}`,
+      `${API_BASE}/v2/roulette/history?slug=${slug}&limit=${limit || 50}`,
       {
         method: 'GET',
         headers: {
@@ -94,15 +97,16 @@ app.get('/api/roulette/history', async (req, res) => {
   }
 });
 
-// Health
+// ========== HEALTH ==========
 app.get('/health', (req, res) => res.send('healthy'));
 
-// Frontend
+// ========== FRONTEND ==========
 app.use(express.static('dist'));
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Proxy rodando na porta ${PORT}`);
+  console.log(`🚀 Servidor rodando na porta ${PORT}`);
+  console.log(`📡 API Base: ${API_BASE}`);
 });
