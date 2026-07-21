@@ -1,48 +1,94 @@
-import express from 'express';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const express = require('express');
+const cors = require('cors');
+const fetch = require('node-fetch');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Log para debug
-console.log('🚀 Iniciando servidor...');
-console.log(`📁 Diretório atual: ${__dirname}`);
-console.log(`📁 Dist path: ${path.join(__dirname, 'dist')}`);
-
-// Servir arquivos estáticos
-app.use(express.static(path.join(__dirname, 'dist'), {
-  index: 'index.html',
-  setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.js')) {
-      res.setHeader('Content-Type', 'application/javascript');
-    } else if (filePath.endsWith('.css')) {
-      res.setHeader('Content-Type', 'text/css');
-    } else if (filePath.endsWith('.html')) {
-      res.setHeader('Content-Type', 'text/html');
-    }
-  }
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Healthcheck - DEVE SER A PRIMEIRA ROTA
-app.get('/health', (req, res) => {
-  console.log('✅ Healthcheck OK');
-  res.status(200).send('healthy');
+app.use(express.json());
+
+// Proxy para login
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    console.log('📤 Proxy login:', req.body.login);
+    const response = await fetch('https://sortenabet.bet.br/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      body: JSON.stringify(req.body)
+    });
+    const data = await response.json();
+    console.log('📥 Status:', response.status);
+    res.status(response.status).json(data);
+  } catch (error) {
+    console.error('❌ Erro:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// Rota raiz
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+// Proxy para jogos
+app.get('/api/start-game-v2', async (req, res) => {
+  try {
+    const { slug, platform, use_demo, source } = req.query;
+    const authHeader = req.headers.authorization;
+    
+    const response = await fetch(
+      `https://sortenabet.bet.br/api/start-game-v2?slug=${slug}&platform=${platform || 'WEB'}&use_demo=${use_demo || 0}&source=${source || 'watchIsAuthenticated'}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          ...(authHeader && { 'Authorization': authHeader })
+        }
+      }
+    );
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// Todas as outras rotas - SPA
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+// Proxy para roleta
+app.get('/api/roulette/history', async (req, res) => {
+  try {
+    const { slug, limit } = req.query;
+    const authHeader = req.headers.authorization;
+    
+    const response = await fetch(
+      `https://sortenabet.bet.br/api/roulette/history?slug=${slug}&limit=${limit || 50}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          ...(authHeader && { 'Authorization': authHeader })
+        }
+      }
+    );
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
+
+app.get('/health', (req, res) => res.send('healthy'));
+
+app.use(express.static('dist'));
+app.get('*', (req, res) => res.sendFile('index.html', { root: 'dist' }));
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Servidor rodando em http://0.0.0.0:${PORT}`);
+  console.log(`🚀 Proxy rodando na porta ${PORT}`);
 });

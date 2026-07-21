@@ -4,8 +4,8 @@ import CryptoJS from 'crypto-js';
 const SITE_KEY = "0x4AAAAAAADmr68KUqpnEKo-9";
 const SECRET_KEY = "0x4AAAAAAADmr62kWZNpTLxzKtYOYbpw7wzY";
 
-// Usa a API diretamente (sem proxy)
-const API_BASE = "https://sortenabet.bet.br";
+// Usa o proxy local (evita CORS)
+const API_BASE = '/api';
 
 // ========== TIPOS ==========
 export interface LoginResponse {
@@ -68,7 +68,6 @@ export const JOGOS: Record<string, JogoInfo> = {
   }
 };
 
-// ========== GERADOR DE TOKEN TURNSTILE ==========
 export class TurnstileTokenGenerator {
   private siteKey: string;
   private secretKey: string;
@@ -111,7 +110,6 @@ export class TurnstileTokenGenerator {
   }
 }
 
-// ========== CLIENTE API ==========
 class ApiClient {
   private baseUrl: string;
   private accessToken: string | null = null;
@@ -143,7 +141,6 @@ class ApiClient {
     if (!this.captchaToken) {
       const generator = new TurnstileTokenGenerator(SITE_KEY, SECRET_KEY);
       this.captchaToken = generator.generateToken();
-      console.log('🔑 Token Turnstile gerado');
     }
 
     const isEmail = loginValue.includes('@');
@@ -156,38 +153,26 @@ class ApiClient {
       captcha_token: this.captchaToken
     };
 
-    console.log('📤 Tentando login em:', `${this.baseUrl}/api/auth/login`);
-    console.log('📧 Email:', loginValue);
+    const response = await fetch(`${this.baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: this.getHeaders(false),
+      body: JSON.stringify(payload)
+    });
 
-    try {
-      const response = await fetch(`${this.baseUrl}/api/auth/login`, {
-        method: 'POST',
-        headers: this.getHeaders(false),
-        body: JSON.stringify(payload)
-      });
-
-      console.log('📥 Status:', response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Erro:', errorText);
-        throw new Error(`Erro ${response.status}: ${errorText}`);
-      }
-
-      const data = await response.json();
-      this.accessToken = data.access_token;
-
-      if (this.accessToken) {
-        localStorage.setItem('access_token', this.accessToken);
-        localStorage.setItem('user_data', JSON.stringify(data.user));
-        console.log('✅ Login bem-sucedido!');
-      }
-
-      return data;
-    } catch (error) {
-      console.error('❌ Erro no login:', error);
-      throw error;
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Erro ao fazer login');
     }
+
+    const data = await response.json();
+    this.accessToken = data.access_token;
+
+    if (this.accessToken) {
+      localStorage.setItem('access_token', this.accessToken);
+      localStorage.setItem('user_data', JSON.stringify(data.user));
+    }
+
+    return data;
   }
 
   async getGameLink(slug: string): Promise<string | null> {
@@ -197,7 +182,7 @@ class ApiClient {
 
     try {
       const response = await fetch(
-        `${this.baseUrl}/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`,
+        `${this.baseUrl}/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`,
         {
           method: 'GET',
           headers: this.getHeaders(true)
@@ -207,23 +192,9 @@ class ApiClient {
       if (!response.ok) return null;
       const data = await response.json();
       return data.gameURL || data.iframe_url || null;
-    } catch (error) {
-      console.error(`Erro ao obter link do jogo ${slug}:`, error);
+    } catch {
       return null;
     }
-  }
-
-  async getAllGameLinks(): Promise<Record<string, string | null>> {
-    const links: Record<string, string | null> = {};
-    for (const [key, jogo] of Object.entries(JOGOS)) {
-      try {
-        links[key] = await this.getGameLink(jogo.slug);
-        await new Promise(resolve => setTimeout(resolve, 500));
-      } catch {
-        links[key] = null;
-      }
-    }
-    return links;
   }
 
   logout() {
@@ -247,6 +218,4 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient();
-
-// ========== RE-EXPORT ==========
 export { rouletteApi } from './rouletteApi';
