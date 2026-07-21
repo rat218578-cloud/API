@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { gameTokenService, GameTokenResponse } from '../services/gameToken';
-import { Loader2, Play, X, Key, Copy, Check } from 'lucide-react';
+import { Loader2, Play, X } from 'lucide-react';
 
 interface RouletteVideoProps {
   isOpen: boolean;
@@ -26,7 +26,6 @@ export function RouletteVideo({ isOpen, roomId, onClose }: RouletteVideoProps) {
   const [loading, setLoading] = useState(false);
   const [gameData, setGameData] = useState<GameTokenResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (isOpen && isAuthenticated && roomId) {
@@ -119,20 +118,10 @@ export function RouletteVideo({ isOpen, roomId, onClose }: RouletteVideoProps) {
         {/* Rodapé com Token */}
         {gameData?.token && (
           <div className="absolute bottom-0 left-0 right-0 z-10 p-2 bg-gradient-to-t from-black/80 to-transparent">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-text-muted font-mono truncate">
+            <div className="flex items-center justify-center">
+              <span className="text-[10px] text-text-muted font-mono truncate max-w-[80%]">
                 Token: {gameData.token.substring(0, 40)}...
               </span>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(gameData.token);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
-                }}
-                className="text-xs text-text-muted hover:text-white transition-colors"
-              >
-                {copied ? '✅ Copiado' : '📋 Copiar'}
-              </button>
             </div>
           </div>
         )}
