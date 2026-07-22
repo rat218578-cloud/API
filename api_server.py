@@ -56,7 +56,6 @@ class TurnstileTokenGenerator:
         return f"t2:1.{payload_b64}.{signature}.{final_hash}"
 
 def get_user_session(email):
-    """Obtém ou cria uma sessão para o usuário"""
     if email not in sessoes:
         sessoes[email] = {
             'session': None,
@@ -66,10 +65,8 @@ def get_user_session(email):
     return sessoes[email]
 
 def fazer_login_usuario(email, password):
-    """Faz login com as credenciais do usuário"""
     user_session = get_user_session(email)
     
-    # Verifica se já está logado
     if user_session['ultimo_login'] and datetime.now() - user_session['ultimo_login'] < timedelta(minutes=5):
         logger.info(f"✅ Login ainda válido para {email}")
         return True
@@ -90,10 +87,17 @@ def fazer_login_usuario(email, password):
     try:
         response = requests.post(f'{API_BASE}/v2/auth/login', json=login_data, timeout=10)
         
+        logger.info(f"📥 Status: {response.status_code}")
+        logger.info(f"📄 Resposta: {response.text[:200]}")
+        
         if response.status_code == 200:
-            data = response.json()
-            access_token = data.get('access_token')
+            try:
+                data = response.json()
+            except json.JSONDecodeError:
+                logger.error("❌ Resposta não é JSON válido")
+                return False
             
+            access_token = data.get('access_token')
             if access_token:
                 session = requests.Session()
                 session.headers.update({
@@ -109,14 +113,15 @@ def fazer_login_usuario(email, password):
                 logger.info(f"✅ Login OK para {email}")
                 return True
         else:
-            logger.error(f"❌ Login falhou para {email}: {response.text}")
+            logger.error(f"❌ Login falhou para {email}: {response.status_code}")
             return False
     except Exception as e:
         logger.error(f"❌ Erro no login para {email}: {e}")
         return False
+    
+    return False
 
 def obter_url_jogo(slug, email, password):
-    """Obtém URL do jogo usando as credenciais do usuário"""
     try:
         if not fazer_login_usuario(email, password):
             return None
@@ -136,9 +141,13 @@ def obter_url_jogo(slug, email, password):
         )
         
         if response.status_code == 200:
-            data = response.json()
-            game_url = data.get('iframe_url') or data.get('gameURL')
-            return game_url
+            try:
+                data = response.json()
+                game_url = data.get('iframe_url') or data.get('gameURL')
+                return game_url
+            except json.JSONDecodeError:
+                logger.error(f"❌ Resposta não é JSON para {slug}")
+                return None
         else:
             logger.warning(f"❌ {slug}: HTTP {response.status_code}")
             return None
@@ -157,41 +166,7 @@ def api_start_game():
     if not slug:
         return jsonify({'error': 'slug é obrigatório'}), 400
     
-    # Se não veio email/password, tenta pegar do header Authorization
     if not email or not password:
-        auth_header = request.headers.get('Authorization')
-        if auth_header:
-            # Tenta usar o token diretamente
-            token = auth_header.replace('Bearer ', '')
-            try:
-                # Verifica se temos sessão para este token
-                for user_email, user_session in sessoes.items():
-                    if user_session.get('access_token') == token:
-                        # Usa a sessão existente
-                        session = user_session['session']
-                        response = session.get(
-                            f'{API_BASE}/v2/start-game',
-                            params={
-                                'slug': slug,
-                                'platform': 'WEB',
-                                'use_demo': 0,
-                                'source': 'watchIsAuthenticated'
-                            },
-                            timeout=10
-                        )
-                        if response.status_code == 200:
-                            data = response.json()
-                            game_url = data.get('iframe_url') or data.get('gameURL')
-                            if game_url:
-                                return jsonify({
-                                    'success': True,
-                                    'slug': slug,
-                                    'gameURL': game_url,
-                                    'iframe_url': game_url
-                                })
-            except Exception as e:
-                logger.error(f"❌ Erro com token: {e}")
-        
         return jsonify({
             'error': 'email e password são obrigatórios para gerar o link',
             'success': False
@@ -214,7 +189,12 @@ def api_start_game():
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
     try:
-        data = request.json
+        data = request.get_json()
+        
+        if not data:
+            logger.error("❌ Body da requisição vazio")
+            return jsonify({'error': 'Body da requisição vazio'}), 400
+        
         email = data.get('login') or data.get('email')
         password = data.get('password')
         
@@ -232,8 +212,18 @@ def api_login():
             "captcha_token": captcha_token
         }
         
+        logger.info(f"📤 Login para: {email}")
+        
         response = requests.post(f'{API_BASE}/v2/auth/login', json=login_data, timeout=10)
-        result = response.json()
+        
+        logger.info(f"📥 Status: {response.status_code}")
+        
+        # Tenta parsear a resposta
+        try:
+            result = response.json()
+        except json.JSONDecodeError:
+            logger.error(f"❌ Resposta não é JSON: {response.text[:200]}")
+            return jsonify({'error': 'Resposta da API inválida'}), 500
         
         if response.status_code == 200:
             access_token = result.get('access_token')
@@ -250,9 +240,11 @@ def api_login():
                 user_session['session'] = session
                 user_session['ultimo_login'] = datetime.now()
                 user_session['access_token'] = access_token
+                logger.info(f"✅ Login OK para {email}")
         
         return jsonify(result), response.status_code
     except Exception as e:
+        logger.error(f"❌ Erro no login: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/roulette/history', methods=['GET'])
@@ -263,11 +255,9 @@ def api_roulette_history():
         email = request.args.get('email')
         
         if not email:
-            # Tenta pegar do header Authorization
             auth_header = request.headers.get('Authorization')
             if auth_header:
                 token = auth_header.replace('Bearer ', '')
-                # Procura a sessão com este token
                 for user_email, user_session in sessoes.items():
                     if user_session.get('access_token') == token:
                         email = user_email
@@ -281,7 +271,10 @@ def api_roulette_history():
                 timeout=10
             )
             if response.status_code == 200:
-                return jsonify(response.json()), response.status_code
+                try:
+                    return jsonify(response.json()), response.status_code
+                except json.JSONDecodeError:
+                    pass
         
         # Dados simulados se falhar
         return jsonify({
