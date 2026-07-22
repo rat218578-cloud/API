@@ -6,7 +6,7 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-console.log('🚀 Servidor iniciando...');
+console.log('🚀 Servidor iniciando na porta ' + PORT);
 console.log('📡 Proxy para Python na porta 5000');
 
 // CORS
@@ -39,7 +39,7 @@ console.log('📁 Servindo arquivos de:', distPath);
 
 app.use(express.static(distPath));
 
-// Fallback para SPA (Single Page Application)
+// Fallback para SPA
 app.get('*', (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'), (err) => {
     if (err) {
