@@ -19,7 +19,9 @@ CORS(app)
 # ========== CONFIGURAÇÕES ==========
 SITE_KEY = "0x4AAAAAAADmr68KUqpnEKo-9"
 SECRET_KEY = "0x4AAAAAAADmr62kWZNpTLxzKtYOYbpw7wzY"
-API_BASE = "https://api-sortenabet-betbr.bs2bet.com"
+
+# ===== DOMÍNIO CORRETO (usando sortenabet.bet.br que funcionava no Python original) =====
+API_BASE = "https://sortenabet.bet.br"
 
 # ========== SESSÕES POR USUÁRIO ==========
 sessoes = {}
@@ -85,7 +87,8 @@ def fazer_login_usuario(email, password):
     }
 
     try:
-        response = requests.post(f'{API_BASE}/v2/auth/login', json=login_data, timeout=10)
+        # ===== USANDO O ENDPOINT CORRETO (igual ao Python original) =====
+        response = requests.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
         
         logger.info(f"📥 Status: {response.status_code}")
         logger.info(f"📄 Resposta: {response.text[:200]}")
@@ -129,8 +132,9 @@ def obter_url_jogo(slug, email, password):
         user_session = get_user_session(email)
         session = user_session['session']
         
+        # ===== USANDO O ENDPOINT CORRETO (igual ao Python original) =====
         response = session.get(
-            f'{API_BASE}/v2/start-game',
+            f'{API_BASE}/api/start-game-v2',
             params={
                 'slug': slug,
                 'platform': 'WEB',
@@ -139,6 +143,8 @@ def obter_url_jogo(slug, email, password):
             },
             timeout=10
         )
+        
+        logger.info(f"📥 Status start-game: {response.status_code}")
         
         if response.status_code == 200:
             try:
@@ -214,9 +220,11 @@ def api_login():
         
         logger.info(f"📤 Login para: {email}")
         
-        response = requests.post(f'{API_BASE}/v2/auth/login', json=login_data, timeout=10)
+        # ===== USANDO O ENDPOINT CORRETO (igual ao Python original) =====
+        response = requests.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
         
         logger.info(f"📥 Status: {response.status_code}")
+        logger.info(f"📄 Resposta: {response.text[:200]}")
         
         # Tenta parsear a resposta
         try:
@@ -266,7 +274,7 @@ def api_roulette_history():
         if email and email in sessoes and sessoes[email]['session']:
             session = sessoes[email]['session']
             response = session.get(
-                f'{API_BASE}/v2/roulette/history',
+                f'{API_BASE}/api/roulette/history',
                 params={'slug': slug, 'limit': limit},
                 timeout=10
             )
