@@ -52,17 +52,6 @@ class GameLinkService {
     console.log(`🎮 Gerando link para: ${slug}`);
 
     try {
-      // Pega email e senha do localStorage
-      const userData = localStorage.getItem('user_data');
-      if (!userData) {
-        console.error('❌ Usuário não logado');
-        return null;
-      }
-
-      const user = JSON.parse(userData);
-      const email = user.email || user.login;
-      // A senha não está no localStorage por segurança
-      // Vamos usar o token que já temos
       const token = localStorage.getItem('access_token');
 
       if (!token) {
@@ -70,7 +59,6 @@ class GameLinkService {
         return null;
       }
 
-      // Usa o token diretamente, sem precisar de email/password
       const url = `/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`;
       console.log(`📤 GET: ${url}`);
 
