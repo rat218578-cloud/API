@@ -28,6 +28,7 @@ export default function App() {
   const [balance] = useState(10000);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [gameLauncherOpen, setGameLauncherOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   if (!isAuthenticated) return <Login onLogin={login} loading={loading} error={error} />;
 
@@ -35,9 +36,15 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-bg-primary text-text-primary">
-      <Sidebar activeGame={activeGame} onGameChange={(game) => { setActiveGame(game); setCurrentView("game"); }}
-        onSettingsClick={() => setSettingsOpen(true)} onGameLauncherClick={() => setGameLauncherOpen(true)} />
-      <main className="ml-16 lg:ml-64 transition-all duration-300 min-h-screen">
+      <Sidebar 
+        activeGame={activeGame} 
+        onGameChange={(game) => { setActiveGame(game); setCurrentView("game"); }}
+        onSettingsClick={() => setSettingsOpen(true)} 
+        onGameLauncherClick={() => setGameLauncherOpen(true)}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+      />
+      <main className={`transition-all duration-300 min-h-screen ${sidebarCollapsed ? "ml-16" : "ml-64"}`}>
         <Header title={currentView === "bankroll" ? "Ferramenta" : gameInfo.title}
           subtitle={currentView === "bankroll" ? "Gestão de Banca" : gameInfo.subtitle}
           balance={balance} user={user} onLogout={logout} />
