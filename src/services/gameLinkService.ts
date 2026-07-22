@@ -32,8 +32,6 @@ export const ROLETAS = [
 
 class GameLinkService {
   private static instance: GameLinkService;
-  private cache: Record<string, { url: string; timestamp: number }> = {};
-  private cacheTTL = 5 * 60 * 1000;
 
   static getInstance(): GameLinkService {
     if (!GameLinkService.instance) {
@@ -42,43 +40,19 @@ class GameLinkService {
     return GameLinkService.instance;
   }
 
+  // SEM CACHE - SEMPRE BUSCA UM LINK NOVO
   async getGameUrl(slug: string): Promise<string | null> {
-    const cached = this.cache[slug];
-    if (cached && (Date.now() - cached.timestamp) < this.cacheTTL) {
-      console.log(`📦 Cache hit para ${slug}`);
-      return cached.url;
-    }
-
-    console.log(`🎮 Gerando link para: ${slug}`);
+    console.log(`🎮 Buscando link para: ${slug}`);
 
     try {
       const token = localStorage.getItem('access_token');
-      const userData = localStorage.getItem('user_data');
       
       if (!token) {
         console.error('❌ Token não encontrado');
         return null;
       }
 
-      // Pega email do usuário
-      let email = '';
-      
-      if (userData) {
-        try {
-          const user = JSON.parse(userData);
-          email = user.email || user.login || '';
-        } catch (e) {
-          console.error('Erro ao parsear userData:', e);
-        }
-      }
-
-      // Construir URL com email se disponível
-      let url = `/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`;
-      
-      if (email) {
-        url += `&email=${encodeURIComponent(email)}`;
-      }
-
+      const url = `/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`;
       console.log(`📤 GET: ${url}`);
 
       const response = await fetch(url, {
@@ -95,37 +69,17 @@ class GameLinkService {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`❌ HTTP ${response.status}: ${errorText}`);
-        
-        if (response.status === 401) {
-          console.warn('⚠️ Token inválido ou expirado. Tente novamente.');
-        }
         return null;
       }
 
       const data = await response.json();
       console.log('📦 Resposta:', data);
 
-      const gameUrl = data.iframe_url || data.gameURL || null;
-
-      if (gameUrl) {
-        this.cache[slug] = {
-          url: gameUrl,
-          timestamp: Date.now()
-        };
-        console.log(`✅ Link gerado para ${slug}`);
-        return gameUrl;
-      }
-
-      return null;
+      return data.iframe_url || data.gameURL || null;
     } catch (error) {
       console.error(`❌ Erro:`, error);
       return null;
     }
-  }
-
-  clearCache(): void {
-    this.cache = {};
-    console.log('🗑️ Cache limpo');
   }
 }
 

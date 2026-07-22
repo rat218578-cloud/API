@@ -17,11 +17,12 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
   const roleta = ROLETAS.find(r => r.slug === slug);
   const cor = roleta?.cor || '#6C3CE1';
 
+  // SEMPRE busca um link novo quando o slug muda
   useEffect(() => {
     if (isOpen && slug) {
       loadGame();
     }
-  }, [isOpen, slug]);
+  }, [isOpen, slug]); // <-- slug na dependência faz recarregar ao mudar
 
   const loadGame = async () => {
     setLoading(true);
@@ -29,14 +30,18 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
     setGameUrl(null);
 
     try {
+      console.log(`🎮 Gerando link para: ${slug}`);
       const url = await gameLinkService.getGameUrl(slug);
+      
       if (url) {
         setGameUrl(url);
+        console.log('✅ Link gerado');
       } else {
         setError('Não foi possível gerar o link. Tente novamente.');
       }
-    } catch {
+    } catch (err) {
       setError('Erro ao gerar link');
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -62,6 +67,7 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
       id="live-game-container"
       className="bg-bg-card border border-border-default rounded-2xl overflow-hidden"
     >
+      {/* Header */}
       <div className="flex items-center justify-between p-3 bg-bg-secondary/80 border-b border-border-default">
         <div className="flex items-center gap-3">
           <span 
@@ -82,6 +88,7 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
             onClick={loadGame}
             disabled={loading}
             className="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors disabled:opacity-50"
+            title="Gerar novo link"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -100,6 +107,7 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
         </div>
       </div>
 
+      {/* Player */}
       <div className="relative bg-black" style={{ minHeight: '500px', height: '65vh' }}>
         {loading ? (
           <div className="absolute inset-0 flex items-center justify-center">
@@ -147,6 +155,7 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
         )}
       </div>
 
+      {/* Footer */}
       <div className="p-2 bg-bg-secondary/50 border-t border-border-default">
         <div className="flex items-center justify-between text-[10px] text-text-muted">
           <span>{roleta?.nome || slug}</span>
