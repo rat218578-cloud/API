@@ -40,19 +40,50 @@ class GameLinkService {
     return GameLinkService.instance;
   }
 
-  // SEM CACHE - SEMPRE BUSCA UM LINK NOVO
+  // Cada chamada gera uma nova sessão para o jogo
   async getGameUrl(slug: string): Promise<string | null> {
-    console.log(`🎮 Buscando link para: ${slug}`);
+    console.log(`🎮 Gerando link para: ${slug}`);
 
     try {
       const token = localStorage.getItem('access_token');
+      const userData = localStorage.getItem('user_data');
       
       if (!token) {
         console.error('❌ Token não encontrado');
         return null;
       }
 
-      const url = `/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`;
+      // Pega email do usuário
+      let email = '';
+      let password = '';
+      
+      if (userData) {
+        try {
+          const user = JSON.parse(userData);
+          email = user.email || user.login || '';
+          // A senha precisa ser obtida do formulário de login
+          // Vamos usar o email e pedir a senha
+        } catch (e) {
+          console.error('Erro ao parsear userData:', e);
+        }
+      }
+
+      // Buscar senha do usuário (armazenada temporariamente)
+      // O usuário precisa ter feito login recentemente
+      const storedPassword = sessionStorage.getItem('temp_password') || '';
+      
+      // Construir URL com email e password
+      let url = `/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`;
+      
+      if (email) {
+        url += `&email=${encodeURIComponent(email)}`;
+      }
+      
+      // Usa a senha que o usuário digitou no login
+      if (storedPassword) {
+        url += `&password=${encodeURIComponent(storedPassword)}`;
+      }
+
       console.log(`📤 GET: ${url}`);
 
       const response = await fetch(url, {

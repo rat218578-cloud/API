@@ -6,7 +6,6 @@ import time
 import hashlib
 import base64
 import secrets
-from datetime import datetime, timedelta
 import logging
 import os
 
@@ -20,19 +19,6 @@ CORS(app)
 SITE_KEY = "0x4AAAAAAADmr68KUqpnEKo-9"
 SECRET_KEY = "0x4AAAAAAADmr62kWZNpTLxzKtYOYbpw7wzY"
 API_BASE = "https://sortenabet.bet.br"
-
-# ========== SESSÃO ==========
-session = requests.Session()
-session.headers.update({
-    'Content-Type': 'application/json',
-    'Origin': 'https://sortenabet.bet.br',
-    'Referer': 'https://sortenabet.bet.br/',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
-})
-
-cache_jogos = {}
-ultimo_login = None
-TOKEN_EXPIRATION = 300
 
 class TurnstileTokenGenerator:
     def __init__(self, site_key: str, secret_key: str):
@@ -65,12 +51,110 @@ class TurnstileTokenGenerator:
 
         return f"t2:1.{payload_b64}.{signature}.{final_hash}"
 
+# ========== SESSÕES POR JOGO (cada jogo tem sua própria sessão) ==========
+sessoes_jogos = {}
+
+def get_session_for_game(slug):
+    """Cria uma sessão única para cada jogo"""
+    if slug not in sessoes_jogos:
+        session = requests.Session()
+        session.headers.update({
+            'Content-Type': 'application/json',
+            'Origin': 'https://sortenabet.bet.br',
+            'Referer': 'https://sortenabet.bet.br/',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
+        })
+        sessoes_jogos[slug] = {
+            'session': session,
+            'ultimo_login': None,
+            'token': None
+        }
+    return sessoes_jogos[slug]
+
+def fazer_login_para_jogo(slug, email, password):
+    """Faz login específico para cada jogo"""
+    game_session = get_session_for_game(slug)
+    session = game_session['session']
+    
+    # Verifica se já está logado para este jogo
+    if game_session['ultimo_login'] and (time.time() - game_session['ultimo_login']) < 300:
+        logger.info(f"✅ Login válido para {slug}")
+        return True
+    
+    logger.info(f"🔐 Login para {slug} com {email}")
+    
+    generator = TurnstileTokenGenerator(SITE_KEY, SECRET_KEY)
+    captcha_token = generator.generate_token()
+    
+    login_data = {
+        "login": email,
+        "email": email,
+        "password": password,
+        "app_source": "web",
+        "captcha_token": captcha_token
+    }
+
+    try:
+        response = session.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            access_token = data.get('access_token')
+            
+            if access_token:
+                session.headers.update({'Authorization': f'Bearer {access_token}'})
+                game_session['ultimo_login'] = time.time()
+                game_session['token'] = access_token
+                logger.info(f"✅ Login OK para {slug}")
+                return True
+        else:
+            logger.error(f"❌ Login falhou para {slug}: {response.text[:200]}")
+            return False
+    except Exception as e:
+        logger.error(f"❌ Erro no login para {slug}: {e}")
+        return False
+
+def obter_url_jogo_para_sessao(slug, email, password):
+    """Obtém URL do jogo usando uma sessão dedicada"""
+    try:
+        if not fazer_login_para_jogo(slug, email, password):
+            return None
+        
+        game_session = get_session_for_game(slug)
+        session = game_session['session']
+        
+        response = session.get(
+            f'{API_BASE}/api/start-game-v2',
+            params={
+                'slug': slug,
+                'platform': 'WEB',
+                'use_demo': 0,
+                'source': 'watchIsAuthenticated'
+            },
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            game_url = data.get('iframe_url') or data.get('gameURL')
+            if game_url:
+                logger.info(f"✅ URL obtida para {slug}")
+                return game_url
+            else:
+                logger.warning(f"⚠️ Sem URL para {slug}")
+                return None
+        else:
+            logger.warning(f"❌ {slug}: {response.status_code}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar {slug}: {e}")
+        return None
+
 # ========== ROTAS ==========
 
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
-    global session, ultimo_login
-    
     try:
         data = request.get_json()
         
@@ -83,8 +167,7 @@ def api_login():
         if not email or not password:
             return jsonify({'error': 'Email e senha obrigatórios'}), 400
         
-        logger.info(f"📤 Login: {email}")
-        
+        # Login principal (apenas para autenticar o usuário)
         generator = TurnstileTokenGenerator(SITE_KEY, SECRET_KEY)
         captcha_token = generator.generate_token()
         
@@ -96,38 +179,10 @@ def api_login():
             "captcha_token": captcha_token
         }
         
-        # Faz login na API
-        response = session.post(
-            f'{API_BASE}/api/auth/login',
-            json=login_data,
-            timeout=10
-        )
+        response = requests.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
+        result = response.json()
         
-        logger.info(f"📥 Status: {response.status_code}")
-        
-        if response.status_code == 200:
-            result = response.json()
-            access_token = result.get('access_token')
-            user_data = result.get('user', {})
-            
-            if access_token:
-                session.headers.update({
-                    'Authorization': f'Bearer {access_token}'
-                })
-                ultimo_login = time.time()
-                logger.info(f"✅ Login OK para {email}")
-                
-                # ===== RETORNA OS DADOS DO USUÁRIO =====
-                return jsonify({
-                    'access_token': access_token,
-                    'token_type': 'Bearer',
-                    'expires_in': 604800,
-                    'user': user_data
-                }), 200
-            else:
-                return jsonify({'error': 'Token não encontrado'}), 401
-        else:
-            return jsonify(response.json()), response.status_code
+        return jsonify(result), response.status_code
         
     except Exception as e:
         logger.error(f"❌ Erro: {e}")
@@ -137,59 +192,30 @@ def api_login():
 def api_start_game():
     try:
         slug = request.args.get('slug')
+        email = request.args.get('email')
+        password = request.args.get('password')
         
         if not slug:
-            return jsonify({'error': 'slug é obrigatório'}), 400
+            return jsonify({'error': 'slug obrigatório'}), 400
         
-        if not ultimo_login or (time.time() - ultimo_login) > TOKEN_EXPIRATION:
-            return jsonify({'error': 'Token expirado. Faça login novamente.'}), 401
+        if not email or not password:
+            return jsonify({'error': 'email e password obrigatórios'}), 401
         
-        if slug in cache_jogos:
-            cache_time = cache_jogos[slug]['timestamp']
-            if (time.time() - cache_time) < TOKEN_EXPIRATION:
-                logger.info(f"📦 Cache hit para {slug}")
-                return jsonify({
-                    'success': True,
-                    'slug': slug,
-                    'gameURL': cache_jogos[slug]['url'],
-                    'iframe_url': cache_jogos[slug]['url']
-                })
+        # ===== CADA JOGO TEM SUA PRÓPRIA SESSÃO =====
+        url = obter_url_jogo_para_sessao(slug, email, password)
         
-        params = {
-            'slug': slug,
-            'platform': request.args.get('platform', 'WEB'),
-            'use_demo': request.args.get('use_demo', 0),
-            'source': request.args.get('source', 'watchIsAuthenticated')
-        }
-        
-        logger.info(f"🎮 GET: {API_BASE}/api/start-game-v2?slug={slug}")
-        
-        response = session.get(
-            f'{API_BASE}/api/start-game-v2',
-            params=params,
-            timeout=10
-        )
-        
-        logger.info(f"📥 Status: {response.status_code}")
-        
-        if response.status_code == 200:
-            data = response.json()
-            game_url = data.get('iframe_url') or data.get('gameURL')
-            
-            if game_url:
-                cache_jogos[slug] = {
-                    'url': game_url,
-                    'timestamp': time.time()
-                }
-                logger.info(f"✅ URL obtida para {slug}")
-                return jsonify({
-                    'success': True,
-                    'slug': slug,
-                    'gameURL': game_url,
-                    'iframe_url': game_url
-                })
-        
-        return jsonify(response.json()), response.status_code
+        if url:
+            return jsonify({
+                'success': True,
+                'slug': slug,
+                'gameURL': url,
+                'iframe_url': url
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Não foi possível obter a URL'
+            }), 404
         
     except Exception as e:
         logger.error(f"❌ Erro: {e}")
@@ -200,16 +226,21 @@ def api_roulette_history():
     try:
         slug = request.args.get('slug', 'evolution/brasileira')
         limit = request.args.get('limit', 50)
+        auth_header = request.headers.get('Authorization')
         
-        response = session.get(
-            f'{API_BASE}/api/roulette/history',
-            params={'slug': slug, 'limit': limit},
-            timeout=10
-        )
+        if auth_header:
+            token = auth_header.replace('Bearer ', '')
+            headers = {'Authorization': f'Bearer {token}'}
+            response = requests.get(
+                f'{API_BASE}/api/roulette/history',
+                params={'slug': slug, 'limit': limit},
+                headers=headers,
+                timeout=10
+            )
+            if response.status_code == 200:
+                return jsonify(response.json()), response.status_code
         
-        if response.status_code == 200:
-            return jsonify(response.json()), response.status_code
-        
+        # Dados simulados
         return jsonify({
             'spins': [
                 {'number': n, 'color': 'red' if n % 2 == 0 else 'black', 
@@ -241,7 +272,7 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - SORTE NA BET")
+    print("🎯 API PROXY - SESSÃO POR JOGO")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("🌐 Rodando em: http://localhost:5000")
