@@ -7,16 +7,14 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "start": "node server.cjs"
+    "start": "python3 api_server.py"
   },
   "dependencies": {
     "clsx": "2.1.1",
     "cors": "^2.8.6",
     "crypto-js": "^4.2.0",
     "express": "^4.22.2",
-    "http-proxy-middleware": "^3.0.7",
     "lucide-react": "^1.24.0",
-    "node-fetch": "^3.3.2",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "recharts": "^3.9.2",
