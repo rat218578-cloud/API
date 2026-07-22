@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader2, RefreshCw, X, Maximize2, Minimize2 } from 'lucide-react';
+import { Loader2, RefreshCw, X, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
 import { gameLinkService, ROLETAS } from '../services/gameLinkService';
 
 interface LiveGameViewProps {
@@ -17,12 +17,11 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
   const roleta = ROLETAS.find(r => r.slug === slug);
   const cor = roleta?.cor || '#6C3CE1';
 
-  // SEMPRE busca um link novo quando o slug muda
   useEffect(() => {
     if (isOpen && slug) {
       loadGame();
     }
-  }, [isOpen, slug]); // <-- slug na dependência faz recarregar ao mudar
+  }, [isOpen, slug]);
 
   const loadGame = async () => {
     setLoading(true);
@@ -44,6 +43,13 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Abrir em nova aba
+  const openInNewTab = () => {
+    if (gameUrl) {
+      window.open(gameUrl, '_blank');
     }
   };
 
@@ -84,6 +90,16 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
           )}
         </div>
         <div className="flex items-center gap-1">
+          {/* Botão para abrir em nova aba */}
+          {gameUrl && (
+            <button
+              onClick={openInNewTab}
+              className="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
+              title="Abrir em nova aba"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </button>
+          )}
           <button
             onClick={loadGame}
             disabled={loading}
@@ -155,20 +171,31 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
         )}
       </div>
 
-      {/* Footer */}
+      {/* Footer com aviso */}
       <div className="p-2 bg-bg-secondary/50 border-t border-border-default">
         <div className="flex items-center justify-between text-[10px] text-text-muted">
           <span>{roleta?.nome || slug}</span>
-          <span className="flex items-center gap-1">
-            {gameUrl ? (
-              <>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Conectado</span>
-              </>
-            ) : (
-              <span>Aguardando</span>
+          <div className="flex items-center gap-3">
+            {gameUrl && (
+              <button
+                onClick={openInNewTab}
+                className="text-accent-cyan hover:text-accent-cyan/80 transition-colors flex items-center gap-1"
+              >
+                <ExternalLink className="w-3 h-3" />
+                Abrir em nova aba
+              </button>
             )}
-          </span>
+            <span className="flex items-center gap-1">
+              {gameUrl ? (
+                <>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>Conectado</span>
+                </>
+              ) : (
+                <span>Aguardando</span>
+              )}
+            </span>
+          </div>
         </div>
       </div>
     </div>
