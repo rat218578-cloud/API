@@ -60,34 +60,25 @@ class GameLinkService {
         return null;
       }
 
-      // Pega email e senha do usuário
+      // Pega email do usuário
       let email = '';
-      let password = '';
       
       if (userData) {
         try {
           const user = JSON.parse(userData);
           email = user.email || user.login || '';
-          // A senha não está salva, então vamos pedir ao usuário
-          // Por enquanto, usamos a senha que está no formulário de login
-          // Ou podemos tentar usar o token diretamente sem email/senha
         } catch (e) {
           console.error('Erro ao parsear userData:', e);
         }
       }
 
-      // Construir URL com email e password se disponíveis
+      // Construir URL com email se disponível
       let url = `/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`;
       
-      // Se tiver email, adiciona na URL
       if (email) {
         url += `&email=${encodeURIComponent(email)}`;
       }
-      
-      // Se tiver senha, adiciona na URL
-      // A senha pode ser obtida do campo de login
-      // Como alternativa, vamos tentar usar o token apenas
-      
+
       console.log(`📤 GET: ${url}`);
 
       const response = await fetch(url, {
@@ -105,11 +96,8 @@ class GameLinkService {
         const errorText = await response.text();
         console.error(`❌ HTTP ${response.status}: ${errorText}`);
         
-        // Se for 401, NÃO remove o token - apenas retorna null
-        // O usuário já está logado, o backend que precisa lidar com isso
         if (response.status === 401) {
           console.warn('⚠️ Token inválido ou expirado. Tente novamente.');
-          // Não remove o token para não voltar para o login
         }
         return null;
       }
