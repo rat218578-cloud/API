@@ -19,11 +19,9 @@ CORS(app)
 # ========== CONFIGURAÇÕES ==========
 SITE_KEY = "0x4AAAAAAADmr68KUqpnEKo-9"
 SECRET_KEY = "0x4AAAAAAADmr62kWZNpTLxzKtYOYbpw7wzY"
-
-# ===== USANDO O MESMO DOMÍNIO DO SEU SCRIPT PYTHON =====
 API_BASE = "https://sortenabet.bet.br"
 
-# ========== SESSÃO PERSISTENTE ==========
+# ========== SESSÃO ==========
 session = requests.Session()
 session.headers.update({
     'Content-Type': 'application/json',
@@ -67,99 +65,12 @@ class TurnstileTokenGenerator:
 
         return f"t2:1.{payload_b64}.{signature}.{final_hash}"
 
-# ========== FUNÇÕES IGUAIS AO SEU SCRIPT PYTHON ==========
-def fazer_login(email, password):
-    global session, ultimo_login
-    
-    if ultimo_login and (time.time() - ultimo_login) < TOKEN_EXPIRATION:
-        logger.info("✅ Login ainda válido")
-        return True
-    
-    logger.info(f"🔐 FAZENDO LOGIN para {email}...")
-    
-    generator = TurnstileTokenGenerator(SITE_KEY, SECRET_KEY)
-    captcha_token = generator.generate_token()
-    
-    login_data = {
-        "login": email,
-        "email": email,
-        "password": password,
-        "app_source": "web",
-        "captcha_token": captcha_token
-    }
-
-    try:
-        # ===== IGUAL AO SEU SCRIPT PYTHON =====
-        response = session.post(
-            f'{API_BASE}/api/auth/login',
-            json=login_data,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            access_token = data.get('access_token')
-            
-            if access_token:
-                session.headers.update({
-                    'Authorization': f'Bearer {access_token}'
-                })
-                ultimo_login = time.time()
-                logger.info(f"✅ Login OK para {email}")
-                return True
-        else:
-            logger.error(f"❌ Login falhou: {response.text[:200]}")
-            return False
-    except Exception as e:
-        logger.error(f"❌ Erro no login: {e}")
-        return False
-
-def obter_url_jogo(slug):
-    """IGUAL AO SEU SCRIPT PYTHON - GET /api/start-game-v2"""
-    global cache_jogos
-    
-    # Cache
-    if slug in cache_jogos:
-        if (time.time() - cache_jogos[slug]['timestamp']) < TOKEN_EXPIRATION:
-            logger.info(f"📦 Cache hit para {slug}")
-            return cache_jogos[slug]['url']
-    
-    try:
-        # ===== IGUAL AO SEU SCRIPT PYTHON =====
-        response = session.get(
-            f'{API_BASE}/api/start-game-v2',
-            params={
-                'slug': slug,
-                'platform': 'WEB',
-                'use_demo': 0,
-                'source': 'watchIsAuthenticated'
-            },
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            game_url = data.get('iframe_url') or data.get('gameURL')
-            
-            if game_url:
-                cache_jogos[slug] = {
-                    'url': game_url,
-                    'timestamp': time.time()
-                }
-                logger.info(f"✅ URL obtida para {slug}")
-                return game_url
-        else:
-            logger.warning(f"❌ {slug}: HTTP {response.status_code}")
-            return None
-            
-    except Exception as e:
-        logger.error(f"❌ Erro ao buscar {slug}: {e}")
-        return None
-
 # ========== ROTAS ==========
 
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
+    global session, ultimo_login
+    
     try:
         data = request.get_json()
         
@@ -172,11 +83,51 @@ def api_login():
         if not email or not password:
             return jsonify({'error': 'Email e senha obrigatórios'}), 400
         
-        # Faz login usando a função igual ao script Python
-        if fazer_login(email, password):
-            return jsonify({'success': True, 'message': 'Login OK'}), 200
+        logger.info(f"📤 Login: {email}")
+        
+        generator = TurnstileTokenGenerator(SITE_KEY, SECRET_KEY)
+        captcha_token = generator.generate_token()
+        
+        login_data = {
+            "login": email,
+            "email": email,
+            "password": password,
+            "app_source": "web",
+            "captcha_token": captcha_token
+        }
+        
+        # Faz login na API
+        response = session.post(
+            f'{API_BASE}/api/auth/login',
+            json=login_data,
+            timeout=10
+        )
+        
+        logger.info(f"📥 Status: {response.status_code}")
+        
+        if response.status_code == 200:
+            result = response.json()
+            access_token = result.get('access_token')
+            user_data = result.get('user', {})
+            
+            if access_token:
+                session.headers.update({
+                    'Authorization': f'Bearer {access_token}'
+                })
+                ultimo_login = time.time()
+                logger.info(f"✅ Login OK para {email}")
+                
+                # ===== RETORNA OS DADOS DO USUÁRIO =====
+                return jsonify({
+                    'access_token': access_token,
+                    'token_type': 'Bearer',
+                    'expires_in': 604800,
+                    'user': user_data
+                }), 200
+            else:
+                return jsonify({'error': 'Token não encontrado'}), 401
         else:
-            return jsonify({'error': 'Login falhou'}), 401
+            return jsonify(response.json()), response.status_code
         
     except Exception as e:
         logger.error(f"❌ Erro: {e}")
@@ -190,21 +141,55 @@ def api_start_game():
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
         
-        # ===== IGUAL AO SEU SCRIPT PYTHON =====
-        url = obter_url_jogo(slug)
+        if not ultimo_login or (time.time() - ultimo_login) > TOKEN_EXPIRATION:
+            return jsonify({'error': 'Token expirado. Faça login novamente.'}), 401
         
-        if url:
-            return jsonify({
-                'success': True,
-                'slug': slug,
-                'gameURL': url,
-                'iframe_url': url
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Não foi possível obter a URL do jogo'
-            }), 404
+        if slug in cache_jogos:
+            cache_time = cache_jogos[slug]['timestamp']
+            if (time.time() - cache_time) < TOKEN_EXPIRATION:
+                logger.info(f"📦 Cache hit para {slug}")
+                return jsonify({
+                    'success': True,
+                    'slug': slug,
+                    'gameURL': cache_jogos[slug]['url'],
+                    'iframe_url': cache_jogos[slug]['url']
+                })
+        
+        params = {
+            'slug': slug,
+            'platform': request.args.get('platform', 'WEB'),
+            'use_demo': request.args.get('use_demo', 0),
+            'source': request.args.get('source', 'watchIsAuthenticated')
+        }
+        
+        logger.info(f"🎮 GET: {API_BASE}/api/start-game-v2?slug={slug}")
+        
+        response = session.get(
+            f'{API_BASE}/api/start-game-v2',
+            params=params,
+            timeout=10
+        )
+        
+        logger.info(f"📥 Status: {response.status_code}")
+        
+        if response.status_code == 200:
+            data = response.json()
+            game_url = data.get('iframe_url') or data.get('gameURL')
+            
+            if game_url:
+                cache_jogos[slug] = {
+                    'url': game_url,
+                    'timestamp': time.time()
+                }
+                logger.info(f"✅ URL obtida para {slug}")
+                return jsonify({
+                    'success': True,
+                    'slug': slug,
+                    'gameURL': game_url,
+                    'iframe_url': game_url
+                })
+        
+        return jsonify(response.json()), response.status_code
         
     except Exception as e:
         logger.error(f"❌ Erro: {e}")
@@ -225,7 +210,6 @@ def api_roulette_history():
         if response.status_code == 200:
             return jsonify(response.json()), response.status_code
         
-        # Dados simulados
         return jsonify({
             'spins': [
                 {'number': n, 'color': 'red' if n % 2 == 0 else 'black', 
@@ -257,7 +241,7 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - IGUAL AO SCRIPT PYTHON")
+    print("🎯 API PROXY - SORTE NA BET")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("🌐 Rodando em: http://localhost:5000")
