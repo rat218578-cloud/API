@@ -40,7 +40,6 @@ class GameLinkService {
     return GameLinkService.instance;
   }
 
-  // Cada chamada gera uma nova sessão para o jogo
   async getGameUrl(slug: string): Promise<string | null> {
     console.log(`🎮 Gerando link para: ${slug}`);
 
@@ -55,23 +54,19 @@ class GameLinkService {
 
       // Pega email do usuário
       let email = '';
-      let password = '';
       
       if (userData) {
         try {
           const user = JSON.parse(userData);
           email = user.email || user.login || '';
-          // A senha precisa ser obtida do formulário de login
-          // Vamos usar o email e pedir a senha
         } catch (e) {
           console.error('Erro ao parsear userData:', e);
         }
       }
 
-      // Buscar senha do usuário (armazenada temporariamente)
-      // O usuário precisa ter feito login recentemente
+      // Busca senha do usuário (armazenada temporariamente no sessionStorage)
       const storedPassword = sessionStorage.getItem('temp_password') || '';
-      
+
       // Construir URL com email e password
       let url = `/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`;
       
@@ -79,7 +74,6 @@ class GameLinkService {
         url += `&email=${encodeURIComponent(email)}`;
       }
       
-      // Usa a senha que o usuário digitou no login
       if (storedPassword) {
         url += `&password=${encodeURIComponent(storedPassword)}`;
       }
