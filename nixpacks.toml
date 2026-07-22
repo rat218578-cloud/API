@@ -1,0 +1,14 @@
+[phases.setup]
+nixPkgs = ["python311", "python311Packages.pip", "nodejs"]
+
+[phases.install]
+cmds = [
+  "pip install flask flask-cors requests",
+  "npm install"
+]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "python3 api_server.py"
