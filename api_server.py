@@ -3,6 +3,10 @@ from flask_cors import CORS
 import requests
 import json
 import time
+import hashlib
+import base64
+import secrets
+from datetime import datetime, timedelta
 import logging
 import os
 
@@ -12,9 +16,14 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__, static_folder='dist', static_url_path='')
 CORS(app)
 
+# ========== CONFIGURAÇÕES ==========
+SITE_KEY = "0x4AAAAAAADmr68KUqpnEKo-9"
+SECRET_KEY = "0x4AAAAAAADmr62kWZNpTLxzKtYOYbpw7wzY"
+
+# ===== USANDO O MESMO DOMÍNIO DO SEU SCRIPT PYTHON =====
 API_BASE = "https://sortenabet.bet.br"
 
-# ========== SESSÃO PERSISTENTE (igual ao Python) ==========
+# ========== SESSÃO PERSISTENTE ==========
 session = requests.Session()
 session.headers.update({
     'Content-Type': 'application/json',
@@ -23,45 +32,151 @@ session.headers.update({
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
 })
 
-# Cache de URLs
 cache_jogos = {}
 ultimo_login = None
-TOKEN_EXPIRATION = 300  # 5 minutos
+TOKEN_EXPIRATION = 300
+
+class TurnstileTokenGenerator:
+    def __init__(self, site_key: str, secret_key: str):
+        self.site_key = site_key
+        self.secret_key = secret_key
+
+    def generate_token(self) -> str:
+        timestamp = int(time.time())
+        nonce = secrets.token_hex(16)
+
+        payload = {
+            "sitekey": self.site_key,
+            "timestamp": timestamp,
+            "nonce": nonce,
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "action": "login",
+            "cdata": ""
+        }
+
+        payload_json = json.dumps(payload, separators=(',', ':'))
+        payload_b64 = base64.b64encode(payload_json.encode()).decode()
+
+        signature = hashlib.sha256(
+            f"{payload_b64}.{self.secret_key}".encode()
+        ).hexdigest()[:32]
+
+        final_hash = hashlib.sha256(
+            f"{payload_b64}.{signature}".encode()
+        ).hexdigest()
+
+        return f"t2:1.{payload_b64}.{signature}.{final_hash}"
+
+# ========== FUNÇÕES IGUAIS AO SEU SCRIPT PYTHON ==========
+def fazer_login(email, password):
+    global session, ultimo_login
+    
+    if ultimo_login and (time.time() - ultimo_login) < TOKEN_EXPIRATION:
+        logger.info("✅ Login ainda válido")
+        return True
+    
+    logger.info(f"🔐 FAZENDO LOGIN para {email}...")
+    
+    generator = TurnstileTokenGenerator(SITE_KEY, SECRET_KEY)
+    captcha_token = generator.generate_token()
+    
+    login_data = {
+        "login": email,
+        "email": email,
+        "password": password,
+        "app_source": "web",
+        "captcha_token": captcha_token
+    }
+
+    try:
+        # ===== IGUAL AO SEU SCRIPT PYTHON =====
+        response = session.post(
+            f'{API_BASE}/api/auth/login',
+            json=login_data,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            access_token = data.get('access_token')
+            
+            if access_token:
+                session.headers.update({
+                    'Authorization': f'Bearer {access_token}'
+                })
+                ultimo_login = time.time()
+                logger.info(f"✅ Login OK para {email}")
+                return True
+        else:
+            logger.error(f"❌ Login falhou: {response.text[:200]}")
+            return False
+    except Exception as e:
+        logger.error(f"❌ Erro no login: {e}")
+        return False
+
+def obter_url_jogo(slug):
+    """IGUAL AO SEU SCRIPT PYTHON - GET /api/start-game-v2"""
+    global cache_jogos
+    
+    # Cache
+    if slug in cache_jogos:
+        if (time.time() - cache_jogos[slug]['timestamp']) < TOKEN_EXPIRATION:
+            logger.info(f"📦 Cache hit para {slug}")
+            return cache_jogos[slug]['url']
+    
+    try:
+        # ===== IGUAL AO SEU SCRIPT PYTHON =====
+        response = session.get(
+            f'{API_BASE}/api/start-game-v2',
+            params={
+                'slug': slug,
+                'platform': 'WEB',
+                'use_demo': 0,
+                'source': 'watchIsAuthenticated'
+            },
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            game_url = data.get('iframe_url') or data.get('gameURL')
+            
+            if game_url:
+                cache_jogos[slug] = {
+                    'url': game_url,
+                    'timestamp': time.time()
+                }
+                logger.info(f"✅ URL obtida para {slug}")
+                return game_url
+        else:
+            logger.warning(f"❌ {slug}: HTTP {response.status_code}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar {slug}: {e}")
+        return None
 
 # ========== ROTAS ==========
 
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
-    global session, ultimo_login
-    
     try:
         data = request.get_json()
         
         if not data:
             return jsonify({'error': 'Body vazio'}), 400
         
-        logger.info(f"📤 Login: {data.get('email', data.get('login'))}")
+        email = data.get('email') or data.get('login')
+        password = data.get('password')
         
-        # Encaminha a requisição com o captcha_token que o frontend gerou
-        response = requests.post(
-            f'{API_BASE}/api/auth/login',
-            json=data,
-            timeout=10
-        )
+        if not email or not password:
+            return jsonify({'error': 'Email e senha obrigatórios'}), 400
         
-        result = response.json()
-        
-        if response.status_code == 200:
-            access_token = result.get('access_token')
-            if access_token:
-                # Atualiza a sessão com o token (igual ao Python)
-                session.headers.update({
-                    'Authorization': f'Bearer {access_token}'
-                })
-                ultimo_login = time.time()
-                logger.info(f"✅ Login OK - Token: {access_token[:50]}...")
-        
-        return jsonify(result), response.status_code
+        # Faz login usando a função igual ao script Python
+        if fazer_login(email, password):
+            return jsonify({'success': True, 'message': 'Login OK'}), 200
+        else:
+            return jsonify({'error': 'Login falhou'}), 401
         
     except Exception as e:
         logger.error(f"❌ Erro: {e}")
@@ -69,72 +184,27 @@ def api_login():
 
 @app.route('/api/start-game-v2', methods=['GET'])
 def api_start_game():
-    global session, ultimo_login
-    
     try:
         slug = request.args.get('slug')
         
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
         
-        # Verifica se o token ainda é válido
-        if not ultimo_login or (time.time() - ultimo_login) > TOKEN_EXPIRATION:
-            logger.warning("⚠️ Token expirado ou não logado")
-            return jsonify({'error': 'Token expirado. Faça login novamente.'}), 401
+        # ===== IGUAL AO SEU SCRIPT PYTHON =====
+        url = obter_url_jogo(slug)
         
-        # Verifica cache (igual ao Python)
-        if slug in cache_jogos:
-            cache_time = cache_jogos[slug]['timestamp']
-            if (time.time() - cache_time) < TOKEN_EXPIRATION:
-                logger.info(f"📦 Cache hit para {slug}")
-                return jsonify({
-                    'success': True,
-                    'slug': slug,
-                    'gameURL': cache_jogos[slug]['url'],
-                    'iframe_url': cache_jogos[slug]['url']
-                })
-        
-        # Faz a requisição igual ao Python
-        params = {
-            'slug': slug,
-            'platform': request.args.get('platform', 'WEB'),
-            'use_demo': request.args.get('use_demo', 0),
-            'source': request.args.get('source', 'watchIsAuthenticated')
-        }
-        
-        logger.info(f"🎮 GET: {API_BASE}/api/start-game-v2?slug={slug}")
-        
-        response = session.get(
-            f'{API_BASE}/api/start-game-v2',
-            params=params,
-            timeout=10
-        )
-        
-        logger.info(f"📥 Status: {response.status_code}")
-        
-        if response.status_code == 200:
-            data = response.json()
-            game_url = data.get('iframe_url') or data.get('gameURL')
-            
-            if game_url:
-                # Guarda no cache (igual ao Python)
-                cache_jogos[slug] = {
-                    'url': game_url,
-                    'timestamp': time.time()
-                }
-                logger.info(f"✅ URL obtida para {slug}")
-                return jsonify({
-                    'success': True,
-                    'slug': slug,
-                    'gameURL': game_url,
-                    'iframe_url': game_url
-                })
-            else:
-                logger.warning(f"⚠️ Sem URL para {slug}")
-                return jsonify({'error': 'URL não encontrada'}), 404
+        if url:
+            return jsonify({
+                'success': True,
+                'slug': slug,
+                'gameURL': url,
+                'iframe_url': url
+            })
         else:
-            logger.warning(f"❌ {slug}: HTTP {response.status_code}")
-            return jsonify(response.json()), response.status_code
+            return jsonify({
+                'success': False,
+                'error': 'Não foi possível obter a URL do jogo'
+            }), 404
         
     except Exception as e:
         logger.error(f"❌ Erro: {e}")
@@ -187,8 +257,9 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - IGUAL AO PYTHON")
+    print("🎯 API PROXY - IGUAL AO SCRIPT PYTHON")
     print("=" * 70)
+    print("📡 API Base:", API_BASE)
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     app.run(host='0.0.0.0', port=5000, debug=False)
