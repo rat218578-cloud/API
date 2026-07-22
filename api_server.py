@@ -22,7 +22,7 @@ SECRET_KEY = "0x4AAAAAAADmr62kWZNpTLxzKtYOYbpw7wzY"
 API_BASE = "https://sortenabet.bet.br"
 
 # ========== SESSÃO POR USUÁRIO ==========
-sessoes = {}  # Armazena sessões por usuário
+sessoes = {}
 
 class TurnstileTokenGenerator:
     def __init__(self, site_key: str, secret_key: str):
@@ -56,7 +56,6 @@ class TurnstileTokenGenerator:
         return f"t2:1.{payload_b64}.{signature}.{final_hash}"
 
 def get_session(email):
-    """Obtém ou cria uma sessão para o usuário"""
     if email not in sessoes:
         session = requests.Session()
         session.headers.update({
@@ -72,57 +71,26 @@ def get_session(email):
         }
     return sessoes[email]
 
-def fazer_login(email, password):
-    """Faz login com as credenciais do usuário"""
+def fazer_login_com_token(email, token):
+    """Usa o token diretamente sem fazer novo login"""
     user_session = get_session(email)
     session = user_session['session']
-    
-    # Verifica se já está logado (token válido por 5 minutos)
-    if user_session['ultimo_login'] and datetime.now() - user_session['ultimo_login'] < timedelta(minutes=5):
-        logger.info(f"✅ Login ainda válido para {email}")
-        return True
-    
-    logger.info(f"🔐 FAZENDO LOGIN para {email}...")
-    
-    generator = TurnstileTokenGenerator(SITE_KEY, SECRET_KEY)
-    captcha_token = generator.generate_token()
-    
-    login_data = {
-        "login": email,
-        "email": email,
-        "password": password,
-        "app_source": "web",
-        "captcha_token": captcha_token
-    }
+    session.headers.update({'Authorization': f'Bearer {token}'})
+    user_session['ultimo_login'] = datetime.now()
+    user_session['access_token'] = token
+    return True
 
+def obter_url_jogo_com_token(slug, token):
+    """Obtém URL do jogo usando o token do header"""
     try:
-        response = session.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
+        # Usa o token diretamente
+        headers = {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
         
-        if response.status_code == 200:
-            data = response.json()
-            access_token = data.get('access_token')
-            session.headers.update({'Authorization': f'Bearer {access_token}'})
-            user_session['ultimo_login'] = datetime.now()
-            user_session['access_token'] = access_token
-            logger.info(f"✅ Login OK para {email}")
-            return True
-        else:
-            logger.error(f"❌ Login falhou para {email}: {response.text}")
-            return False
-    except Exception as e:
-        logger.error(f"❌ Erro no login para {email}: {e}")
-        return False
-
-def obter_url_jogo(slug, email, password):
-    """Obtém URL do jogo usando as credenciais do usuário"""
-    try:
-        if not fazer_login(email, password):
-            return None
-        
-        user_session = get_session(email)
-        session = user_session['session']
-        
-        response = session.get(
+        response = requests.get(
             f'{API_BASE}/api/start-game-v2',
             params={
                 'slug': slug,
@@ -130,6 +98,7 @@ def obter_url_jogo(slug, email, password):
                 'use_demo': 0,
                 'source': 'watchIsAuthenticated'
             },
+            headers=headers,
             timeout=10
         )
         
@@ -149,16 +118,17 @@ def obter_url_jogo(slug, email, password):
 @app.route('/api/start-game-v2', methods=['GET'])
 def api_start_game():
     slug = request.args.get('slug')
-    email = request.args.get('email')
-    password = request.args.get('password')
+    auth_header = request.headers.get('Authorization')
     
     if not slug:
         return jsonify({'error': 'slug é obrigatório'}), 400
     
-    if not email or not password:
-        return jsonify({'error': 'email e password são obrigatórios'}), 401
+    if not auth_header:
+        return jsonify({'error': 'Authorization header é obrigatório'}), 401
     
-    url = obter_url_jogo(slug, email, password)
+    token = auth_header.replace('Bearer ', '')
+    
+    url = obter_url_jogo_com_token(slug, token)
     if url:
         return jsonify({
             'success': True,
@@ -193,19 +163,13 @@ def api_login():
             "captcha_token": captcha_token
         }
         
-        # Criar sessão para o usuário
-        user_session = get_session(email)
-        session = user_session['session']
-        
-        response = session.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
+        response = requests.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
         result = response.json()
         
         if response.status_code == 200:
             access_token = result.get('access_token')
             if access_token:
-                session.headers.update({'Authorization': f'Bearer {access_token}'})
-                user_session['ultimo_login'] = datetime.now()
-                user_session['access_token'] = access_token
+                fazer_login_com_token(email, access_token)
         
         return jsonify(result), response.status_code
     except Exception as e:
@@ -216,17 +180,19 @@ def api_roulette_history():
     try:
         slug = request.args.get('slug', 'evolution/brasileira')
         limit = request.args.get('limit', 50)
-        email = request.args.get('email')
+        auth_header = request.headers.get('Authorization')
         
-        if not email:
-            return jsonify({'error': 'email é obrigatório'}), 401
+        if not auth_header:
+            return jsonify({'error': 'Authorization header é obrigatório'}), 401
         
-        user_session = get_session(email)
-        session = user_session['session']
+        token = auth_header.replace('Bearer ', '')
         
-        response = session.get(
+        headers = {'Authorization': f'Bearer {token}'}
+        
+        response = requests.get(
             f'{API_BASE}/api/roulette/history',
             params={'slug': slug, 'limit': limit},
+            headers=headers,
             timeout=10
         )
         return jsonify(response.json()), response.status_code

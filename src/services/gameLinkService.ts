@@ -43,7 +43,6 @@ class GameLinkService {
   }
 
   async getGameUrl(slug: string): Promise<string | null> {
-    // Verifica cache
     const cached = this.cache[slug];
     if (cached && (Date.now() - cached.timestamp) < this.cacheTTL) {
       console.log(`📦 Cache hit para ${slug}`);
@@ -53,16 +52,25 @@ class GameLinkService {
     console.log(`🎮 Gerando link para: ${slug}`);
 
     try {
-      // ===== VERIFICA TOKEN =====
-      const token = localStorage.getItem('access_token');
-      console.log('🔑 Token:', token ? `${token.substring(0, 30)}...` : '❌ NÃO ENCONTRADO');
-      
-      if (!token) {
-        console.error('❌ Token não encontrado no localStorage');
+      // Pega email e senha do localStorage
+      const userData = localStorage.getItem('user_data');
+      if (!userData) {
+        console.error('❌ Usuário não logado');
         return null;
       }
 
-      // ===== FAZ REQUISIÇÃO =====
+      const user = JSON.parse(userData);
+      const email = user.email || user.login;
+      // A senha não está no localStorage por segurança
+      // Vamos usar o token que já temos
+      const token = localStorage.getItem('access_token');
+
+      if (!token) {
+        console.error('❌ Token não encontrado');
+        return null;
+      }
+
+      // Usa o token diretamente, sem precisar de email/password
       const url = `/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`;
       console.log(`📤 GET: ${url}`);
 
@@ -78,18 +86,16 @@ class GameLinkService {
       console.log(`📥 Status: ${response.status}`);
 
       if (!response.ok) {
-        console.error(`❌ HTTP ${response.status}`);
         const errorText = await response.text();
-        console.error(`📄 Erro: ${errorText}`);
+        console.error(`❌ HTTP ${response.status}: ${errorText}`);
         return null;
       }
 
       const data = await response.json();
       console.log('📦 Resposta:', data);
 
-      // ===== PEGA A URL =====
       const gameUrl = data.iframe_url || data.gameURL || null;
-      
+
       if (gameUrl) {
         this.cache[slug] = {
           url: gameUrl,
@@ -99,7 +105,6 @@ class GameLinkService {
         return gameUrl;
       }
 
-      console.warn(`⚠️ Sem URL para ${slug}`);
       return null;
     } catch (error) {
       console.error(`❌ Erro:`, error);
