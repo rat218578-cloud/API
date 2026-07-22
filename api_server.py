@@ -3,10 +3,6 @@ from flask_cors import CORS
 import requests
 import json
 import time
-import hashlib
-import base64
-import secrets
-from datetime import datetime, timedelta
 import logging
 import os
 
@@ -16,165 +12,11 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__, static_folder='dist', static_url_path='')
 CORS(app)
 
-# ========== CONFIGURAÇÕES ==========
-SITE_KEY = "0x4AAAAAAADmr68KUqpnEKo-9"
-SECRET_KEY = "0x4AAAAAAADmr62kWZNpTLxzKtYOYbpw7wzY"
 API_BASE = "https://sortenabet.bet.br"
 
-# ========== SESSÕES POR USUÁRIO ==========
-sessoes = {}
+# ========== ROTAS ==========
 
-class TurnstileTokenGenerator:
-    def __init__(self, site_key: str, secret_key: str):
-        self.site_key = site_key
-        self.secret_key = secret_key
-
-    def generate_token(self) -> str:
-        timestamp = int(time.time())
-        nonce = secrets.token_hex(16)
-
-        payload = {
-            "sitekey": self.site_key,
-            "timestamp": timestamp,
-            "nonce": nonce,
-            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "action": "login",
-            "cdata": ""
-        }
-
-        payload_json = json.dumps(payload, separators=(',', ':'))
-        payload_b64 = base64.b64encode(payload_json.encode()).decode()
-
-        signature = hashlib.sha256(
-            f"{payload_b64}.{self.secret_key}".encode()
-        ).hexdigest()[:32]
-
-        final_hash = hashlib.sha256(
-            f"{payload_b64}.{signature}".encode()
-        ).hexdigest()
-
-        return f"t2:1.{payload_b64}.{signature}.{final_hash}"
-
-def get_user_session(email):
-    if email not in sessoes:
-        sessoes[email] = {
-            'session': None,
-            'ultimo_login': None,
-            'access_token': None
-        }
-    return sessoes[email]
-
-# ========== ROTAS API ==========
-@app.route('/api/start-game-v2', methods=['GET'])
-def api_start_game():
-    slug = request.args.get('slug')
-    email = request.args.get('email')
-    password = request.args.get('password')
-    auth_header = request.headers.get('Authorization')
-    
-    if not slug:
-        return jsonify({'error': 'slug é obrigatório'}), 400
-    
-    # Se tem token no header, usa ele
-    if auth_header:
-        token = auth_header.replace('Bearer ', '')
-        
-        # Tenta usar o token diretamente
-        try:
-            headers = {
-                'Authorization': f'Bearer {token}',
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            }
-            
-            response = requests.get(
-                f'{API_BASE}/api/start-game-v2',
-                params={
-                    'slug': slug,
-                    'platform': 'WEB',
-                    'use_demo': 0,
-                    'source': 'watchIsAuthenticated'
-                },
-                headers=headers,
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                game_url = data.get('iframe_url') or data.get('gameURL')
-                if game_url:
-                    return jsonify({
-                        'success': True,
-                        'slug': slug,
-                        'gameURL': game_url,
-                        'iframe_url': game_url
-                    })
-        except Exception as e:
-            logger.error(f"❌ Erro com token: {e}")
-    
-    # Se não funcionou com token, tenta com email/senha
-    if not email or not password:
-        return jsonify({
-            'error': 'email e password são obrigatórios para gerar o link',
-            'success': False
-        }), 401
-    
-    # Faz login com as credenciais
-    try:
-        generator = TurnstileTokenGenerator(SITE_KEY, SECRET_KEY)
-        captcha_token = generator.generate_token()
-        
-        login_data = {
-            "login": email,
-            "email": email,
-            "password": password,
-            "app_source": "web",
-            "captcha_token": captcha_token
-        }
-        
-        login_response = requests.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
-        
-        if login_response.status_code == 200:
-            login_data = login_response.json()
-            access_token = login_data.get('access_token')
-            
-            if access_token:
-                headers = {
-                    'Authorization': f'Bearer {access_token}',
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                }
-                
-                response = requests.get(
-                    f'{API_BASE}/api/start-game-v2',
-                    params={
-                        'slug': slug,
-                        'platform': 'WEB',
-                        'use_demo': 0,
-                        'source': 'watchIsAuthenticated'
-                    },
-                    headers=headers,
-                    timeout=10
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    game_url = data.get('iframe_url') or data.get('gameURL')
-                    if game_url:
-                        return jsonify({
-                            'success': True,
-                            'slug': slug,
-                            'gameURL': game_url,
-                            'iframe_url': game_url
-                        })
-    except Exception as e:
-        logger.error(f"❌ Erro no login: {e}")
-    
-    return jsonify({
-        'success': False,
-        'error': 'Não foi possível obter a URL do jogo'
-    }), 404
-
+# Login - apenas encaminha a requisição com o captcha_token que o frontend gerou
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
     try:
@@ -183,30 +25,74 @@ def api_login():
         if not data:
             return jsonify({'error': 'Body da requisição vazio'}), 400
         
-        email = data.get('login') or data.get('email')
-        password = data.get('password')
+        # Encaminha a requisição para a API da Sorte na Bet
+        response = requests.post(
+            f'{API_BASE}/api/auth/login',
+            json=data,
+            timeout=10
+        )
         
-        if not email or not password:
-            return jsonify({'error': 'Email e senha são obrigatórios'}), 400
+        logger.info(f"📥 Login status: {response.status_code}")
         
-        generator = TurnstileTokenGenerator(SITE_KEY, SECRET_KEY)
-        captcha_token = generator.generate_token()
-        
-        login_data = {
-            "login": email,
-            "email": email,
-            "password": password,
-            "app_source": "web",
-            "captcha_token": captcha_token
-        }
-        
-        response = requests.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
-        result = response.json()
-        
-        return jsonify(result), response.status_code
+        return jsonify(response.json()), response.status_code
     except Exception as e:
+        logger.error(f"❌ Erro no login: {e}")
         return jsonify({'error': str(e)}), 500
 
+# Start Game - usa o token JWT do header Authorization
+@app.route('/api/start-game-v2', methods=['GET'])
+def api_start_game():
+    try:
+        slug = request.args.get('slug')
+        auth_header = request.headers.get('Authorization')
+        
+        if not slug:
+            return jsonify({'error': 'slug é obrigatório'}), 400
+        
+        if not auth_header:
+            return jsonify({'error': 'Token de autenticação necessário'}), 401
+        
+        # Encaminha a requisição com o token JWT
+        headers = {
+            'Authorization': auth_header,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+        
+        params = {
+            'slug': slug,
+            'platform': request.args.get('platform', 'WEB'),
+            'use_demo': request.args.get('use_demo', 0),
+            'source': request.args.get('source', 'watchIsAuthenticated')
+        }
+        
+        response = requests.get(
+            f'{API_BASE}/api/start-game-v2',
+            params=params,
+            headers=headers,
+            timeout=10
+        )
+        
+        logger.info(f"🎮 {slug} - Status: {response.status_code}")
+        
+        if response.status_code == 200:
+            data = response.json()
+            game_url = data.get('iframe_url') or data.get('gameURL')
+            if game_url:
+                return jsonify({
+                    'success': True,
+                    'slug': slug,
+                    'gameURL': game_url,
+                    'iframe_url': game_url
+                })
+        
+        return jsonify(response.json()), response.status_code
+        
+    except Exception as e:
+        logger.error(f"❌ Erro: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# Roulette History - usa o token JWT
 @app.route('/api/roulette/history', methods=['GET'])
 def api_roulette_history():
     try:
@@ -214,36 +100,38 @@ def api_roulette_history():
         limit = request.args.get('limit', 50)
         auth_header = request.headers.get('Authorization')
         
-        if auth_header:
-            token = auth_header.replace('Bearer ', '')
-            headers = {'Authorization': f'Bearer {token}'}
-            response = requests.get(
-                f'{API_BASE}/api/roulette/history',
-                params={'slug': slug, 'limit': limit},
-                headers=headers,
-                timeout=10
-            )
-            if response.status_code == 200:
-                return jsonify(response.json()), response.status_code
+        if not auth_header:
+            return jsonify({'error': 'Token necessário'}), 401
         
+        headers = {'Authorization': auth_header}
+        
+        response = requests.get(
+            f'{API_BASE}/api/roulette/history',
+            params={'slug': slug, 'limit': limit},
+            headers=headers,
+            timeout=10
+        )
+        
+        return jsonify(response.json()), response.status_code
+        
+    except Exception as e:
+        logger.error(f"❌ Erro: {e}")
         # Dados simulados se falhar
         return jsonify({
             'spins': [
                 {'number': n, 'color': 'red' if n % 2 == 0 else 'black', 
-                 'timestamp': datetime.now().isoformat(), 'roundId': f'sim_{i}'}
+                 'timestamp': time.time(), 'roundId': f'sim_{i}'}
                 for i, n in enumerate([10, 5, 22, 15, 8, 30, 12, 25, 3, 18])
             ],
             'total': 10,
             'room': slug
         })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({'status': 'healthy', 'timestamp': time.time()})
 
-# ========== ROTAS FRONTEND ==========
+# Frontend
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve_frontend(path):
@@ -257,9 +145,9 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API SERVER + FRONTEND - SORTE NA BET")
+    print("🎯 API PROXY - SORTE NA BET")
     print("=" * 70)
     print("🌐 Rodando em: http://localhost:5000")
-    print("📡 API Base:", API_BASE)
+    print("📡 Encaminhando para:", API_BASE)
     print("=" * 70)
     app.run(host='0.0.0.0', port=5000, debug=False)
