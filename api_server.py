@@ -14,51 +14,87 @@ CORS(app)
 
 API_BASE = "https://sortenabet.bet.br"
 
+# ========== SESSÃO PERSISTENTE (igual ao Python) ==========
+session = requests.Session()
+session.headers.update({
+    'Content-Type': 'application/json',
+    'Origin': 'https://sortenabet.bet.br',
+    'Referer': 'https://sortenabet.bet.br/',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
+})
+
+# Cache de URLs
+cache_jogos = {}
+ultimo_login = None
+TOKEN_EXPIRATION = 300  # 5 minutos
+
 # ========== ROTAS ==========
 
-# Login - apenas encaminha a requisição com o captcha_token que o frontend gerou
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
+    global session, ultimo_login
+    
     try:
         data = request.get_json()
         
         if not data:
-            return jsonify({'error': 'Body da requisição vazio'}), 400
+            return jsonify({'error': 'Body vazio'}), 400
         
-        # Encaminha a requisição para a API da Sorte na Bet
+        logger.info(f"📤 Login: {data.get('email', data.get('login'))}")
+        
+        # Encaminha a requisição com o captcha_token que o frontend gerou
         response = requests.post(
             f'{API_BASE}/api/auth/login',
             json=data,
             timeout=10
         )
         
-        logger.info(f"📥 Login status: {response.status_code}")
+        result = response.json()
         
-        return jsonify(response.json()), response.status_code
+        if response.status_code == 200:
+            access_token = result.get('access_token')
+            if access_token:
+                # Atualiza a sessão com o token (igual ao Python)
+                session.headers.update({
+                    'Authorization': f'Bearer {access_token}'
+                })
+                ultimo_login = time.time()
+                logger.info(f"✅ Login OK - Token: {access_token[:50]}...")
+        
+        return jsonify(result), response.status_code
+        
     except Exception as e:
-        logger.error(f"❌ Erro no login: {e}")
+        logger.error(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
-# Start Game - usa o token JWT do header Authorization
 @app.route('/api/start-game-v2', methods=['GET'])
 def api_start_game():
+    global session, ultimo_login
+    
     try:
         slug = request.args.get('slug')
-        auth_header = request.headers.get('Authorization')
         
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
         
-        if not auth_header:
-            return jsonify({'error': 'Token de autenticação necessário'}), 401
+        # Verifica se o token ainda é válido
+        if not ultimo_login or (time.time() - ultimo_login) > TOKEN_EXPIRATION:
+            logger.warning("⚠️ Token expirado ou não logado")
+            return jsonify({'error': 'Token expirado. Faça login novamente.'}), 401
         
-        # Encaminha a requisição com o token JWT
-        headers = {
-            'Authorization': auth_header,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        }
+        # Verifica cache (igual ao Python)
+        if slug in cache_jogos:
+            cache_time = cache_jogos[slug]['timestamp']
+            if (time.time() - cache_time) < TOKEN_EXPIRATION:
+                logger.info(f"📦 Cache hit para {slug}")
+                return jsonify({
+                    'success': True,
+                    'slug': slug,
+                    'gameURL': cache_jogos[slug]['url'],
+                    'iframe_url': cache_jogos[slug]['url']
+                })
         
+        # Faz a requisição igual ao Python
         params = {
             'slug': slug,
             'platform': request.args.get('platform', 'WEB'),
@@ -66,57 +102,60 @@ def api_start_game():
             'source': request.args.get('source', 'watchIsAuthenticated')
         }
         
-        response = requests.get(
+        logger.info(f"🎮 GET: {API_BASE}/api/start-game-v2?slug={slug}")
+        
+        response = session.get(
             f'{API_BASE}/api/start-game-v2',
             params=params,
-            headers=headers,
             timeout=10
         )
         
-        logger.info(f"🎮 {slug} - Status: {response.status_code}")
+        logger.info(f"📥 Status: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
             game_url = data.get('iframe_url') or data.get('gameURL')
+            
             if game_url:
+                # Guarda no cache (igual ao Python)
+                cache_jogos[slug] = {
+                    'url': game_url,
+                    'timestamp': time.time()
+                }
+                logger.info(f"✅ URL obtida para {slug}")
                 return jsonify({
                     'success': True,
                     'slug': slug,
                     'gameURL': game_url,
                     'iframe_url': game_url
                 })
-        
-        return jsonify(response.json()), response.status_code
+            else:
+                logger.warning(f"⚠️ Sem URL para {slug}")
+                return jsonify({'error': 'URL não encontrada'}), 404
+        else:
+            logger.warning(f"❌ {slug}: HTTP {response.status_code}")
+            return jsonify(response.json()), response.status_code
         
     except Exception as e:
         logger.error(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
-# Roulette History - usa o token JWT
 @app.route('/api/roulette/history', methods=['GET'])
 def api_roulette_history():
     try:
         slug = request.args.get('slug', 'evolution/brasileira')
         limit = request.args.get('limit', 50)
-        auth_header = request.headers.get('Authorization')
         
-        if not auth_header:
-            return jsonify({'error': 'Token necessário'}), 401
-        
-        headers = {'Authorization': auth_header}
-        
-        response = requests.get(
+        response = session.get(
             f'{API_BASE}/api/roulette/history',
             params={'slug': slug, 'limit': limit},
-            headers=headers,
             timeout=10
         )
         
-        return jsonify(response.json()), response.status_code
+        if response.status_code == 200:
+            return jsonify(response.json()), response.status_code
         
-    except Exception as e:
-        logger.error(f"❌ Erro: {e}")
-        # Dados simulados se falhar
+        # Dados simulados
         return jsonify({
             'spins': [
                 {'number': n, 'color': 'red' if n % 2 == 0 else 'black', 
@@ -126,6 +165,9 @@ def api_roulette_history():
             'total': 10,
             'room': slug
         })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/health', methods=['GET'])
 def health():
@@ -145,9 +187,8 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - SORTE NA BET")
+    print("🎯 API PROXY - IGUAL AO PYTHON")
     print("=" * 70)
     print("🌐 Rodando em: http://localhost:5000")
-    print("📡 Encaminhando para:", API_BASE)
     print("=" * 70)
     app.run(host='0.0.0.0', port=5000, debug=False)
