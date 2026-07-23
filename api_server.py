@@ -20,7 +20,7 @@ SITE_KEY = "0x4AAAAAAADmr68KUqpnEKo-9"
 SECRET_KEY = "0x4AAAAAAADmr62kWZNpTLxzKtYOYbpw7wzY"
 API_BASE = "https://sortenabet.bet.br"
 
-# ========== SESSÕES POR JOGO (em memória) ==========
+# ========== SESSÕES POR JOGO (cada jogo tem sua própria) ==========
 sessoes_jogos = {}
 
 class TurnstileTokenGenerator:
@@ -69,7 +69,9 @@ def get_sessao_jogo(slug):
             'ultimo_login': None,
             'token': None,
             'game_url': None,
-            'url_timestamp': None
+            'url_timestamp': None,
+            'email': None,
+            'password': None
         }
         logger.info(f"🆕 Nova sessão criada para: {slug}")
     return sessoes_jogos[slug]
@@ -79,9 +81,16 @@ def fazer_login_para_jogo(slug, email, password):
     game_session = get_sessao_jogo(slug)
     session = game_session['session']
     
-    # Verifica se já está logado para este jogo (token válido por 10 minutos)
-    if game_session['ultimo_login'] and (time.time() - game_session['ultimo_login']) < 600:
-        logger.info(f"✅ Sessão válida para {slug}")
+    # Se as credenciais mudaram, força novo login
+    if game_session['email'] != email or game_session['password'] != password:
+        logger.info(f"🔄 Credenciais diferentes para {slug}, refazendo login")
+        game_session['ultimo_login'] = None
+        game_session['email'] = email
+        game_session['password'] = password
+    
+    # Verifica se já está logado para este jogo (token válido por 30 minutos)
+    if game_session['ultimo_login'] and (time.time() - game_session['ultimo_login']) < 1800:
+        logger.info(f"✅ Sessão válida para {slug} ({(time.time() - game_session['ultimo_login'])/60:.1f} min)")
         return True
     
     logger.info(f"🔐 Login para {slug}")
@@ -108,6 +117,8 @@ def fazer_login_para_jogo(slug, email, password):
                 session.headers.update({'Authorization': f'Bearer {access_token}'})
                 game_session['ultimo_login'] = time.time()
                 game_session['token'] = access_token
+                game_session['email'] = email
+                game_session['password'] = password
                 logger.info(f"✅ Login OK para {slug}")
                 return True
         else:
@@ -118,7 +129,7 @@ def fazer_login_para_jogo(slug, email, password):
         return False
 
 def obter_url_jogo(slug, email, password, force_refresh=False):
-    """Obtém URL do jogo usando sessão dedicada"""
+    """Obtém URL do jogo usando sessão dedicada com cache de 30 minutos"""
     try:
         game_session = get_sessao_jogo(slug)
         
@@ -128,11 +139,14 @@ def obter_url_jogo(slug, email, password, force_refresh=False):
             game_session['url_timestamp'] = None
             logger.info(f"🔄 Forçando refresh para {slug}")
         
-        # Verifica se já tem URL em cache (válida por 5 minutos)
+        # Verifica se já tem URL em cache (válida por 30 minutos)
         if game_session['game_url'] and game_session['url_timestamp']:
-            if (time.time() - game_session['url_timestamp']) < 300:
-                logger.info(f"📦 URL em cache para {slug}")
+            tempo_cache = (time.time() - game_session['url_timestamp']) / 60
+            if tempo_cache < 30:
+                logger.info(f"📦 URL em cache para {slug} ({tempo_cache:.1f} min)")
                 return game_session['game_url']
+            else:
+                logger.info(f"⏰ Cache expirado para {slug} ({tempo_cache:.1f} min)")
         
         if not fazer_login_para_jogo(slug, email, password):
             return None
@@ -236,7 +250,7 @@ def api_start_game():
         if not email or not password:
             return jsonify({'error': 'email e password obrigatórios'}), 401
         
-        logger.info(f"🎮 Gerando link para: {slug}")
+        logger.info(f"🎮 Requisição para: {slug}")
         
         # Cada jogo tem sua própria sessão e URL
         url = obter_url_jogo(slug, email, password, force_refresh)
@@ -277,7 +291,6 @@ def api_roulette_history():
             if response.status_code == 200:
                 return jsonify(response.json()), response.status_code
         
-        # Dados simulados
         return jsonify({
             'spins': [
                 {'number': n, 'color': 'red' if n % 2 == 0 else 'black', 
@@ -309,7 +322,7 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - SESSÃO POR JOGO")
+    print("🎯 API PROXY - SESSÃO POR JOGO COM CACHE")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("🌐 Rodando em: http://localhost:5000")
