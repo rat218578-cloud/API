@@ -1,10 +1,9 @@
-// ========== ROLETAS E SUAS CONFIGURAÇÕES ==========
+// ========== APENAS ROLETAS ==========
 export const ROLETAS = [
   { 
     id: 'brasileira', 
     nome: '🇧🇷 Brasileira', 
     slug: 'evolution/brasileira',
-    gameId: 'PorROULigh000001',
     provedor: 'Evolution',
     cor: '#6C3CE1'
   },
@@ -12,7 +11,6 @@ export const ROLETAS = [
     id: 'immersive', 
     nome: '🎥 Imersiva', 
     slug: 'evolution/immersive-roulette',
-    gameId: 'ImmerRoulette0001',
     provedor: 'Evolution',
     cor: '#6C3CE1'
   },
@@ -20,7 +18,6 @@ export const ROLETAS = [
     id: 'lightning', 
     nome: '⚡ Lightning', 
     slug: 'evolution/lightning-roulette',
-    gameId: 'LightningTable01',
     provedor: 'Evolution',
     cor: '#6C3CE1'
   },
@@ -28,7 +25,6 @@ export const ROLETAS = [
     id: 'roulette-live', 
     nome: '🎰 Roleta Live', 
     slug: 'evolution/roulette-live',
-    gameId: 'PorROULive00001',
     provedor: 'Evolution',
     cor: '#6C3CE1'
   }
@@ -36,7 +32,7 @@ export const ROLETAS = [
 
 class GameLinkService {
   private static instance: GameLinkService;
-  // Cache de URLs por jogo (cada jogo tem sua própria URL)
+  // Cache por jogo (cada jogo tem sua própria URL)
   private gameUrls: Record<string, { url: string; timestamp: number }> = {};
   private cacheTTL = 5 * 60 * 1000; // 5 minutos
 
@@ -47,13 +43,7 @@ class GameLinkService {
     return GameLinkService.instance;
   }
 
-  async getGameUrl(slug: string, forceRefresh: boolean = false): Promise<string | null> {
-    // Se forceRefresh, limpa cache deste jogo
-    if (forceRefresh) {
-      delete this.gameUrls[slug];
-      console.log(`🔄 Forçando refresh para ${slug}`);
-    }
-
+  async getGameUrl(slug: string): Promise<string | null> {
     // Verifica cache específico do jogo
     const cached = this.gameUrls[slug];
     if (cached && (Date.now() - cached.timestamp) < this.cacheTTL) {
@@ -72,10 +62,8 @@ class GameLinkService {
         return null;
       }
 
-      // Pega email e senha do usuário
+      // Pega email do usuário
       let email = '';
-      let password = sessionStorage.getItem('temp_password') || '';
-      
       if (userData) {
         try {
           const user = JSON.parse(userData);
@@ -85,17 +73,20 @@ class GameLinkService {
         }
       }
 
-      // Construir URL com email e password
-      let url = `/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`;
+      // Pega a senha do sessionStorage (salva no login)
+      const password = sessionStorage.getItem('temp_password') || '';
       
-      if (email) {
-        url += `&email=${encodeURIComponent(email)}`;
-      }
-      
-      if (password) {
-        url += `&password=${encodeURIComponent(password)}`;
+      if (!email || !password) {
+        console.error('❌ Email ou senha não encontrados. Faça login novamente.');
+        // Se não tem credenciais, redireciona para login
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user_data');
+        window.location.href = '/';
+        return null;
       }
 
+      // Construir URL com email e password
+      const url = `/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`;
       console.log(`📤 GET: ${url}`);
 
       const response = await fetch(url, {
@@ -112,6 +103,14 @@ class GameLinkService {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`❌ HTTP ${response.status}: ${errorText}`);
+        
+        // Se for 401, redireciona para login
+        if (response.status === 401) {
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('user_data');
+          sessionStorage.removeItem('temp_password');
+          window.location.href = '/';
+        }
         return null;
       }
 
@@ -121,6 +120,7 @@ class GameLinkService {
       const gameUrl = data.iframe_url || data.gameURL || null;
 
       if (gameUrl) {
+        // Guarda no cache específico do jogo
         this.gameUrls[slug] = {
           url: gameUrl,
           timestamp: Date.now()
