@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Sparkles, Loader2, Target, Clock, Brain } from "lucide-react";
+import { Sparkles, Loader2, Target, Clock, Brain, Play } from "lucide-react";
 import { generateAISignal } from "../utils/roulette";
 import type { Signal } from "../types";
 
@@ -16,10 +16,10 @@ export function SignalGenerator({ history }: SignalGeneratorProps) {
     setLoading(true);
     setTimeout(() => {
       const newSignals: Signal[] = [];
-      for (let i = 0; i < 3; i++) {
-        newSignals.push(generateAISignal(history)); // <-- PASSA history
+      for (let i = 0; i < 4; i++) {
+        newSignals.push(generateAISignal(history));
       }
-      setSignals((prev) => [...newSignals, ...prev].slice(0, 10));
+      setSignals((prev) => [...newSignals, ...prev].slice(0, 8));
       setLoading(false);
     }, 1200);
   };
@@ -33,15 +33,15 @@ export function SignalGenerator({ history }: SignalGeneratorProps) {
           </div>
           <div>
             <h3 className="font-bold text-text-primary text-sm">IA de Sinais</h3>
-            <p className="text-xs text-text-muted">Geração inteligente de entradas</p>
+            <p className="text-[10px] text-text-muted">Geração inteligente de entradas</p>
           </div>
         </div>
         <button
           onClick={handleGenerate}
           disabled={loading}
-          className="btn-primary flex items-center gap-2 px-4 py-2 rounded-xl text-sm disabled:opacity-50"
+          className="btn-primary flex items-center gap-2 px-4 py-2 rounded-xl text-xs disabled:opacity-50"
         >
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+          {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
           {loading ? "Analisando..." : "Gerar sinais"}
         </button>
       </div>
@@ -49,7 +49,7 @@ export function SignalGenerator({ history }: SignalGeneratorProps) {
       <div className="flex gap-2 mb-4">
         <button
           onClick={() => setActiveTab("all")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+          className={`px-3 py-1 rounded-lg text-[10px] font-medium transition-colors ${
             activeTab === "all"
               ? "bg-bg-tertiary text-text-primary border border-border-hover"
               : "text-text-secondary hover:text-text-primary"
@@ -59,7 +59,7 @@ export function SignalGenerator({ history }: SignalGeneratorProps) {
         </button>
         <button
           onClick={() => setActiveTab("favorites")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+          className={`px-3 py-1 rounded-lg text-[10px] font-medium transition-colors ${
             activeTab === "favorites"
               ? "bg-bg-tertiary text-text-primary border border-border-hover"
               : "text-text-secondary hover:text-text-primary"
@@ -69,40 +69,34 @@ export function SignalGenerator({ history }: SignalGeneratorProps) {
         </button>
       </div>
 
-      <div className="space-y-2 max-h-[320px] overflow-y-auto">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 max-h-[400px] overflow-y-auto">
         {signals.length === 0 ? (
-          <div className="text-center py-8 text-text-muted border border-dashed border-border-default rounded-xl">
+          <div className="col-span-full text-center py-8 text-text-muted border border-dashed border-border-default rounded-xl">
             <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-50" />
             <p className="text-sm">Nenhum sinal gerado ainda</p>
-            <p className="text-xs">Clique em "Gerar sinais" para começar</p>
+            <p className="text-[10px]">Clique em "Gerar sinais" para começar</p>
           </div>
         ) : (
           signals.map((signal) => (
             <div
               key={signal.id}
-              className="p-3 rounded-xl bg-bg-tertiary/50 border border-border-default hover:border-border-hover transition-colors slide-in"
+              className="p-4 rounded-xl bg-gradient-to-br from-bg-tertiary to-bg-secondary border border-border-default hover:border-border-hover transition-all group slide-in"
             >
               <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-accent-pink">{signal.strategy}</span>
-                  <span
-                    className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                      signal.assertiveness >= 85
-                        ? "bg-emerald-500/20 text-emerald-400"
-                        : signal.assertiveness >= 70
-                        ? "bg-amber-500/20 text-amber-400"
-                        : "bg-red-500/20 text-red-400"
-                    }`}
-                  >
-                    {signal.assertiveness}% assertividade
-                  </span>
-                </div>
-                <div className="flex items-center gap-1 text-[10px] text-text-muted">
-                  <Clock className="w-3 h-3" />
-                  {signal.timestamp.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                </div>
+                <span className="text-xs font-bold text-accent-pink">{signal.strategy}</span>
+                <span
+                  className={`text-[9px] px-1.5 py-0.5 rounded-full ${
+                    signal.assertiveness >= 85
+                      ? "bg-emerald-500/20 text-emerald-400"
+                      : signal.assertiveness >= 70
+                      ? "bg-amber-500/20 text-amber-400"
+                      : "bg-red-500/20 text-red-400"
+                  }`}
+                >
+                  {signal.assertiveness}%
+                </span>
               </div>
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-1.5 mb-2">
                 {signal.numbers.map((n) => (
                   <div
                     key={n}
@@ -118,10 +112,19 @@ export function SignalGenerator({ history }: SignalGeneratorProps) {
                   </div>
                 ))}
               </div>
-              <p className="text-[11px] text-text-secondary flex items-start gap-1">
-                <Target className="w-3 h-3 mt-0.5 text-accent-cyan" />
+              <p className="text-[9px] text-text-secondary flex items-start gap-1 mb-2">
+                <Target className="w-2.5 h-2.5 mt-0.5 text-accent-cyan" />
                 {signal.reason}
               </p>
+              <div className="flex items-center justify-between">
+                <span className="text-[8px] text-text-muted flex items-center gap-1">
+                  <Clock className="w-2.5 h-2.5" />
+                  {signal.timestamp.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                </span>
+                <button className="px-3 py-1 rounded-lg text-[9px] font-medium bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 text-emerald-400 hover:from-emerald-500/30 hover:to-cyan-500/30 transition-all flex items-center gap-1">
+                  <Play className="w-2.5 h-2.5" /> Jogar
+                </button>
+              </div>
             </div>
           ))
         )}
