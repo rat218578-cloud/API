@@ -20,7 +20,7 @@ SITE_KEY = "0x4AAAAAAADmr68KUqpnEKo-9"
 SECRET_KEY = "0x4AAAAAAADmr62kWZNpTLxzKtYOYbpw7wzY"
 API_BASE = "https://sortenabet.bet.br"
 
-# ========== SESSÕES POR JOGO (cada jogo tem sua própria) ==========
+# ========== SESSÕES POR JOGO (cada jogo tem seu próprio token) ==========
 sessoes_jogos = {}
 
 class TurnstileTokenGenerator:
@@ -54,9 +54,10 @@ class TurnstileTokenGenerator:
 
         return f"t2:1.{payload_b64}.{signature}.{final_hash}"
 
-def get_sessao_jogo(slug):
-    """Obtém ou cria uma sessão dedicada para cada jogo"""
-    if slug not in sessoes_jogos:
+def get_sessao_jogo(slug, email):
+    """Obtém ou cria uma sessão dedicada para cada jogo e usuário"""
+    key = f"{email}:{slug}"
+    if key not in sessoes_jogos:
         session = requests.Session()
         session.headers.update({
             'Content-Type': 'application/json',
@@ -64,36 +65,30 @@ def get_sessao_jogo(slug):
             'Referer': 'https://sortenabet.bet.br/',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
         })
-        sessoes_jogos[slug] = {
+        sessoes_jogos[key] = {
             'session': session,
             'ultimo_login': None,
             'token': None,
             'game_url': None,
             'url_timestamp': None,
-            'email': None,
-            'password': None
+            'email': email,
+            'slug': slug
         }
-        logger.info(f"🆕 Nova sessão criada para: {slug}")
-    return sessoes_jogos[slug]
+        logger.info(f"🆕 Nova sessão criada para: {slug} (usuário: {email})")
+    return sessoes_jogos[key]
 
 def fazer_login_para_jogo(slug, email, password):
-    """Faz login específico para cada jogo (sessão independente)"""
-    game_session = get_sessao_jogo(slug)
+    """Faz login específico para cada jogo (cada jogo tem seu próprio token)"""
+    key = f"{email}:{slug}"
+    game_session = get_sessao_jogo(slug, email)
     session = game_session['session']
-    
-    # Se as credenciais mudaram, força novo login
-    if game_session['email'] != email or game_session['password'] != password:
-        logger.info(f"🔄 Credenciais diferentes para {slug}, refazendo login")
-        game_session['ultimo_login'] = None
-        game_session['email'] = email
-        game_session['password'] = password
     
     # Verifica se já está logado para este jogo (token válido por 30 minutos)
     if game_session['ultimo_login'] and (time.time() - game_session['ultimo_login']) < 1800:
-        logger.info(f"✅ Sessão válida para {slug} ({(time.time() - game_session['ultimo_login'])/60:.1f} min)")
+        logger.info(f"✅ Sessão válida para {slug}")
         return True
     
-    logger.info(f"🔐 Login para {slug}")
+    logger.info(f"🔐 Login para {slug} (criando token próprio)")
     
     generator = TurnstileTokenGenerator(SITE_KEY, SECRET_KEY)
     captcha_token = generator.generate_token()
@@ -117,9 +112,7 @@ def fazer_login_para_jogo(slug, email, password):
                 session.headers.update({'Authorization': f'Bearer {access_token}'})
                 game_session['ultimo_login'] = time.time()
                 game_session['token'] = access_token
-                game_session['email'] = email
-                game_session['password'] = password
-                logger.info(f"✅ Login OK para {slug}")
+                logger.info(f"✅ Token próprio criado para {slug}")
                 return True
         else:
             logger.error(f"❌ Login falhou para {slug}: {response.text[:200]}")
@@ -129,24 +122,22 @@ def fazer_login_para_jogo(slug, email, password):
         return False
 
 def obter_url_jogo(slug, email, password, force_refresh=False):
-    """Obtém URL do jogo usando sessão dedicada com cache de 30 minutos"""
+    """Obtém URL do jogo com token próprio para cada jogo"""
     try:
-        game_session = get_sessao_jogo(slug)
+        key = f"{email}:{slug}"
+        game_session = get_sessao_jogo(slug, email)
         
-        # Se force_refresh, limpa a URL em cache
         if force_refresh:
             game_session['game_url'] = None
             game_session['url_timestamp'] = None
             logger.info(f"🔄 Forçando refresh para {slug}")
         
-        # Verifica se já tem URL em cache (válida por 30 minutos)
+        # Verifica cache (válido por 30 minutos)
         if game_session['game_url'] and game_session['url_timestamp']:
             tempo_cache = (time.time() - game_session['url_timestamp']) / 60
             if tempo_cache < 30:
                 logger.info(f"📦 URL em cache para {slug} ({tempo_cache:.1f} min)")
                 return game_session['game_url']
-            else:
-                logger.info(f"⏰ Cache expirado para {slug} ({tempo_cache:.1f} min)")
         
         if not fazer_login_para_jogo(slug, email, password):
             return None
@@ -170,7 +161,7 @@ def obter_url_jogo(slug, email, password, force_refresh=False):
             if game_url:
                 game_session['game_url'] = game_url
                 game_session['url_timestamp'] = time.time()
-                logger.info(f"✅ URL obtida para {slug}")
+                logger.info(f"✅ URL obtida para {slug} com token próprio")
                 return game_url
             else:
                 logger.warning(f"⚠️ Sem URL para {slug}")
@@ -250,9 +241,9 @@ def api_start_game():
         if not email or not password:
             return jsonify({'error': 'email e password obrigatórios'}), 401
         
-        logger.info(f"🎮 Requisição para: {slug}")
+        logger.info(f"🎮 Gerando link para: {slug} (usuário: {email})")
         
-        # Cada jogo tem sua própria sessão e URL
+        # CADA JOGO TEM SEU PRÓPRIO TOKEN
         url = obter_url_jogo(slug, email, password, force_refresh)
         
         if url:
@@ -322,7 +313,7 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - SESSÃO POR JOGO COM CACHE")
+    print("🎯 API PROXY - CADA JOGO COM SEU PRÓPRIO TOKEN")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("🌐 Rodando em: http://localhost:5000")
