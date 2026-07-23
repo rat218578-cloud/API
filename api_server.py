@@ -185,6 +185,8 @@ def api_login():
         if not email or not password:
             return jsonify({'error': 'Email e senha obrigatórios'}), 400
         
+        logger.info(f"📤 Login: {email}")
+        
         generator = TurnstileTokenGenerator(SITE_KEY, SECRET_KEY)
         captcha_token = generator.generate_token()
         
@@ -202,6 +204,7 @@ def api_login():
         if response.status_code == 200:
             access_token = result.get('access_token')
             if access_token:
+                logger.info(f"✅ Login OK para {email}")
                 return jsonify({
                     'access_token': access_token,
                     'token_type': 'Bearer',
@@ -216,7 +219,7 @@ def api_login():
         return jsonify(result), response.status_code
         
     except Exception as e:
-        logger.error(f"❌ Erro: {e}")
+        logger.error(f"❌ Erro no login: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/start-game-v2', methods=['GET'])
@@ -232,6 +235,8 @@ def api_start_game():
         
         if not email or not password:
             return jsonify({'error': 'email e password obrigatórios'}), 401
+        
+        logger.info(f"🎮 Gerando link para: {slug}")
         
         # Cada jogo tem sua própria sessão e URL
         url = obter_url_jogo(slug, email, password, force_refresh)
