@@ -20,7 +20,6 @@ export function RouletteDashboard() {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [showVideo, setShowVideo] = useState(false);
   const [showCatalog, setShowCatalog] = useState(true);
-  const [showGroups, setShowGroups] = useState(true);
 
   const fetchRouletteData = useCallback(async (roomId: string = activeRoom) => {
     setLoading(true);

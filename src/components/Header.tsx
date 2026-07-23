@@ -13,13 +13,12 @@ import type { User } from "../types";
 
 interface HeaderProps {
   title: string;
-  subtitle?: string;
   balance: number;
   user?: User | null;
   onLogout?: () => void;
 }
 
-export function Header({ title, subtitle, balance, user, onLogout }: HeaderProps) {
+export function Header({ title, balance, user, onLogout }: HeaderProps) {
   return (
     <header className="h-14 border-b border-border-default bg-bg-secondary/80 backdrop-blur-sm flex items-center justify-between px-6 sticky top-0 z-40">
       <div className="flex items-center gap-4">
