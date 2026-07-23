@@ -8,6 +8,9 @@ import base64
 import secrets
 import logging
 import os
+import psycopg2
+from psycopg2.extras import Json
+from datetime import datetime, timedelta
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -20,9 +23,147 @@ SITE_KEY = "0x4AAAAAAADmr68KUqpnEKo-9"
 SECRET_KEY = "0x4AAAAAAADmr62kWZNpTLxzKtYOYbpw7wzY"
 API_BASE = "https://sortenabet.bet.br"
 
-# ========== SESSÕES POR JOGO (cada jogo tem sua própria) ==========
-sessoes_jogos = {}
+# ========== CONEXÃO POSTGRESQL ==========
+DATABASE_URL = "postgresql://neondb_owner:npg_xfAJSo7nEa4P@ep-bitter-king-aykqh1ix-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require"
 
+def get_db_connection():
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        return conn
+    except Exception as e:
+        logger.error(f"❌ Erro ao conectar ao PostgreSQL: {e}")
+        return None
+
+# ========== FUNÇÕES DE SESSÃO ==========
+def get_user_session(email):
+    """Busca sessão do usuário no banco"""
+    conn = get_db_connection()
+    if not conn:
+        return None
+    
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT user_id, access_token, session_data, expires_at FROM user_sessions WHERE email = %s AND is_active = TRUE",
+            (email,)
+        )
+        result = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        if result:
+            return {
+                'user_id': result[0],
+                'access_token': result[1],
+                'session_data': result[2],
+                'expires_at': result[3]
+            }
+        return None
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar sessão: {e}")
+        return None
+
+def save_user_session(email, user_id, access_token, session_data=None, expires_in=604800):
+    """Salva ou atualiza sessão do usuário"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cur = conn.cursor()
+        expires_at = datetime.now() + timedelta(seconds=expires_in)
+        
+        cur.execute("""
+            INSERT INTO user_sessions (user_id, email, access_token, session_data, expires_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (user_id) DO UPDATE SET
+                access_token = EXCLUDED.access_token,
+                session_data = EXCLUDED.session_data,
+                expires_at = EXCLUDED.expires_at,
+                updated_at = CURRENT_TIMESTAMP,
+                is_active = TRUE
+        """, (user_id, email, access_token, Json(session_data or {}), expires_at))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        logger.info(f"✅ Sessão salva para {email}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Erro ao salvar sessão: {e}")
+        return False
+
+def get_game_session(email, slug):
+    """Busca sessão de um jogo específico"""
+    conn = get_db_connection()
+    if not conn:
+        return None
+    
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT game_url, game_token, session_data, expires_at 
+            FROM game_sessions 
+            WHERE user_id = (SELECT user_id FROM user_sessions WHERE email = %s) 
+            AND game_slug = %s AND is_active = TRUE
+        """, (email, slug))
+        result = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        if result:
+            return {
+                'game_url': result[0],
+                'game_token': result[1],
+                'session_data': result[2],
+                'expires_at': result[3]
+            }
+        return None
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar sessão do jogo: {e}")
+        return None
+
+def save_game_session(email, slug, game_url, game_token=None, session_data=None, expires_in=300):
+    """Salva ou atualiza sessão de um jogo"""
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        cur = conn.cursor()
+        expires_at = datetime.now() + timedelta(seconds=expires_in)
+        
+        # Pega o user_id
+        cur.execute("SELECT user_id FROM user_sessions WHERE email = %s", (email,))
+        result = cur.fetchone()
+        if not result:
+            logger.error(f"❌ Usuário não encontrado: {email}")
+            return False
+        
+        user_id = result[0]
+        
+        cur.execute("""
+            INSERT INTO game_sessions (user_id, game_slug, game_url, game_token, session_data, expires_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (user_id, game_slug) DO UPDATE SET
+                game_url = EXCLUDED.game_url,
+                game_token = EXCLUDED.game_token,
+                session_data = EXCLUDED.session_data,
+                expires_at = EXCLUDED.expires_at,
+                updated_at = CURRENT_TIMESTAMP,
+                is_active = TRUE
+        """, (user_id, slug, game_url, game_token, Json(session_data or {}), expires_at))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        logger.info(f"✅ Sessão do jogo {slug} salva para {email}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Erro ao salvar sessão do jogo: {e}")
+        return False
+
+# ========== CLASSES ==========
 class TurnstileTokenGenerator:
     def __init__(self, site_key: str, secret_key: str):
         self.site_key = site_key
@@ -54,91 +195,44 @@ class TurnstileTokenGenerator:
 
         return f"t2:1.{payload_b64}.{signature}.{final_hash}"
 
-def get_sessao_jogo(slug):
-    """Obtém ou cria uma sessão dedicada para cada jogo"""
-    if slug not in sessoes_jogos:
-        session = requests.Session()
-        session.headers.update({
-            'Content-Type': 'application/json',
-            'Origin': 'https://sortenabet.bet.br',
-            'Referer': 'https://sortenabet.bet.br/',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
-        })
-        sessoes_jogos[slug] = {
-            'session': session,
-            'ultimo_login': None,
-            'token': None,
-            'game_url': None,
-            'url_timestamp': None,
-            'game_id': None
-        }
-        logger.info(f"🆕 Nova sessão criada para: {slug}")
-    return sessoes_jogos[slug]
-
-def fazer_login_para_jogo(slug, email, password):
-    """Faz login específico para cada jogo (sessão independente)"""
-    game_session = get_sessao_jogo(slug)
-    session = game_session['session']
-    
-    # Verifica se já está logado para este jogo (token válido por 10 minutos)
-    if game_session['ultimo_login'] and (time.time() - game_session['ultimo_login']) < 600:
-        logger.info(f"✅ Sessão válida para {slug}")
-        return True
-    
-    logger.info(f"🔐 Login para {slug}")
-    
-    generator = TurnstileTokenGenerator(SITE_KEY, SECRET_KEY)
-    captcha_token = generator.generate_token()
-    
-    login_data = {
-        "login": email,
-        "email": email,
-        "password": password,
-        "app_source": "web",
-        "captcha_token": captcha_token
-    }
-
-    try:
-        response = session.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
-        
-        if response.status_code == 200:
-            data = response.json()
-            access_token = data.get('access_token')
-            
-            if access_token:
-                session.headers.update({'Authorization': f'Bearer {access_token}'})
-                game_session['ultimo_login'] = time.time()
-                game_session['token'] = access_token
-                logger.info(f"✅ Login OK para {slug}")
-                return True
-        else:
-            logger.error(f"❌ Login falhou para {slug}: {response.text[:200]}")
-            return False
-    except Exception as e:
-        logger.error(f"❌ Erro no login para {slug}: {e}")
-        return False
-
 def obter_url_jogo(slug, email, password, force_refresh=False):
-    """Obtém URL do jogo usando sessão dedicada"""
+    """Obtém URL do jogo usando sessão do banco"""
     try:
-        game_session = get_sessao_jogo(slug)
+        # Verifica se já tem sessão do jogo no banco
+        game_session = get_game_session(email, slug)
         
-        # Se force_refresh, limpa a URL em cache
-        if force_refresh:
-            game_session['game_url'] = None
-            game_session['url_timestamp'] = None
-            logger.info(f"🔄 Forçando refresh para {slug}")
-        
-        # Verifica se já tem URL em cache (válida por 5 minutos)
-        if game_session['game_url'] and game_session['url_timestamp']:
-            if (time.time() - game_session['url_timestamp']) < 300:
-                logger.info(f"📦 URL em cache para {slug}")
+        if game_session and game_session.get('game_url') and not force_refresh:
+            expires_at = game_session.get('expires_at')
+            if expires_at and datetime.now() < expires_at:
+                logger.info(f"📦 URL em cache no banco para {slug}")
                 return game_session['game_url']
         
-        if not fazer_login_para_jogo(slug, email, password):
+        # Faz login para obter token
+        generator = TurnstileTokenGenerator(SITE_KEY, SECRET_KEY)
+        captcha_token = generator.generate_token()
+        
+        login_data = {
+            "login": email,
+            "email": email,
+            "password": password,
+            "app_source": "web",
+            "captcha_token": captcha_token
+        }
+        
+        response = requests.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
+        
+        if response.status_code != 200:
+            logger.error(f"❌ Login falhou para {slug}")
             return None
         
-        session = game_session['session']
+        data = response.json()
+        access_token = data.get('access_token')
+        
+        if not access_token:
+            return None
+        
+        # Faz requisição para obter a URL do jogo
+        headers = {'Authorization': f'Bearer {access_token}'}
         
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
@@ -148,6 +242,7 @@ def obter_url_jogo(slug, email, password, force_refresh=False):
                 'use_demo': 0,
                 'source': 'watchIsAuthenticated'
             },
+            headers=headers,
             timeout=10
         )
         
@@ -155,13 +250,9 @@ def obter_url_jogo(slug, email, password, force_refresh=False):
             data = response.json()
             game_url = data.get('iframe_url') or data.get('gameURL')
             if game_url:
-                game_session['game_url'] = game_url
-                game_session['url_timestamp'] = time.time()
-                logger.info(f"✅ URL obtida para {slug}")
+                # Salva no banco
+                save_game_session(email, slug, game_url, access_token, {'last_access': time.time()})
                 return game_url
-            else:
-                logger.warning(f"⚠️ Sem URL para {slug}")
-                return None
         else:
             logger.warning(f"❌ {slug}: {response.status_code}")
             return None
@@ -171,7 +262,6 @@ def obter_url_jogo(slug, email, password, force_refresh=False):
         return None
 
 # ========== ROTAS ==========
-
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
     try:
@@ -202,16 +292,18 @@ def api_login():
         
         if response.status_code == 200:
             access_token = result.get('access_token')
+            user_data = result.get('user', {})
+            
             if access_token:
+                # Salva sessão no banco
+                user_id = str(user_data.get('id', email))
+                save_user_session(email, user_id, access_token, user_data)
+                
                 return jsonify({
                     'access_token': access_token,
                     'token_type': 'Bearer',
                     'expires_in': 604800,
-                    'user': result.get('user', {
-                        'id': 1,
-                        'name': email.split('@')[0],
-                        'email': email
-                    })
+                    'user': user_data
                 }), 200
         
         return jsonify(result), response.status_code
@@ -234,7 +326,6 @@ def api_start_game():
         if not email or not password:
             return jsonify({'error': 'email e password obrigatórios'}), 401
         
-        # Cada jogo tem sua própria sessão e URL
         url = obter_url_jogo(slug, email, password, force_refresh)
         
         if url:
@@ -305,9 +396,10 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - SESSÃO POR JOGO (igual ao seu HTML)")
+    print("🎯 API PROXY - SESSÃO COM POSTGRESQL")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
+    print("🐘 PostgreSQL:", DATABASE_URL.split('@')[1].split('/')[0])
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     app.run(host='0.0.0.0', port=5000, debug=False)
