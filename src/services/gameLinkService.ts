@@ -32,9 +32,9 @@ export const ROLETAS = [
 
 class GameLinkService {
   private static instance: GameLinkService;
-  // Cache por jogo (cada jogo tem sua própria URL)
+  // Cache de URLs por jogo (cada jogo tem sua própria URL, mas SEMPRE gera link novo)
   private gameUrls: Record<string, { url: string; timestamp: number }> = {};
-  private cacheTTL = 5 * 60 * 1000; // 5 minutos
+  private cacheTTL = 60 * 1000; // 1 minuto de cache (curto para evitar EV.12)
 
   static getInstance(): GameLinkService {
     if (!GameLinkService.instance) {
@@ -43,15 +43,22 @@ class GameLinkService {
     return GameLinkService.instance;
   }
 
-  async getGameUrl(slug: string): Promise<string | null> {
-    // Verifica cache específico do jogo
+  // SEMPRE gera um link novo quando a roleta é selecionada
+  async getGameUrl(slug: string, forceRefresh: boolean = true): Promise<string | null> {
+    // SEMPRE força refresh ao mudar de roleta para evitar EV.12
+    if (forceRefresh) {
+      delete this.gameUrls[slug];
+      console.log(`🔄 Forçando refresh para ${slug}`);
+    }
+
+    // Cache muito curto (1 minuto) - só para evitar múltiplas requisições seguidas
     const cached = this.gameUrls[slug];
     if (cached && (Date.now() - cached.timestamp) < this.cacheTTL) {
-      console.log(`📦 Cache hit para ${slug}`);
+      console.log(`📦 Cache hit para ${slug} (${(Date.now() - cached.timestamp)/1000}s)`);
       return cached.url;
     }
 
-    console.log(`🎮 Gerando link para: ${slug}`);
+    console.log(`🎮 Gerando link NOVO para: ${slug}`);
 
     try {
       const token = localStorage.getItem('access_token');
@@ -62,7 +69,6 @@ class GameLinkService {
         return null;
       }
 
-      // Pega email do usuário
       let email = '';
       if (userData) {
         try {
@@ -73,20 +79,15 @@ class GameLinkService {
         }
       }
 
-      // Pega a senha do sessionStorage (salva no login)
       const password = sessionStorage.getItem('temp_password') || '';
       
       if (!email || !password) {
-        console.error('❌ Email ou senha não encontrados. Faça login novamente.');
-        // Se não tem credenciais, redireciona para login
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('user_data');
-        window.location.href = '/';
+        console.error('❌ Email ou senha não encontrados');
         return null;
       }
 
-      // Construir URL com email e password
-      const url = `/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`;
+      // SEMPRE gera link novo com force_refresh=true
+      const url = `/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}&force_refresh=true`;
       console.log(`📤 GET: ${url}`);
 
       const response = await fetch(url, {
@@ -103,14 +104,6 @@ class GameLinkService {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`❌ HTTP ${response.status}: ${errorText}`);
-        
-        // Se for 401, redireciona para login
-        if (response.status === 401) {
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('user_data');
-          sessionStorage.removeItem('temp_password');
-          window.location.href = '/';
-        }
         return null;
       }
 
@@ -120,12 +113,11 @@ class GameLinkService {
       const gameUrl = data.iframe_url || data.gameURL || null;
 
       if (gameUrl) {
-        // Guarda no cache específico do jogo
         this.gameUrls[slug] = {
           url: gameUrl,
           timestamp: Date.now()
         };
-        console.log(`✅ Link gerado para ${slug}`);
+        console.log(`✅ Link NOVO gerado para ${slug}`);
         return gameUrl;
       }
 
@@ -136,7 +128,6 @@ class GameLinkService {
     }
   }
 
-  // Limpa cache de um jogo específico
   clearGameCache(slug: string): void {
     delete this.gameUrls[slug];
     console.log(`🗑️ Cache limpo para ${slug}`);
