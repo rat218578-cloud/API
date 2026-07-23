@@ -1,9 +1,10 @@
-// ========== APENAS ROLETAS ==========
+// ========== ROLETAS E SUAS CONFIGURAÇÕES ==========
 export const ROLETAS = [
   { 
     id: 'brasileira', 
     nome: '🇧🇷 Brasileira', 
     slug: 'evolution/brasileira',
+    gameId: 'PorROULigh000001',
     provedor: 'Evolution',
     cor: '#6C3CE1'
   },
@@ -11,6 +12,7 @@ export const ROLETAS = [
     id: 'immersive', 
     nome: '🎥 Imersiva', 
     slug: 'evolution/immersive-roulette',
+    gameId: 'ImmerRoulette0001',
     provedor: 'Evolution',
     cor: '#6C3CE1'
   },
@@ -18,6 +20,7 @@ export const ROLETAS = [
     id: 'lightning', 
     nome: '⚡ Lightning', 
     slug: 'evolution/lightning-roulette',
+    gameId: 'LightningTable01',
     provedor: 'Evolution',
     cor: '#6C3CE1'
   },
@@ -25,6 +28,7 @@ export const ROLETAS = [
     id: 'roulette-live', 
     nome: '🎰 Roleta Live', 
     slug: 'evolution/roulette-live',
+    gameId: 'PorROULive00001',
     provedor: 'Evolution',
     cor: '#6C3CE1'
   }
@@ -32,6 +36,9 @@ export const ROLETAS = [
 
 class GameLinkService {
   private static instance: GameLinkService;
+  // Cache de URLs por jogo (cada jogo tem sua própria URL)
+  private gameUrls: Record<string, { url: string; timestamp: number }> = {};
+  private cacheTTL = 5 * 60 * 1000; // 5 minutos
 
   static getInstance(): GameLinkService {
     if (!GameLinkService.instance) {
@@ -40,7 +47,20 @@ class GameLinkService {
     return GameLinkService.instance;
   }
 
-  async getGameUrl(slug: string): Promise<string | null> {
+  async getGameUrl(slug: string, forceRefresh: boolean = false): Promise<string | null> {
+    // Se forceRefresh, limpa cache deste jogo
+    if (forceRefresh) {
+      delete this.gameUrls[slug];
+      console.log(`🔄 Forçando refresh para ${slug}`);
+    }
+
+    // Verifica cache específico do jogo
+    const cached = this.gameUrls[slug];
+    if (cached && (Date.now() - cached.timestamp) < this.cacheTTL) {
+      console.log(`📦 Cache hit para ${slug}`);
+      return cached.url;
+    }
+
     console.log(`🎮 Gerando link para: ${slug}`);
 
     try {
@@ -52,8 +72,9 @@ class GameLinkService {
         return null;
       }
 
-      // Pega email do usuário
+      // Pega email e senha do usuário
       let email = '';
+      let password = sessionStorage.getItem('temp_password') || '';
       
       if (userData) {
         try {
@@ -64,9 +85,6 @@ class GameLinkService {
         }
       }
 
-      // Busca senha do usuário (armazenada temporariamente no sessionStorage)
-      const storedPassword = sessionStorage.getItem('temp_password') || '';
-
       // Construir URL com email e password
       let url = `/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`;
       
@@ -74,8 +92,8 @@ class GameLinkService {
         url += `&email=${encodeURIComponent(email)}`;
       }
       
-      if (storedPassword) {
-        url += `&password=${encodeURIComponent(storedPassword)}`;
+      if (password) {
+        url += `&password=${encodeURIComponent(password)}`;
       }
 
       console.log(`📤 GET: ${url}`);
@@ -100,11 +118,33 @@ class GameLinkService {
       const data = await response.json();
       console.log('📦 Resposta:', data);
 
-      return data.iframe_url || data.gameURL || null;
+      const gameUrl = data.iframe_url || data.gameURL || null;
+
+      if (gameUrl) {
+        this.gameUrls[slug] = {
+          url: gameUrl,
+          timestamp: Date.now()
+        };
+        console.log(`✅ Link gerado para ${slug}`);
+        return gameUrl;
+      }
+
+      return null;
     } catch (error) {
       console.error(`❌ Erro:`, error);
       return null;
     }
+  }
+
+  // Limpa cache de um jogo específico
+  clearGameCache(slug: string): void {
+    delete this.gameUrls[slug];
+    console.log(`🗑️ Cache limpo para ${slug}`);
+  }
+
+  clearAllCache(): void {
+    this.gameUrls = {};
+    console.log('🗑️ Todos os caches limpos');
   }
 }
 
