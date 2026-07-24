@@ -1,9 +1,10 @@
-// ========== APENAS ROLETAS ==========
+// ========== ROLETAS EVOLUTION ==========
 export const ROLETAS = [
   { 
-    id: 'brasileira', 
-    nome: '🇧🇷 Brasileira', 
-    slug: 'evolution/brasileira',
+    id: 'lightning', 
+    nome: '⚡ Lightning', 
+    slug: 'evolution/lightning-roulette',
+    gameId: 'LightningTable01',
     provedor: 'Evolution',
     cor: '#6C3CE1'
   },
@@ -11,20 +12,15 @@ export const ROLETAS = [
     id: 'immersive', 
     nome: '🎥 Imersiva', 
     slug: 'evolution/immersive-roulette',
+    gameId: 'ImmerRoulette0001',
     provedor: 'Evolution',
     cor: '#6C3CE1'
   },
   { 
-    id: 'lightning', 
-    nome: '⚡ Lightning', 
-    slug: 'evolution/lightning-roulette',
-    provedor: 'Evolution',
-    cor: '#6C3CE1'
-  },
-  { 
-    id: 'roulette-live', 
-    nome: '🎰 Roleta Live', 
-    slug: 'evolution/roulette-live',
+    id: 'brasileira', 
+    nome: '🇧🇷 Brasileira', 
+    slug: 'evolution/brasileira',
+    gameId: 'PorROULigh000001',
     provedor: 'Evolution',
     cor: '#6C3CE1'
   }
@@ -32,9 +28,8 @@ export const ROLETAS = [
 
 class GameLinkService {
   private static instance: GameLinkService;
-  // Cache de URLs por jogo (cada jogo tem sua própria URL, mas SEMPRE gera link novo)
   private gameUrls: Record<string, { url: string; timestamp: number }> = {};
-  private cacheTTL = 60 * 1000; // 1 minuto de cache (curto para evitar EV.12)
+  private cacheTTL = 60 * 60 * 1000; // 1 hora
 
   static getInstance(): GameLinkService {
     if (!GameLinkService.instance) {
@@ -43,51 +38,56 @@ class GameLinkService {
     return GameLinkService.instance;
   }
 
-  // SEMPRE gera um link novo quando a roleta é selecionada
-  async getGameUrl(slug: string, forceRefresh: boolean = true): Promise<string | null> {
-    // SEMPRE força refresh ao mudar de roleta para evitar EV.12
-    if (forceRefresh) {
-      delete this.gameUrls[slug];
-      console.log(`🔄 Forçando refresh para ${slug}`);
+  // ===== CRIA UMA SESSÃO ÚNICA PARA O USUÁRIO =====
+  private getEvoSession(): { evosessionid: string; instance: string; client_version: string } {
+    // Tenta pegar do localStorage (criado no login)
+    let evosessionid = localStorage.getItem('evo_evosessionid') || '';
+    let instance = localStorage.getItem('evo_instance') || '';
+    let client_version = localStorage.getItem('evo_client_version') || '';
+
+    // Se não tiver, gera uma nova (igual ao HTML)
+    if (!evosessionid) {
+      // Gera um EVOSESSIONID único baseado no timestamp + random
+      const timestamp = Date.now().toString(36);
+      const random = Math.random().toString(36).substring(2, 15);
+      evosessionid = `tztnmffxax4bftiot${timestamp}${random}`;
+      localStorage.setItem('evo_evosessionid', evosessionid);
     }
 
-    // Cache muito curto (1 minuto) - só para evitar múltiplas requisições seguidas
+    if (!instance) {
+      instance = `3wsaab-${evosessionid.substring(0, 20)}-PorROULigh000001`;
+      localStorage.setItem('evo_instance', instance);
+    }
+
+    if (!client_version) {
+      client_version = "6.20260529.83717.62338-307701dd59-r2";
+      localStorage.setItem('evo_client_version', client_version);
+    }
+
+    return { evosessionid, instance, client_version };
+  }
+
+  async getGameUrl(slug: string): Promise<string | null> {
     const cached = this.gameUrls[slug];
     if (cached && (Date.now() - cached.timestamp) < this.cacheTTL) {
-      console.log(`📦 Cache hit para ${slug} (${(Date.now() - cached.timestamp)/1000}s)`);
+      console.log(`📦 Cache hit para ${slug}`);
       return cached.url;
     }
 
-    console.log(`🎮 Gerando link NOVO para: ${slug}`);
+    console.log(`🎮 Gerando link para: ${slug}`);
 
     try {
       const token = localStorage.getItem('access_token');
-      const userData = localStorage.getItem('user_data');
-      
       if (!token) {
         console.error('❌ Token não encontrado');
         return null;
       }
 
-      let email = '';
-      if (userData) {
-        try {
-          const user = JSON.parse(userData);
-          email = user.email || user.login || '';
-        } catch (e) {
-          console.error('Erro ao parsear userData:', e);
-        }
-      }
+      // ===== USA A SESSÃO DO USUÁRIO =====
+      const evoSession = this.getEvoSession();
+      console.log('🔑 EVOSESSIONID:', evoSession.evosessionid.substring(0, 30) + '...');
 
-      const password = sessionStorage.getItem('temp_password') || '';
-      
-      if (!email || !password) {
-        console.error('❌ Email ou senha não encontrados');
-        return null;
-      }
-
-      // SEMPRE gera link novo com force_refresh=true
-      const url = `/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}&force_refresh=true`;
+      const url = `/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`;
       console.log(`📤 GET: ${url}`);
 
       const response = await fetch(url, {
@@ -110,15 +110,19 @@ class GameLinkService {
       const data = await response.json();
       console.log('📦 Resposta:', data);
 
-      const gameUrl = data.iframe_url || data.gameURL || null;
-
-      if (gameUrl) {
+      const baseUrl = data.iframe_url || data.gameURL;
+      if (baseUrl) {
+        const gameId = ROLETAS.find(r => r.slug === slug)?.gameId || 'PorROULigh000001';
+        
+        // ===== URL COM AS CREDENCIAIS DO USUÁRIO =====
+        const finalUrl = `${baseUrl}&EVOSESSIONID=${evoSession.evosessionid}&instance=${evoSession.instance}&client_version=${evoSession.client_version}&gameId=${gameId}`;
+        
         this.gameUrls[slug] = {
-          url: gameUrl,
+          url: finalUrl,
           timestamp: Date.now()
         };
-        console.log(`✅ Link NOVO gerado para ${slug}`);
-        return gameUrl;
+        console.log(`✅ Link gerado para ${slug} com sessão do usuário`);
+        return finalUrl;
       }
 
       return null;
@@ -126,6 +130,15 @@ class GameLinkService {
       console.error(`❌ Erro:`, error);
       return null;
     }
+  }
+
+  // ===== GERA UMA NOVA SESSÃO PARA O USUÁRIO =====
+  refreshEvoSession(): void {
+    localStorage.removeItem('evo_evosessionid');
+    localStorage.removeItem('evo_instance');
+    localStorage.removeItem('evo_client_version');
+    this.clearAllCache();
+    console.log('🔄 Nova sessão Evolution gerada');
   }
 
   clearGameCache(slug: string): void {
