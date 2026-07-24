@@ -86,15 +86,6 @@ export function RouletteDashboard() {
     }
   };
 
-  const changeRoom = (roomId: string) => {
-    setActiveRoom(roomId);
-    setHistory([]);
-    const roleta = ROLETAS.find(r => r.id === roomId);
-    if (roleta) {
-      rouletteWS.switchTable(roleta.gameId || 'PorROULigh000001');
-    }
-  };
-
   const reconnect = () => {
     const roleta = ROLETAS.find(r => r.id === activeRoom);
     const gameId = roleta?.gameId || 'PorROULigh000001';
@@ -102,6 +93,19 @@ export function RouletteDashboard() {
     setTimeout(() => {
       rouletteWS.connect(gameId);
     }, 500);
+  };
+
+  const handleRoomChange = (roomId: string) => {
+    setActiveRoom(roomId);
+    setHistory([]);
+    setWins(0);
+    setLosses(0);
+    setLastSignal(null);
+    setSignalNumbers([]);
+    const roleta = ROLETAS.find(r => r.id === roomId);
+    if (roleta) {
+      rouletteWS.switchTable(roleta.gameId || 'PorROULigh000001');
+    }
   };
 
   const topNumbers = useMemo(() => {
@@ -130,6 +134,23 @@ export function RouletteDashboard() {
 
   return (
     <div className="p-4 space-y-4">
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 flex-wrap">
+        {ROLETAS.map((r) => (
+          <button
+            key={r.id}
+            onClick={() => handleRoomChange(r.id)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${
+              activeRoom === r.id
+                ? "bg-bg-tertiary border-accent-pink text-text-primary shadow-lg shadow-accent-pink/20"
+                : "bg-bg-card border-border-default text-text-secondary hover:border-border-hover"
+            }`}
+          >
+            <span className={`w-2 h-2 rounded-full ${activeRoom === r.id && isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-text-muted'}`} />
+            {r.nome}
+          </button>
+        ))}
+      </div>
+
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-bold text-text-primary">{ROLETAS.find(r => r.id === activeRoom)?.nome}</span>
