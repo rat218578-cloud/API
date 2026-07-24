@@ -38,16 +38,12 @@ class GameLinkService {
     return GameLinkService.instance;
   }
 
-  // ===== CRIA UMA SESSÃO ÚNICA PARA O USUÁRIO =====
   private getEvoSession(): { evosessionid: string; instance: string; client_version: string } {
-    // Tenta pegar do localStorage (criado no login)
     let evosessionid = localStorage.getItem('evo_evosessionid') || '';
     let instance = localStorage.getItem('evo_instance') || '';
-    let client_version = localStorage.getItem('evo_client_version') || '';
+    let client_version = localStorage.getItem('evo_client_version') || '6.20260529.83717.62338-307701dd59-r2';
 
-    // Se não tiver, gera uma nova (igual ao HTML)
     if (!evosessionid) {
-      // Gera um EVOSESSIONID único baseado no timestamp + random
       const timestamp = Date.now().toString(36);
       const random = Math.random().toString(36).substring(2, 15);
       evosessionid = `tztnmffxax4bftiot${timestamp}${random}`;
@@ -57,11 +53,6 @@ class GameLinkService {
     if (!instance) {
       instance = `3wsaab-${evosessionid.substring(0, 20)}-PorROULigh000001`;
       localStorage.setItem('evo_instance', instance);
-    }
-
-    if (!client_version) {
-      client_version = "6.20260529.83717.62338-307701dd59-r2";
-      localStorage.setItem('evo_client_version', client_version);
     }
 
     return { evosessionid, instance, client_version };
@@ -78,16 +69,35 @@ class GameLinkService {
 
     try {
       const token = localStorage.getItem('access_token');
+      const userData = localStorage.getItem('user_data');
+      
       if (!token) {
         console.error('❌ Token não encontrado');
         return null;
       }
 
-      // ===== USA A SESSÃO DO USUÁRIO =====
+      let email = '';
+      if (userData) {
+        try {
+          const user = JSON.parse(userData);
+          email = user.email || user.login || '';
+        } catch (e) {
+          console.error('Erro ao parsear userData:', e);
+        }
+      }
+
+      const password = sessionStorage.getItem('temp_password') || '';
+      
+      if (!email || !password) {
+        console.error('❌ Email ou senha não encontrados');
+        return null;
+      }
+
       const evoSession = this.getEvoSession();
       console.log('🔑 EVOSESSIONID:', evoSession.evosessionid.substring(0, 30) + '...');
 
-      const url = `/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated`;
+      // ===== ENVIA EMAIL E PASSWORD =====
+      const url = `/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`;
       console.log(`📤 GET: ${url}`);
 
       const response = await fetch(url, {
@@ -113,15 +123,13 @@ class GameLinkService {
       const baseUrl = data.iframe_url || data.gameURL;
       if (baseUrl) {
         const gameId = ROLETAS.find(r => r.slug === slug)?.gameId || 'PorROULigh000001';
-        
-        // ===== URL COM AS CREDENCIAIS DO USUÁRIO =====
         const finalUrl = `${baseUrl}&EVOSESSIONID=${evoSession.evosessionid}&instance=${evoSession.instance}&client_version=${evoSession.client_version}&gameId=${gameId}`;
         
         this.gameUrls[slug] = {
           url: finalUrl,
           timestamp: Date.now()
         };
-        console.log(`✅ Link gerado para ${slug} com sessão do usuário`);
+        console.log(`✅ Link gerado para ${slug}`);
         return finalUrl;
       }
 
@@ -132,23 +140,9 @@ class GameLinkService {
     }
   }
 
-  // ===== GERA UMA NOVA SESSÃO PARA O USUÁRIO =====
-  refreshEvoSession(): void {
-    localStorage.removeItem('evo_evosessionid');
-    localStorage.removeItem('evo_instance');
-    localStorage.removeItem('evo_client_version');
-    this.clearAllCache();
-    console.log('🔄 Nova sessão Evolution gerada');
-  }
-
   clearGameCache(slug: string): void {
     delete this.gameUrls[slug];
     console.log(`🗑️ Cache limpo para ${slug}`);
-  }
-
-  clearAllCache(): void {
-    this.gameUrls = {};
-    console.log('🗑️ Todos os caches limpos');
   }
 }
 
