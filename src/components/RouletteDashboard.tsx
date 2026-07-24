@@ -31,7 +31,6 @@ export function RouletteDashboard() {
   const [lastSignal, setLastSignal] = useState<string | null>(null);
   const [signalNumbers, setSignalNumbers] = useState<number[]>([]);
 
-  // ===== CONECTA WEBSOCKET =====
   useEffect(() => {
     const roleta = ROLETAS.find(r => r.id === activeRoom);
     const gameId = roleta?.gameId || 'PorROULigh000001';
@@ -66,7 +65,6 @@ export function RouletteDashboard() {
     };
   }, [activeRoom]);
 
-  // ===== GERAR SINAL =====
   const generateSignal = () => {
     const random = Math.random();
     
@@ -88,7 +86,6 @@ export function RouletteDashboard() {
     }
   };
 
-  // ===== MUDA DE ROLETA =====
   const changeRoom = (roomId: string) => {
     setActiveRoom(roomId);
     setHistory([]);
@@ -98,7 +95,6 @@ export function RouletteDashboard() {
     }
   };
 
-  // ===== RECONECTAR =====
   const reconnect = () => {
     const roleta = ROLETAS.find(r => r.id === activeRoom);
     const gameId = roleta?.gameId || 'PorROULigh000001';
@@ -108,7 +104,6 @@ export function RouletteDashboard() {
     }, 500);
   };
 
-  // ===== TOP 8 NÚMEROS =====
   const topNumbers = useMemo(() => {
     const validHistory = sanitizeHistory(history);
     const counts: Record<number, number> = {};
@@ -135,8 +130,7 @@ export function RouletteDashboard() {
 
   return (
     <div className="p-4 space-y-4">
-      {/* Status da Conexão */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-bold text-text-primary">{ROLETAS.find(r => r.id === activeRoom)?.nome}</span>
           {isConnected ? (
@@ -164,10 +158,7 @@ export function RouletteDashboard() {
         </button>
       </div>
 
-      {/* Layout Principal: Player + Análise */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        
-        {/* Player */}
         <div className="xl:col-span-6">
           <LiveGameView
             slug={currentSlug}
@@ -176,10 +167,7 @@ export function RouletteDashboard() {
           />
         </div>
 
-        {/* Análise */}
         <div className="xl:col-span-6 space-y-4">
-          
-          {/* Sinal Atual */}
           {lastSignal && signalNumbers.length > 0 && (
             <div className="bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30 rounded-2xl p-4">
               <div className="flex items-center justify-between">
@@ -204,7 +192,6 @@ export function RouletteDashboard() {
             </div>
           )}
 
-          {/* Catálogo */}
           <div className="bg-bg-card border border-border-default rounded-2xl p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider">📊 Catálogo</h3>
@@ -247,7 +234,6 @@ export function RouletteDashboard() {
             </div>
           </div>
 
-          {/* Grupos + Assertividade */}
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-bg-card border border-border-default rounded-2xl p-4">
               <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">📈 Grupos</h3>
@@ -305,7 +291,6 @@ export function RouletteDashboard() {
         </div>
       </div>
 
-      {/* IA de Sinais */}
       <div className="grid grid-cols-1 gap-4">
         <SignalGenerator history={history} />
       </div>
