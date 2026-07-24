@@ -28,14 +28,10 @@ export class RouletteWebSocketService {
       return;
     }
 
-    const evosessionid = localStorage.getItem('evo_evosessionid') || '';
-    const instance = localStorage.getItem('evo_instance') || '';
-    const client_version = localStorage.getItem('evo_client_version') || '6.20260529.83717.62338-307701dd59-r2';
-
-    if (!evosessionid || !instance) {
-      console.error('❌ EVOSESSIONID ou INSTANCE não encontrados');
-      return;
-    }
+    // ===== CREDENCIAIS FIXAS (IGUAL AO HTML QUE FUNCIONAVA) =====
+    const evosessionid = "tztnmffxax4bftiotz5nldw4ewbihiucfa1a02b43300ac6f454fb8509c85e629c52cc321605135fd";
+    const instance = "3wsaab-tztnmffxax4bftio-PorROULigh000001";
+    const client_version = "6.20260529.83717.62338-307701dd59-r2";
 
     this.isConnecting = true;
 
