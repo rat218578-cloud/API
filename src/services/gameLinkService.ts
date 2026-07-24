@@ -4,7 +4,6 @@ export const ROLETAS = [
     id: 'lightning', 
     nome: '⚡ Lightning', 
     slug: 'evolution/lightning-roulette',
-    gameId: 'LightningTable01',
     provedor: 'Evolution',
     cor: '#6C3CE1'
   },
@@ -12,7 +11,6 @@ export const ROLETAS = [
     id: 'immersive', 
     nome: '🎥 Imersiva', 
     slug: 'evolution/immersive-roulette',
-    gameId: 'ImmerRoulette0001',
     provedor: 'Evolution',
     cor: '#6C3CE1'
   },
@@ -20,7 +18,6 @@ export const ROLETAS = [
     id: 'brasileira', 
     nome: '🇧🇷 Brasileira', 
     slug: 'evolution/brasileira',
-    gameId: 'PorROULigh000001',
     provedor: 'Evolution',
     cor: '#6C3CE1'
   }
@@ -28,9 +25,9 @@ export const ROLETAS = [
 
 class GameLinkService {
   private static instance: GameLinkService;
+  // Cache por roleta - CADA UMA TEM SEU PRÓPRIO LINK
   private gameUrls: Record<string, { url: string; timestamp: number }> = {};
-  private evoSession: { evosessionid: string; instance: string } | null = null;
-  private cacheTTL = 60 * 60 * 1000;
+  private cacheTTL = 5 * 60 * 1000; // 5 minutos de cache
 
   static getInstance(): GameLinkService {
     if (!GameLinkService.instance) {
@@ -39,27 +36,8 @@ class GameLinkService {
     return GameLinkService.instance;
   }
 
-  // Extrai EVOSESSIONID e INSTANCE da URL gerada pela API
-  private extractEvoSession(url: string): { evosessionid: string; instance: string } | null {
-    try {
-      // Procura por EVOSESSIONID e instance na URL
-      const evoMatch = url.match(/EVOSESSIONID=([^&]+)/);
-      const instanceMatch = url.match(/instance=([^&]+)/);
-      
-      if (evoMatch && instanceMatch) {
-        return {
-          evosessionid: evoMatch[1],
-          instance: instanceMatch[1]
-        };
-      }
-      return null;
-    } catch (e) {
-      console.error('Erro ao extrair EVOSESSIONID:', e);
-      return null;
-    }
-  }
-
   async getGameUrl(slug: string): Promise<string | null> {
+    // Cache separado para cada roleta
     const cached = this.gameUrls[slug];
     if (cached && (Date.now() - cached.timestamp) < this.cacheTTL) {
       console.log(`📦 Cache hit para ${slug}`);
@@ -94,6 +72,7 @@ class GameLinkService {
         return null;
       }
 
+      // ===== CADA ROLETA GERA SEU PRÓPRIO LINK =====
       const url = `/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`;
       console.log(`📤 GET: ${url}`);
 
@@ -117,40 +96,15 @@ class GameLinkService {
       const data = await response.json();
       console.log('📦 Resposta:', data);
 
-      const baseUrl = data.iframe_url || data.gameURL;
-      if (baseUrl) {
-        // Extrai EVOSESSIONID e INSTANCE da URL
-        const evoInfo = this.extractEvoSession(baseUrl);
-        
-        if (evoInfo) {
-          // Salva a sessão para reutilizar
-          this.evoSession = evoInfo;
-          console.log('🔑 EVOSESSIONID extraído:', evoInfo.evosessionid.substring(0, 30) + '...');
-          console.log('🔧 INSTANCE extraído:', evoInfo.instance);
-          
-          // Armazena no localStorage para outras roletas
-          localStorage.setItem('evo_evosessionid', evoInfo.evosessionid);
-          localStorage.setItem('evo_instance', evoInfo.instance);
-        }
-
-        const gameId = ROLETAS.find(r => r.slug === slug)?.gameId || 'PorROULigh000001';
-        
-        // Se temos a sessão, usamos ela para construir a URL final
-        let finalUrl = baseUrl;
-        if (this.evoSession) {
-          // Substitui ou adiciona os parâmetros
-          finalUrl = baseUrl;
-          // Se a URL já tem parâmetros, adiciona com &, senão com ?
-          const separator = baseUrl.includes('?') ? '&' : '?';
-          finalUrl += `${separator}EVOSESSIONID=${this.evoSession.evosessionid}&instance=${this.evoSession.instance}&client_version=6.20260529.83717.62338-307701dd59-r2&gameId=${gameId}`;
-        }
-        
+      const gameUrl = data.iframe_url || data.gameURL;
+      if (gameUrl) {
+        // Guarda no cache SEPARADO para esta roleta
         this.gameUrls[slug] = {
-          url: finalUrl,
+          url: gameUrl,
           timestamp: Date.now()
         };
-        console.log(`✅ Link gerado para ${slug} com sessão Evolution`);
-        return finalUrl;
+        console.log(`✅ Link gerado para ${slug}`);
+        return gameUrl;
       }
 
       return null;
@@ -160,9 +114,15 @@ class GameLinkService {
     }
   }
 
-  clearGameCache(slug: string): void {
+  // Força refresh de uma roleta específica
+  refreshGame(slug: string): void {
     delete this.gameUrls[slug];
-    console.log(`🗑️ Cache limpo para ${slug}`);
+    console.log(`🔄 Refresh forçado para ${slug}`);
+  }
+
+  clearAllCache(): void {
+    this.gameUrls = {};
+    console.log('🗑️ Todos os caches limpos');
   }
 }
 
