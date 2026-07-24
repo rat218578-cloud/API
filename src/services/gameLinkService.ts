@@ -103,6 +103,16 @@ class GameLinkService {
           timestamp: Date.now()
         };
         console.log(`✅ Link gerado para ${slug}`);
+        
+        // ===== SALVA NO CACHE DO WEBSOCKET PARA EXTRAIR EVOSESSIONID =====
+        try {
+          const { rouletteWS } = await import('./rouletteWebSocket');
+          rouletteWS.setGameUrlCache(slug, gameUrl);
+          console.log('📤 Cache do WebSocket atualizado');
+        } catch (e) {
+          console.error('Erro ao salvar cache do WebSocket:', e);
+        }
+        
         return gameUrl;
       }
 
@@ -125,15 +135,3 @@ class GameLinkService {
 }
 
 export const gameLinkService = GameLinkService.getInstance();
-// No final da função getGameUrl, antes do return:
-if (gameUrl) {
-  // ... código existente ...
-  
-  // ===== SALVA NO CACHE DO WEBSOCKET PARA EXTRAIR EVOSESSIONID =====
-  try {
-    const { rouletteWS } = await import('./rouletteWebSocket');
-    rouletteWS.setGameUrlCache(slug, gameUrl);
-  } catch (e) {
-    console.error('Erro ao salvar cache do WebSocket:', e);
-  }
-}
