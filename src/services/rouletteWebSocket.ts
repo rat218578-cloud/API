@@ -13,12 +13,66 @@ export class RouletteWebSocketService {
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private shouldReconnect = true;
   private isConnecting = false;
+  private evosessionid: string = '';
+  private instance: string = '';
+  private clientVersion: string = '6.20260529.83717.62338-307701dd59-r2';
 
   static getInstance(): RouletteWebSocketService {
     if (!RouletteWebSocketService.instance) {
       RouletteWebSocketService.instance = new RouletteWebSocketService();
     }
     return RouletteWebSocketService.instance;
+  }
+
+  // ===== EXTRAI EVOSESSIONID E INSTANCE DO LINK =====
+  extractFromUrl(url: string): { evosessionid: string; instance: string } | null {
+    try {
+      const evoMatch = url.match(/EVOSESSIONID=([^&]+)/);
+      const instanceMatch = url.match(/instance=([^&]+)/);
+      
+      if (evoMatch && instanceMatch) {
+        return {
+          evosessionid: evoMatch[1],
+          instance: instanceMatch[1]
+        };
+      }
+      return null;
+    } catch (e) {
+      console.error('Erro ao extrair:', e);
+      return null;
+    }
+  }
+
+  // ===== PEGA EVOSESSIONID E INSTANCE DO CACHE DE LINKS =====
+  private getEvoCredentials(): { evosessionid: string; instance: string } | null {
+    // Tenta do localStorage
+    let evosessionid = localStorage.getItem('evo_evosessionid') || '';
+    let instance = localStorage.getItem('evo_instance') || '';
+
+    if (evosessionid && instance) {
+      return { evosessionid, instance };
+    }
+
+    // Tenta extrair dos links cacheados
+    try {
+      // @ts-ignore - acessa o cache do gameLinkService
+      const gameUrls = (window as any).__gameLinkCache || {};
+      for (const slug in gameUrls) {
+        const url = gameUrls[slug];
+        if (url) {
+          const extracted = this.extractFromUrl(url);
+          if (extracted) {
+            localStorage.setItem('evo_evosessionid', extracted.evosessionid);
+            localStorage.setItem('evo_instance', extracted.instance);
+            return extracted;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao buscar cache:', e);
+    }
+
+    return null;
   }
 
   connect(gameId: string = 'PorROULigh000001') {
@@ -28,16 +82,23 @@ export class RouletteWebSocketService {
       return;
     }
 
-    // ===== CREDENCIAIS FIXAS (IGUAL AO HTML QUE FUNCIONAVA) =====
-    const evosessionid = "tztnmffxax4bftiotz5nldw4ewbihiucfa1a02b43300ac6f454fb8509c85e629c52cc321605135fd";
-    const instance = "3wsaab-tztnmffxax4bftio-PorROULigh000001";
-    const client_version = "6.20260529.83717.62338-307701dd59-r2";
+    // ===== PEGA CREDENCIAIS =====
+    const creds = this.getEvoCredentials();
+    
+    if (!creds) {
+      console.error('❌ Não foi possível obter EVOSESSIONID e INSTANCE');
+      return;
+    }
+
+    this.evosessionid = creds.evosessionid;
+    this.instance = creds.instance;
 
     this.isConnecting = true;
 
-    const wsUrl = `wss://sortenabet.evo-games.com/public/roulette/player/game/${gameId}/socket?messageFormat=json&EVOSESSIONID=${evosessionid}&instance=${instance}&client_version=${client_version}`;
+    const wsUrl = `wss://sortenabet.evo-games.com/public/roulette/player/game/${gameId}/socket?messageFormat=json&EVOSESSIONID=${this.evosessionid}&instance=${this.instance}&client_version=${this.clientVersion}`;
 
     console.log(`🔌 Conectando WebSocket para ${gameId}...`);
+    console.log(`🔑 EVOSESSIONID: ${this.evosessionid.substring(0, 20)}...`);
 
     try {
       this.ws = new WebSocket(wsUrl);
@@ -102,6 +163,7 @@ export class RouletteWebSocketService {
         return;
       }
 
+      // ===== NÚMERO SORTEADO EM TEMPO REAL =====
       if (data.type === 'roulette.winSpots' && data.args?.code) {
         const number = data.args.code;
         console.log(`🎯 Número sorteado: ${number}`);
@@ -113,12 +175,14 @@ export class RouletteWebSocketService {
         this.historyCallbacks.forEach(cb => cb(this.history));
       }
 
+      // ===== HISTÓRICO RECENTE (ATÉ 500 RODADAS) =====
       if (data.type === 'roulette.recentResults' && data.args?.recentResults) {
         const results = data.args.recentResults;
         let novos = 0;
         for (const result of results) {
           if (result && result.length > 0) {
             const number = result[0];
+            // Evita duplicatas
             if (this.history.length === 0 || this.history[0] !== number) {
               this.history.unshift(number);
               novos++;
@@ -126,7 +190,7 @@ export class RouletteWebSocketService {
           }
         }
         if (novos > 0) {
-          console.log(`📜 Carregados ${novos} números do histórico`);
+          console.log(`📜 Carregados ${novos} números do histórico (total: ${this.history.length})`);
           this.historyCallbacks.forEach(cb => cb(this.history));
         }
       }
