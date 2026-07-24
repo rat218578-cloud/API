@@ -30,9 +30,9 @@ export default function App() {
   const [gameLauncherOpen, setGameLauncherOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // Função de login que salva a senha temporariamente
   const handleLogin = async (loginValue: string, password: string) => {
     sessionStorage.setItem('temp_password', password);
+    console.log('🔑 Senha salva temporariamente');
     return await login(loginValue, password);
   };
 
@@ -51,9 +51,12 @@ export default function App() {
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
       <main className={`transition-all duration-300 min-h-screen ${sidebarCollapsed ? "ml-16" : "ml-64"}`}>
-        <Header title={currentView === "bankroll" ? "Ferramenta" : gameInfo.title}
-          subtitle={currentView === "bankroll" ? "Gestão de Banca" : gameInfo.subtitle}
-          balance={balance} user={user} onLogout={logout} />
+        <Header 
+          title={currentView === "bankroll" ? "Ferramenta" : gameInfo.title}
+          balance={balance} 
+          user={user} 
+          onLogout={logout} 
+        />
         {currentView === "bankroll" ? <BankrollManager onBack={() => setCurrentView("game")} /> :
          activeGame === "roleta" ? <RouletteDashboard /> :
          <GamePlaceholder title={gameInfo.title} status={gameInfo.status === "active" ? "beta" : gameInfo.status} />}
