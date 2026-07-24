@@ -4,6 +4,7 @@ export const ROLETAS = [
     id: 'lightning', 
     nome: '⚡ Lightning', 
     slug: 'evolution/lightning-roulette',
+    gameId: 'LightningTable01',
     provedor: 'Evolution',
     cor: '#6C3CE1'
   },
@@ -11,6 +12,7 @@ export const ROLETAS = [
     id: 'immersive', 
     nome: '🎥 Imersiva', 
     slug: 'evolution/immersive-roulette',
+    gameId: 'ImmerRoulette0001',
     provedor: 'Evolution',
     cor: '#6C3CE1'
   },
@@ -18,6 +20,7 @@ export const ROLETAS = [
     id: 'brasileira', 
     nome: '🇧🇷 Brasileira', 
     slug: 'evolution/brasileira',
+    gameId: 'PorROULigh000001',
     provedor: 'Evolution',
     cor: '#6C3CE1'
   }
@@ -25,9 +28,8 @@ export const ROLETAS = [
 
 class GameLinkService {
   private static instance: GameLinkService;
-  // Cache por roleta - CADA UMA TEM SEU PRÓPRIO LINK
   private gameUrls: Record<string, { url: string; timestamp: number }> = {};
-  private cacheTTL = 5 * 60 * 1000; // 5 minutos de cache
+  private cacheTTL = 5 * 60 * 1000;
 
   static getInstance(): GameLinkService {
     if (!GameLinkService.instance) {
@@ -37,7 +39,6 @@ class GameLinkService {
   }
 
   async getGameUrl(slug: string): Promise<string | null> {
-    // Cache separado para cada roleta
     const cached = this.gameUrls[slug];
     if (cached && (Date.now() - cached.timestamp) < this.cacheTTL) {
       console.log(`📦 Cache hit para ${slug}`);
@@ -72,7 +73,6 @@ class GameLinkService {
         return null;
       }
 
-      // ===== CADA ROLETA GERA SEU PRÓPRIO LINK =====
       const url = `/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`;
       console.log(`📤 GET: ${url}`);
 
@@ -98,7 +98,6 @@ class GameLinkService {
 
       const gameUrl = data.iframe_url || data.gameURL;
       if (gameUrl) {
-        // Guarda no cache SEPARADO para esta roleta
         this.gameUrls[slug] = {
           url: gameUrl,
           timestamp: Date.now()
@@ -114,7 +113,6 @@ class GameLinkService {
     }
   }
 
-  // Força refresh de uma roleta específica
   refreshGame(slug: string): void {
     delete this.gameUrls[slug];
     console.log(`🔄 Refresh forçado para ${slug}`);
