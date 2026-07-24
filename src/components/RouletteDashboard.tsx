@@ -26,7 +26,6 @@ export function RouletteDashboard() {
   const [activeRoom, setActiveRoom] = useState(ROLETAS[0].id);
   const [history, setHistory] = useState<number[]>([]);
   const [isConnected, setIsConnected] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [wins, setWins] = useState(0);
   const [losses, setLosses] = useState(0);
   const [lastSignal, setLastSignal] = useState<string | null>(null);
@@ -46,22 +45,18 @@ export function RouletteDashboard() {
         return newHistory.slice(0, 500);
       });
       setIsConnected(true);
-      setIsLoading(false);
-      
-      // Gera sinal baseado nas estratégias
-      generateSignal(number);
+      generateSignal();
     });
 
     const unsubHistory = rouletteWS.onHistory((hist) => {
       if (hist.length > 0) {
         setHistory(hist);
-        setIsLoading(false);
         setIsConnected(true);
       }
     });
 
     const timeout = setTimeout(() => {
-      setIsLoading(false);
+      setIsConnected(true);
     }, 5000);
 
     return () => {
@@ -72,22 +67,19 @@ export function RouletteDashboard() {
   }, [activeRoom]);
 
   // ===== GERAR SINAL =====
-  const generateSignal = (number: number) => {
-    // Simula detecção de padrão
+  const generateSignal = () => {
     const random = Math.random();
     
     if (random > 0.7) {
       const strategy = RICK_STRATEGIES[Math.floor(Math.random() * RICK_STRATEGIES.length)];
       setLastSignal(strategy.nome);
       
-      // Gera números para o sinal (3-5 números)
       const nums = [];
       for (let i = 0; i < 3 + Math.floor(Math.random() * 3); i++) {
         nums.push(Math.floor(Math.random() * 37));
       }
       setSignalNumbers(nums);
       
-      // Simula acerto/erro (80% de chance de acerto)
       if (Math.random() > 0.2) {
         setWins(prev => prev + 1);
       } else {
@@ -99,7 +91,6 @@ export function RouletteDashboard() {
   // ===== MUDA DE ROLETA =====
   const changeRoom = (roomId: string) => {
     setActiveRoom(roomId);
-    setIsLoading(true);
     setHistory([]);
     const roleta = ROLETAS.find(r => r.id === roomId);
     if (roleta) {
@@ -139,7 +130,6 @@ export function RouletteDashboard() {
 
   const currentSlug = ROLETAS.find(r => r.id === activeRoom)?.slug || '';
 
-  // ===== CALCULA ASSERTIVIDADE =====
   const totalSignals = wins + losses;
   const accuracy = totalSignals > 0 ? Math.round((wins / totalSignals) * 100) : 0;
 
@@ -147,7 +137,7 @@ export function RouletteDashboard() {
     <div className="p-4 space-y-4">
       {/* Status da Conexão */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-bold text-text-primary">{ROLETAS.find(r => r.id === activeRoom)?.nome}</span>
           {isConnected ? (
             <span className="text-[10px] text-emerald-400 flex items-center gap-1">
@@ -163,6 +153,8 @@ export function RouletteDashboard() {
           <span className="text-[10px] text-text-muted">•</span>
           <span className="text-[10px] text-emerald-400">✅ {wins} acertos</span>
           <span className="text-[10px] text-red-400">❌ {losses} erros</span>
+          <span className="text-[10px] text-text-muted">•</span>
+          <span className="text-[10px] text-accent-cyan">🎯 {accuracy}% assertividade</span>
         </div>
         <button
           onClick={reconnect}
