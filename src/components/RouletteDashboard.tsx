@@ -12,7 +12,6 @@ import {
 } from "../utils/roulette";
 import { Loader2, Wifi, WifiOff, RefreshCw } from "lucide-react";
 
-// ===== ESTRATÉGIAS DO PDF RICK ROLETA =====
 const RICK_STRATEGIES = [
   { id: 'duzias', nome: 'Dúzias', cor: '#FF6B35', descricao: 'Aposta em 2 dúzias' },
   { id: 'indiana', nome: 'Indiana', cor: '#6C3CE1', descricao: 'Setor quente da roda' },
@@ -181,11 +180,7 @@ export function RouletteDashboard() {
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
         <div className="xl:col-span-6">
-          <LiveGameView
-            slug={currentSlug}
-            isOpen={true}
-            onClose={() => {}}
-          />
+          <LiveGameView slug={currentSlug} isOpen={true} onClose={() => {}} />
         </div>
 
         <div className="xl:col-span-6 space-y-4">
