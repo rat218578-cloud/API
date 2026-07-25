@@ -21,7 +21,7 @@ SITE_KEY = "0x4AAAAAAADmr68KUqpnEKo-9"
 SECRET_KEY = "0x4AAAAAAADmr62kWZNpTLxzKtYOYbpw7wzY"
 API_BASE = "https://sortenabet.bet.br"
 
-# ========== CACHE GLOBAL (para não fazer login toda vez) ==========
+# ========== CACHE ==========
 cache_jogos = {}
 ultimo_login = None
 session_global = None
@@ -58,10 +58,10 @@ class TurnstileTokenGenerator:
 
         return f"t2:1.{payload_b64}.{signature}.{final_hash}"
 
-def fazer_login(email, password):
+def fazer_login(email, password, force=False):
     global session_global, ultimo_login
     
-    if session_global and ultimo_login and (time.time() - ultimo_login) < TOKEN_EXPIRATION:
+    if not force and session_global and ultimo_login and (time.time() - ultimo_login) < TOKEN_EXPIRATION:
         logger.info("✅ Token reutilizado")
         return True
     
@@ -114,8 +114,10 @@ def obter_url_jogo(slug, email, password):
             return cache_jogos[slug]['url']
     
     try:
-        if not fazer_login(email, password):
-            return None
+        # Tenta login se não tiver sessão
+        if not session_global:
+            if not fazer_login(email, password):
+                return None
         
         response = session_global.get(
             f'{API_BASE}/api/start-game-v2',
@@ -127,6 +129,21 @@ def obter_url_jogo(slug, email, password):
             },
             timeout=10
         )
+        
+        # Se token expirou, faz login novo e tenta de novo
+        if response.status_code in [401, 404]:
+            logger.warning(f"⚠️ Token expirado ou inválido, refazendo login...")
+            if fazer_login(email, password, force=True):
+                response = session_global.get(
+                    f'{API_BASE}/api/start-game-v2',
+                    params={
+                        'slug': slug,
+                        'platform': 'WEB',
+                        'use_demo': 0,
+                        'source': 'watchIsAuthenticated'
+                    },
+                    timeout=10
+                )
         
         if response.status_code == 200:
             data = response.json()
@@ -163,42 +180,19 @@ def api_login():
         if not email or not password:
             return jsonify({'error': 'Email e senha obrigatórios'}), 400
         
-        generator = TurnstileTokenGenerator(SITE_KEY, SECRET_KEY)
-        captcha_token = generator.generate_token()
-        
-        login_data = {
-            "login": email,
-            "email": email,
-            "password": password,
-            "app_source": "web",
-            "captcha_token": captcha_token
-        }
-        
-        response = requests.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
-        result = response.json()
-        
-        if response.status_code == 200:
-            access_token = result.get('access_token')
-            if access_token:
-                global session_global, ultimo_login
-                session_global = requests.Session()
-                session_global.headers.update({
-                    'Authorization': f'Bearer {access_token}'
-                })
-                ultimo_login = time.time()
-                
-                return jsonify({
-                    'access_token': access_token,
-                    'token_type': 'Bearer',
-                    'expires_in': 604800,
-                    'user': result.get('user', {
-                        'id': 1,
-                        'name': email.split('@')[0],
-                        'email': email
-                    })
-                }), 200
-        
-        return jsonify(result), response.status_code
+        # Faz login com força
+        if fazer_login(email, password, force=True):
+            return jsonify({
+                'success': True,
+                'message': 'Login OK',
+                'user': {
+                    'id': 1,
+                    'name': email.split('@')[0],
+                    'email': email
+                }
+            }), 200
+        else:
+            return jsonify({'error': 'Login falhou'}), 401
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -250,7 +244,6 @@ def api_roulette_history():
             if response.status_code == 200:
                 return jsonify(response.json()), response.status_code
         
-        # Dados simulados
         return jsonify({
             'spins': [
                 {'number': n, 'color': 'red' if n % 2 == 0 else 'black', 
@@ -282,7 +275,7 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - CACHE GLOBAL")
+    print("🎯 API PROXY - COM RENOVAÇÃO DE TOKEN")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("🌐 Rodando em: http://localhost:5000")
