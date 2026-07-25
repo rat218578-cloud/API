@@ -63,7 +63,7 @@ def fazer_login(email, password, force=False):
     
     if not force and session_global and ultimo_login and (time.time() - ultimo_login) < TOKEN_EXPIRATION:
         logger.info("✅ Token reutilizado")
-        return True
+        return True, session_global.headers.get('Authorization', '').replace('Bearer ', '')
     
     logger.info(f"🔐 Login: {email}")
     
@@ -84,6 +84,7 @@ def fazer_login(email, password, force=False):
         if response.status_code == 200:
             data = response.json()
             access_token = data.get('access_token')
+            user_data = data.get('user', {})
             
             if access_token:
                 session_global = requests.Session()
@@ -96,27 +97,26 @@ def fazer_login(email, password, force=False):
                 })
                 ultimo_login = time.time()
                 logger.info("✅ Login OK")
-                return True
+                return True, access_token, user_data
         else:
             logger.error(f"❌ Login falhou: {response.text[:200]}")
-            return False
+            return False, None, None
     except Exception as e:
         logger.error(f"❌ Erro: {e}")
-        return False
+        return False, None, None
 
 def obter_url_jogo(slug, email, password):
     global cache_jogos
     
-    # Verifica cache
     if slug in cache_jogos:
         if (time.time() - cache_jogos[slug]['timestamp']) < TOKEN_EXPIRATION:
             logger.info(f"📦 Cache hit para {slug}")
             return cache_jogos[slug]['url']
     
     try:
-        # Tenta login se não tiver sessão
         if not session_global:
-            if not fazer_login(email, password):
+            success, _, _ = fazer_login(email, password)
+            if not success:
                 return None
         
         response = session_global.get(
@@ -130,10 +130,10 @@ def obter_url_jogo(slug, email, password):
             timeout=10
         )
         
-        # Se token expirou, faz login novo e tenta de novo
         if response.status_code in [401, 404]:
-            logger.warning(f"⚠️ Token expirado ou inválido, refazendo login...")
-            if fazer_login(email, password, force=True):
+            logger.warning(f"⚠️ Token expirado, refazendo login...")
+            success, _, _ = fazer_login(email, password, force=True)
+            if success:
                 response = session_global.get(
                     f'{API_BASE}/api/start-game-v2',
                     params={
@@ -180,21 +180,27 @@ def api_login():
         if not email or not password:
             return jsonify({'error': 'Email e senha obrigatórios'}), 400
         
-        # Faz login com força
-        if fazer_login(email, password, force=True):
+        # Faz login e pega token e user
+        success, access_token, user_data = fazer_login(email, password, force=True)
+        
+        if success and access_token:
             return jsonify({
-                'success': True,
-                'message': 'Login OK',
+                'access_token': access_token,
+                'token_type': 'Bearer',
+                'expires_in': 604800,
                 'user': {
-                    'id': 1,
-                    'name': email.split('@')[0],
-                    'email': email
+                    'id': user_data.get('id', 1),
+                    'name': user_data.get('name', email.split('@')[0]),
+                    'email': user_data.get('email', email),
+                    'cpf': user_data.get('cpf', ''),
+                    'plan': 'pro'
                 }
             }), 200
         else:
             return jsonify({'error': 'Login falhou'}), 401
         
     except Exception as e:
+        logger.error(f"❌ Erro no login: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/start-game-v2', methods=['GET'])
@@ -275,7 +281,7 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - COM RENOVAÇÃO DE TOKEN")
+    print("🎯 API PROXY - COM LOGIN COMPLETO")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("🌐 Rodando em: http://localhost:5000")
