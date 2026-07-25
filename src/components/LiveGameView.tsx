@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader2, RefreshCw, X, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
+import { Loader2, RefreshCw, X, Maximize2, Minimize2, ExternalLink, AlertCircle } from 'lucide-react';
 import { gameLinkService, ROLETAS } from '../services/gameLinkService';
 
 interface LiveGameViewProps {
@@ -13,16 +13,9 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
   const [gameUrl, setGameUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [sessionId, setSessionId] = useState<string>('');
 
   const roleta = ROLETAS.find(r => r.slug === slug);
   const cor = roleta?.cor || '#6C3CE1';
-
-  useEffect(() => {
-    const uniqueId = `sessao_${slug}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-    setSessionId(uniqueId);
-    console.log(`🆕 Sessão única criada: ${uniqueId}`);
-  }, [slug]);
 
   useEffect(() => {
     if (isOpen && slug) {
@@ -37,13 +30,8 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
 
     try {
       const url = await gameLinkService.getGameUrl(slug);
-      
       if (url) {
-        const separator = url.includes('?') ? '&' : '?';
-        const uniqueUrl = `${url}${separator}_=${Date.now()}&session=${sessionId}&gameId=${roleta?.gameId || 'PorROULigh000001'}`;
-        
-        console.log(`🔗 Link único gerado para ${slug}`);
-        setGameUrl(uniqueUrl);
+        setGameUrl(url);
       } else {
         setError('Não foi possível gerar o link. Tente novamente.');
       }
@@ -78,7 +66,7 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
 
   return (
     <div 
-      id={`live-game-container-${sessionId}`}
+      id="live-game-container"
       className="bg-bg-card border border-border-default rounded-2xl overflow-hidden"
     >
       <div className="flex items-center justify-between p-3 bg-bg-secondary/80 border-b border-border-default">
@@ -95,20 +83,8 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
               ● AO VIVO
             </span>
           )}
-          <span className="text-[10px] text-text-muted">
-            ID: {sessionId.substring(0, 8)}
-          </span>
         </div>
         <div className="flex items-center gap-1">
-          {gameUrl && (
-            <button
-              onClick={openInNewTab}
-              className="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
-              title="Abrir em nova aba"
-            >
-              <ExternalLink className="w-4 h-4" />
-            </button>
-          )}
           <button
             onClick={loadGame}
             disabled={loading}
@@ -136,8 +112,7 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
               <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4" style={{ color: cor }} />
-              <p className="text-text-muted text-sm">Gerando link único...</p>
-              <p className="text-text-muted text-xs mt-1">Sessão: {sessionId}</p>
+              <p className="text-text-muted text-sm">Carregando...</p>
             </div>
           </div>
         ) : error ? (
@@ -155,13 +130,26 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
             </div>
           </div>
         ) : gameUrl ? (
-          <iframe
-            src={gameUrl}
-            className="w-full h-full border-0"
-            allow="autoplay; fullscreen; camera; microphone; accelerometer; gyroscope"
-            loading="lazy"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-orientation-lock"
-          />
+          <>
+            <iframe
+              src={gameUrl}
+              className="w-full h-full border-0"
+              allow="autoplay; fullscreen; camera; microphone; accelerometer; gyroscope"
+              loading="lazy"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-orientation-lock"
+            />
+            {/* Aviso sobre múltiplas roletas */}
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-sm px-4 py-2 rounded-lg text-[10px] text-text-muted flex items-center gap-2 border border-border-default">
+              <AlertCircle className="w-3 h-3 text-amber-400" />
+              <span>Para abrir outra roleta, use o botão </span>
+              <button
+                onClick={openInNewTab}
+                className="text-accent-cyan hover:text-accent-cyan/80 flex items-center gap-1"
+              >
+                <ExternalLink className="w-3 h-3" /> Nova Aba
+              </button>
+            </div>
+          </>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
@@ -183,14 +171,13 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
         <div className="flex items-center justify-between text-[10px] text-text-muted">
           <span>{roleta?.nome || slug}</span>
           <div className="flex items-center gap-3">
-            <span className="text-[8px] text-text-muted">Sessão: {sessionId.substring(0, 12)}</span>
             {gameUrl && (
               <button
                 onClick={openInNewTab}
-                className="text-accent-cyan hover:text-accent-cyan/80 transition-colors flex items-center gap-1"
+                className="text-accent-cyan hover:text-accent-cyan/80 transition-colors flex items-center gap-1 font-medium"
               >
                 <ExternalLink className="w-3 h-3" />
-                Nova aba
+                Abrir em nova aba
               </button>
             )}
             <span className="flex items-center gap-1">
