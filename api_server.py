@@ -20,9 +20,10 @@ SITE_KEY = "0x4AAAAAAADmr68KUqpnEKo-9"
 SECRET_KEY = "0x4AAAAAAADmr62kWZNpTLxzKtYOYbpw7wzY"
 API_BASE = "https://sortenabet.bet.br"
 
-# ========== SESSÃO GLOBAL COM TOKEN ==========
-session = None
+# ========== CACHE ==========
+cache_jogos = {}
 ultimo_login = None
+session = None
 TOKEN_EXPIRATION = 300  # 5 minutos
 
 class TurnstileTokenGenerator:
@@ -57,12 +58,10 @@ class TurnstileTokenGenerator:
         return f"t2:1.{payload_b64}.{signature}.{final_hash}"
 
 def fazer_login(email, password):
-    """Faz login apenas 1 vez e reutiliza o token"""
     global session, ultimo_login
     
-    # Se já tem sessão válida, reutiliza
     if session and ultimo_login and (time.time() - ultimo_login) < TOKEN_EXPIRATION:
-        logger.info("✅ Token reutilizado (cache)")
+        logger.info("✅ Token reutilizado")
         return True
     
     logger.info(f"🔐 Login: {email}")
@@ -79,7 +78,7 @@ def fazer_login(email, password):
     }
 
     try:
-        response = requests.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=5)
+        response = requests.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
         
         if response.status_code == 200:
             data = response.json()
@@ -105,12 +104,18 @@ def fazer_login(email, password):
         return False
 
 def obter_url_jogo(slug, email, password):
-    """Obtém URL do jogo com cache global"""
+    global cache_jogos
+    
+    # Verifica cache
+    if slug in cache_jogos:
+        if (time.time() - cache_jogos[slug]['timestamp']) < TOKEN_EXPIRATION:
+            logger.info(f"📦 Cache hit para {slug}")
+            return cache_jogos[slug]['url']
+    
     try:
         if not fazer_login(email, password):
             return None
         
-        # Faz a requisição (agora mais rápida porque já tem token)
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
             params={
@@ -119,19 +124,26 @@ def obter_url_jogo(slug, email, password):
                 'use_demo': 0,
                 'source': 'watchIsAuthenticated'
             },
-            timeout=5
+            timeout=10
         )
         
         if response.status_code == 200:
             data = response.json()
             game_url = data.get('iframe_url') or data.get('gameURL')
-            return game_url
+            
+            if game_url:
+                cache_jogos[slug] = {
+                    'url': game_url,
+                    'timestamp': time.time()
+                }
+                logger.info(f"✅ URL obtida para {slug}")
+                return game_url
         else:
-            logger.warning(f"❌ {slug}: {response.status_code}")
+            logger.warning(f"❌ {slug}: HTTP {response.status_code}")
             return None
             
     except Exception as e:
-        logger.error(f"❌ Erro: {e}")
+        logger.error(f"❌ Erro ao buscar {slug}: {e}")
         return None
 
 # ========== ROTAS ==========
@@ -161,7 +173,7 @@ def api_login():
             "captcha_token": captcha_token
         }
         
-        response = requests.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=5)
+        response = requests.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
         result = response.json()
         
         if response.status_code == 200:
@@ -192,7 +204,6 @@ def api_start_game():
         if not email or not password:
             return jsonify({'error': 'email e password obrigatórios'}), 401
         
-        # Tempo de resposta reduzido
         url = obter_url_jogo(slug, email, password)
         
         if url:
@@ -222,12 +233,12 @@ def api_roulette_history():
             response = session.get(
                 f'{API_BASE}/api/roulette/history',
                 params={'slug': slug, 'limit': limit},
-                timeout=5
+                timeout=10
             )
             if response.status_code == 200:
                 return jsonify(response.json()), response.status_code
         
-        # Dados simulados (fallback rápido)
+        # Dados simulados
         return jsonify({
             'spins': [
                 {'number': n, 'color': 'red' if n % 2 == 0 else 'black', 
@@ -259,7 +270,7 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - OTIMIZADO")
+    print("🎯 API PROXY - SORTE NA BET")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("🌐 Rodando em: http://localhost:5000")
