@@ -66,22 +66,24 @@ session.headers.update({
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
 })
 
-def fazer_login():
+def fazer_login(email, password):
+    """Faz login com as credenciais fornecidas pelo usuário"""
     global ultimo_login, session
     
+    # Verifica se o token ainda é válido
     if ultimo_login and datetime.now() - ultimo_login < TOKEN_EXPIRATION:
         logger.info("✅ Login ainda válido")
         return True
     
-    logger.info("🔐 FAZENDO LOGIN...")
+    logger.info(f"🔐 FAZENDO LOGIN para: {email}")
     
     generator = TurnstileTokenGenerator(SITE_KEY, SECRET_KEY)
     captcha_token = generator.generate_token()
     
     login_data = {
-        "login": "gcriste268@gmail.com",
-        "email": "gcriste268@gmail.com",
-        "password": "284050",
+        "login": email,
+        "email": email,
+        "password": password,
         "app_source": "web",
         "captcha_token": captcha_token
     }
@@ -94,7 +96,7 @@ def fazer_login():
             access_token = data.get('access_token')
             session.headers.update({'Authorization': f'Bearer {access_token}'})
             ultimo_login = datetime.now()
-            logger.info("✅ Login OK!")
+            logger.info(f"✅ Login OK para: {email}")
             return True
         else:
             logger.error(f"❌ Login falhou: {response.text}")
@@ -103,7 +105,8 @@ def fazer_login():
         logger.error(f"❌ Erro no login: {e}")
         return False
 
-def obter_url_jogo(slug):
+def obter_url_jogo(slug, email, password):
+    """Obtém URL do jogo com as credenciais do usuário"""
     global cache_jogos
     
     if slug in cache_jogos:
@@ -112,7 +115,7 @@ def obter_url_jogo(slug):
             return cache_jogos[slug]['url']
     
     try:
-        if not fazer_login():
+        if not fazer_login(email, password):
             return None
         
         response = session.get(
@@ -151,13 +154,19 @@ def obter_url_jogo(slug):
 def api_login():
     try:
         data = request.json
+        email = data.get('login') or data.get('email')
+        password = data.get('password')
+        
+        if not email or not password:
+            return jsonify({'error': 'Email e senha são obrigatórios'}), 400
+        
         generator = TurnstileTokenGenerator(SITE_KEY, SECRET_KEY)
         captcha_token = generator.generate_token()
         
         login_data = {
-            "login": data.get('login') or data.get('email'),
-            "email": data.get('email'),
-            "password": data.get('password'),
+            "login": email,
+            "email": email,
+            "password": password,
             "app_source": "web",
             "captcha_token": captcha_token
         }
@@ -177,8 +186,8 @@ def api_login():
                     'expires_in': 604800,
                     'user': result.get('user', {
                         'id': 1,
-                        'name': data.get('email', '').split('@')[0],
-                        'email': data.get('email', '')
+                        'name': email.split('@')[0],
+                        'email': email
                     })
                 }), 200
         
@@ -188,37 +197,52 @@ def api_login():
 
 @app.route('/api/start-game-v2', methods=['GET'])
 def api_start_game():
-    slug = request.args.get('slug')
-    if not slug:
-        return jsonify({'error': 'slug é obrigatório'}), 400
-    
-    url = obter_url_jogo(slug)
-    if url:
-        return jsonify({
-            'success': True,
-            'slug': slug,
-            'gameURL': url,
-            'iframe_url': url
-        })
-    else:
-        return jsonify({
-            'success': False,
-            'error': 'Não foi possível obter a URL do jogo'
-        }), 404
+    try:
+        slug = request.args.get('slug')
+        email = request.args.get('email')
+        password = request.args.get('password')
+        
+        if not slug:
+            return jsonify({'error': 'slug é obrigatório'}), 400
+        
+        if not email or not password:
+            return jsonify({'error': 'email e password são obrigatórios'}), 401
+        
+        url = obter_url_jogo(slug, email, password)
+        
+        if url:
+            return jsonify({
+                'success': True,
+                'slug': slug,
+                'gameURL': url,
+                'iframe_url': url
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Não foi possível obter a URL do jogo'
+            }), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/roulette/history', methods=['GET'])
 def api_roulette_history():
     try:
         slug = request.args.get('slug', 'evolution/brasileira')
         limit = request.args.get('limit', 50)
+        auth_header = request.headers.get('Authorization')
         
-        response = session.get(
-            f'{API_BASE}/api/roulette/history',
-            params={'slug': slug, 'limit': limit},
-            timeout=10
-        )
-        return jsonify(response.json()), response.status_code
-    except Exception as e:
+        if auth_header:
+            token = auth_header.replace('Bearer ', '')
+            headers = {'Authorization': f'Bearer {token}'}
+            response = requests.get(
+                f'{API_BASE}/api/roulette/history',
+                params={'slug': slug, 'limit': limit},
+                headers=headers,
+                timeout=10
+            )
+            return jsonify(response.json()), response.status_code
+        
         return jsonify({
             'spins': [
                 {'number': n, 'color': 'red' if n % 2 == 0 else 'black', 
@@ -228,6 +252,8 @@ def api_roulette_history():
             'total': 10,
             'room': slug
         })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/health', methods=['GET'])
 def health():
