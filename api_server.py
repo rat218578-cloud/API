@@ -57,51 +57,52 @@ class TurnstileTokenGenerator:
 
         return f"t2:1.{payload_b64}.{signature}.{final_hash}"
 
-def fazer_login(email, password):
+def fazer_login(email, password, force=False):
     global session, ultimo_login
     
-    if session and ultimo_login and (time.time() - ultimo_login) < TOKEN_EXPIRATION:
-        logger.info("✅ Token reutilizado")
-        return True
-    
-    logger.info(f"🔐 Login: {email}")
-    
-    generator = TurnstileTokenGenerator(SITE_KEY, SECRET_KEY)
-    captcha_token = generator.generate_token()
-    
-    login_data = {
-        "login": email,
-        "email": email,
-        "password": password,
-        "app_source": "web",
-        "captcha_token": captcha_token
-    }
-
-    try:
-        response = requests.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
+    # Se force ou não tem sessão, faz login
+    if force or not session or not ultimo_login or (time.time() - ultimo_login) > TOKEN_EXPIRATION:
+        logger.info(f"🔐 Login: {email}")
         
-        if response.status_code == 200:
-            data = response.json()
-            access_token = data.get('access_token')
+        generator = TurnstileTokenGenerator(SITE_KEY, SECRET_KEY)
+        captcha_token = generator.generate_token()
+        
+        login_data = {
+            "login": email,
+            "email": email,
+            "password": password,
+            "app_source": "web",
+            "captcha_token": captcha_token
+        }
+
+        try:
+            response = requests.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
             
-            if access_token:
-                session = requests.Session()
-                session.headers.update({
-                    'Content-Type': 'application/json',
-                    'Origin': 'https://sortenabet.bet.br',
-                    'Referer': 'https://sortenabet.bet.br/',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-                    'Authorization': f'Bearer {access_token}'
-                })
-                ultimo_login = time.time()
-                logger.info("✅ Login OK")
-                return True
-        else:
-            logger.error(f"❌ Login falhou: {response.text[:200]}")
+            if response.status_code == 200:
+                data = response.json()
+                access_token = data.get('access_token')
+                
+                if access_token:
+                    session = requests.Session()
+                    session.headers.update({
+                        'Content-Type': 'application/json',
+                        'Origin': 'https://sortenabet.bet.br',
+                        'Referer': 'https://sortenabet.bet.br/',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+                        'Authorization': f'Bearer {access_token}'
+                    })
+                    ultimo_login = time.time()
+                    logger.info("✅ Login OK")
+                    return True
+            else:
+                logger.error(f"❌ Login falhou: {response.text[:200]}")
+                return False
+        except Exception as e:
+            logger.error(f"❌ Erro: {e}")
             return False
-    except Exception as e:
-        logger.error(f"❌ Erro: {e}")
-        return False
+    
+    logger.info("✅ Token reutilizado")
+    return True
 
 def obter_url_jogo(slug, email, password):
     global cache_jogos
@@ -113,8 +114,10 @@ def obter_url_jogo(slug, email, password):
             return cache_jogos[slug]['url']
     
     try:
-        if not fazer_login(email, password):
-            return None
+        # Tenta com sessão existente
+        if not session:
+            if not fazer_login(email, password):
+                return None
         
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
@@ -126,6 +129,21 @@ def obter_url_jogo(slug, email, password):
             },
             timeout=10
         )
+        
+        # Se for 401, força novo login e tenta de novo
+        if response.status_code == 401:
+            logger.warning(f"⚠️ Token expirado, refazendo login...")
+            if fazer_login(email, password, force=True):
+                response = session.get(
+                    f'{API_BASE}/api/start-game-v2',
+                    params={
+                        'slug': slug,
+                        'platform': 'WEB',
+                        'use_demo': 0,
+                        'source': 'watchIsAuthenticated'
+                    },
+                    timeout=10
+                )
         
         if response.status_code == 200:
             data = response.json()
@@ -139,7 +157,7 @@ def obter_url_jogo(slug, email, password):
                 logger.info(f"✅ URL obtida para {slug}")
                 return game_url
         else:
-            logger.warning(f"❌ {slug}: HTTP {response.status_code}")
+            logger.warning(f"❌ {slug}: HTTP {response.status_code} - {response.text[:200]}")
             return None
             
     except Exception as e:
@@ -162,31 +180,11 @@ def api_login():
         if not email or not password:
             return jsonify({'error': 'Email e senha obrigatórios'}), 400
         
-        generator = TurnstileTokenGenerator(SITE_KEY, SECRET_KEY)
-        captcha_token = generator.generate_token()
-        
-        login_data = {
-            "login": email,
-            "email": email,
-            "password": password,
-            "app_source": "web",
-            "captcha_token": captcha_token
-        }
-        
-        response = requests.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
-        result = response.json()
-        
-        if response.status_code == 200:
-            access_token = result.get('access_token')
-            if access_token:
-                global session, ultimo_login
-                session = requests.Session()
-                session.headers.update({
-                    'Authorization': f'Bearer {access_token}'
-                })
-                ultimo_login = time.time()
-        
-        return jsonify(result), response.status_code
+        # Faz login e salva sessão
+        if fazer_login(email, password, force=True):
+            return jsonify({'success': True, 'message': 'Login OK'}), 200
+        else:
+            return jsonify({'error': 'Login falhou'}), 401
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
