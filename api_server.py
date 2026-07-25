@@ -60,7 +60,6 @@ class TurnstileTokenGenerator:
 def fazer_login(email, password, force=False):
     global session, ultimo_login
     
-    # Se force ou não tem sessão, faz login
     if force or not session or not ultimo_login or (time.time() - ultimo_login) > TOKEN_EXPIRATION:
         logger.info(f"🔐 Login: {email}")
         
@@ -93,28 +92,26 @@ def fazer_login(email, password, force=False):
                     })
                     ultimo_login = time.time()
                     logger.info("✅ Login OK")
-                    return True
+                    return True, data
             else:
                 logger.error(f"❌ Login falhou: {response.text[:200]}")
-                return False
+                return False, None
         except Exception as e:
             logger.error(f"❌ Erro: {e}")
-            return False
+            return False, None
     
     logger.info("✅ Token reutilizado")
-    return True
+    return True, None
 
 def obter_url_jogo(slug, email, password):
     global cache_jogos
     
-    # Verifica cache
     if slug in cache_jogos:
         if (time.time() - cache_jogos[slug]['timestamp']) < TOKEN_EXPIRATION:
             logger.info(f"📦 Cache hit para {slug}")
             return cache_jogos[slug]['url']
     
     try:
-        # Tenta com sessão existente
         if not session:
             if not fazer_login(email, password):
                 return None
@@ -130,10 +127,10 @@ def obter_url_jogo(slug, email, password):
             timeout=10
         )
         
-        # Se for 401, força novo login e tenta de novo
         if response.status_code == 401:
             logger.warning(f"⚠️ Token expirado, refazendo login...")
-            if fazer_login(email, password, force=True):
+            success, _ = fazer_login(email, password, force=True)
+            if success:
                 response = session.get(
                     f'{API_BASE}/api/start-game-v2',
                     params={
@@ -157,7 +154,7 @@ def obter_url_jogo(slug, email, password):
                 logger.info(f"✅ URL obtida para {slug}")
                 return game_url
         else:
-            logger.warning(f"❌ {slug}: HTTP {response.status_code} - {response.text[:200]}")
+            logger.warning(f"❌ {slug}: HTTP {response.status_code}")
             return None
             
     except Exception as e:
@@ -180,13 +177,51 @@ def api_login():
         if not email or not password:
             return jsonify({'error': 'Email e senha obrigatórios'}), 400
         
-        # Faz login e salva sessão
-        if fazer_login(email, password, force=True):
-            return jsonify({'success': True, 'message': 'Login OK'}), 200
-        else:
-            return jsonify({'error': 'Login falhou'}), 401
+        # Faz login e pega os dados do usuário
+        generator = TurnstileTokenGenerator(SITE_KEY, SECRET_KEY)
+        captcha_token = generator.generate_token()
+        
+        login_data = {
+            "login": email,
+            "email": email,
+            "password": password,
+            "app_source": "web",
+            "captcha_token": captcha_token
+        }
+        
+        response = requests.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
+        result = response.json()
+        
+        if response.status_code == 200:
+            access_token = result.get('access_token')
+            user_data = result.get('user', {})
+            
+            if access_token:
+                global session, ultimo_login
+                session = requests.Session()
+                session.headers.update({
+                    'Authorization': f'Bearer {access_token}'
+                })
+                ultimo_login = time.time()
+                
+                # ===== RETORNA OS DADOS DO USUÁRIO =====
+                return jsonify({
+                    'access_token': access_token,
+                    'token_type': 'Bearer',
+                    'expires_in': 604800,
+                    'user': {
+                        'id': user_data.get('id', 1),
+                        'name': user_data.get('name', email.split('@')[0]),
+                        'email': user_data.get('email', email),
+                        'cpf': user_data.get('cpf', ''),
+                        'plan': 'pro'
+                    }
+                }), 200
+        
+        return jsonify(result), response.status_code
         
     except Exception as e:
+        logger.error(f"❌ Erro no login: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/start-game-v2', methods=['GET'])
