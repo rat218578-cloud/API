@@ -5,7 +5,6 @@ import logging
 import os
 import sys
 
-# Tenta importar db com fallback
 try:
     from db import db
 except Exception as e:
@@ -24,14 +23,13 @@ CORS(app)
 
 API_BASE = "https://sortenabet.bet.br"
 
-# ========== SESSÃO HTTP COM COOKIES ==========
 session = requests.Session()
 session.headers.update({
     'Content-Type': 'application/json',
     'Accept': 'application/json',
     'Origin': 'https://sortenabet.bet.br',
     'Referer': 'https://sortenabet.bet.br/',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 })
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -50,15 +48,15 @@ def api_login():
             "login": email,
             "email": email,
             "password": password,
-            "app_source": "web",
-            "captcha_token": "test_token"
+            "app_source": "web"
         }
         
         response = session.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=15)
         print(f"📥 Status login: {response.status_code}")
         
         if response.status_code != 200:
-            return jsonify({'error': 'Credenciais inválidas'}), 401
+            error_msg = response.json().get('error', 'Credenciais inválidas')
+            return jsonify({'error': error_msg}), 401
         
         result = response.json()
         access_token_externo = result.get('access_token')
@@ -66,12 +64,10 @@ def api_login():
         if not access_token_externo:
             return jsonify({'error': 'Token não retornado'}), 500
         
-        # Guarda token externo na sessão
         session.headers.update({'Authorization': f'Bearer {access_token_externo}'})
         
         user_id = str(result.get('user', {}).get('id', email))
         
-        # GERA TOKENS LOCAIS
         jwt_token = jwt_manager.generate_token(user_id, email)
         refresh_token = jwt_manager.generate_refresh_token(user_id, email)
         
@@ -105,41 +101,15 @@ def api_start_game():
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
         
-        # Busca credenciais da sessão
-        user_id = request.user_id
-        email = request.user_email
+        # Busca token externo da sessão HTTP
+        auth_header = session.headers.get('Authorization')
+        if not auth_header:
+            print("⚠️ Token externo não encontrado na sessão")
+            return jsonify({'error': 'Token externo não encontrado'}), 401
         
-        # Recupera senha do banco ou localStorage
-        session_data = request.session_data
-        password_hash = session_data.get('password_hash')
+        print(f"🔑 Token externo: {auth_header[:50]}...")
         
-        # Busca dados do usuário do banco
-        if db:
-            user_data = session_service.get_session_by_user_id(user_id)
-            if user_data:
-                email = user_data.get('email')
-                password_hash = user_data.get('password_hash')
-                print(f"📧 Email do banco: {email}")
-        
-        if not email:
-            return jsonify({'error': 'Email não encontrado'}), 401
-        
-        print(f"🔑 Tentando gerar link com email: {email}")
-        
-        # Faz login novamente para garantir token fresco
-        try:
-            # Tenta usar o refresh token para renovar
-            refresh_token = session_data.get('refresh_token')
-            if refresh_token:
-                refresh_result = session_service.refresh_access_token(refresh_token)
-                if refresh_result:
-                    print("🔄 Token renovado via refresh")
-        except Exception as e:
-            print(f"⚠️ Erro ao renovar token: {e}")
-        
-        # Busca URL do jogo com headers corretos
-        headers = session.headers.copy()
-        
+        # Faz a requisição para a API externa
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
             params={
@@ -148,19 +118,17 @@ def api_start_game():
                 'use_demo': 0,
                 'source': 'watchIsAuthenticated'
             },
-            headers=headers,
             timeout=15
         )
         
         print(f"📥 Status start-game: {response.status_code}")
-        print(f"📦 Response: {response.text[:200]}...")
         
         if response.status_code == 200:
             data = response.json()
             game_url = data.get('iframe_url') or data.get('gameURL')
             
             if game_url:
-                print(f"✅ URL gerada: {game_url[:100]}...")
+                print(f"✅ URL gerada com sucesso!")
                 return jsonify({
                     'success': True,
                     'slug': slug,
@@ -168,30 +136,7 @@ def api_start_game():
                     'iframe_url': game_url
                 })
         
-        # Se falhou, tenta com credenciais diretas
-        print("🔄 Tentando com credenciais diretas...")
-        response = session.get(
-            f'{API_BASE}/api/start-game-v2',
-            params={
-                'slug': slug,
-                'platform': 'WEB',
-                'use_demo': 0,
-                'email': email,
-                'password': password_hash
-            },
-            timeout=15
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            game_url = data.get('iframe_url') or data.get('gameURL')
-            if game_url:
-                return jsonify({
-                    'success': True,
-                    'slug': slug,
-                    'gameURL': game_url,
-                    'iframe_url': game_url
-                })
+        print(f"❌ Resposta: {response.text[:200]}")
         
         return jsonify({
             'success': False,
@@ -204,7 +149,6 @@ def api_start_game():
         logger.error(f"❌ Erro ao gerar link: {e}")
         return jsonify({'error': str(e)}), 500
 
-# ========== ROTAS DE AUTH ==========
 @app.route('/api/auth/refresh', methods=['POST'])
 def api_refresh():
     try:
@@ -283,6 +227,6 @@ if __name__ == '__main__':
     if db:
         session_service.cleanup_expired()
     else:
-        print("⚠️ Banco de dados não disponível - continuando sem persistência")
+        print("⚠️ Banco de dados não disponível")
     
     app.run(host='0.0.0.0', port=5000, debug=False)

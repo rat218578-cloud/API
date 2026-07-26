@@ -29,6 +29,13 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
     setGameUrl(null);
 
     try {
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        setError('Você precisa estar logado para jogar');
+        setLoading(false);
+        return;
+      }
+
       const url = await gameLinkService.getGameUrl(slug);
       if (url) {
         setGameUrl(url);

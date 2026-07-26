@@ -48,40 +48,23 @@ class GameLinkService {
     console.log(`🎮 Gerando link para: ${slug}`);
 
     try {
+      // PEGA O TOKEN DO LOCALSTORAGE
       const token = localStorage.getItem('access_token');
-      const userData = localStorage.getItem('user_data');
       
       if (!token) {
-        console.error('❌ Token não encontrado');
+        console.error('❌ Token não encontrado no localStorage');
         return null;
       }
 
-      let email = '';
-      if (userData) {
-        try {
-          const user = JSON.parse(userData);
-          email = user.email || user.login || '';
-        } catch (e) {
-          console.error('Erro ao parsear userData:', e);
-        }
-      }
+      console.log(`🔑 Token encontrado: ${token.substring(0, 30)}...`);
 
-      const password = sessionStorage.getItem('temp_password') || '';
-      
-      if (!email || !password) {
-        console.error('❌ Email ou senha não encontrados');
-        return null;
-      }
-
-      const url = `/api/start-game-v2?slug=${slug}&platform=WEB&use_demo=0&source=watchIsAuthenticated&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`;
-      console.log(`📤 GET: ${url}`);
-
-      const response = await fetch(url, {
+      // FAZ A REQUISIÇÃO COM O TOKEN NO HEADER
+      const response = await fetch(`/api/start-game-v2?slug=${slug}`, {
         method: 'GET',
         headers: {
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Accept': 'application/json'
         }
       });
 
@@ -90,6 +73,30 @@ class GameLinkService {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`❌ HTTP ${response.status}: ${errorText}`);
+        
+        // Se for 401, token expirado - tenta renovar
+        if (response.status === 401) {
+          console.log('🔄 Token expirado, tentando renovar...');
+          const refreshToken = localStorage.getItem('refresh_token');
+          
+          if (refreshToken) {
+            const refreshResponse = await fetch('/api/auth/refresh', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ refresh_token: refreshToken })
+            });
+            
+            if (refreshResponse.ok) {
+              const data = await refreshResponse.json();
+              localStorage.setItem('access_token', data.access_token);
+              console.log('✅ Token renovado com sucesso!');
+              
+              // Tenta novamente com o novo token
+              return this.getGameUrl(slug);
+            }
+          }
+        }
+        
         return null;
       }
 
