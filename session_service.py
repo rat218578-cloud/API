@@ -34,7 +34,9 @@ class SessionService:
             session_data = json.dumps({
                 'login_at': datetime.now().isoformat(),
                 'user_agent': 'web',
-                'refresh_expires': refresh_expires.isoformat()
+                'refresh_expires': refresh_expires.isoformat(),
+                'email': email,
+                'password_hash': password_hash
             })
             
             db.execute(query, (
