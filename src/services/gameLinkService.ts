@@ -38,28 +38,23 @@ class GameLinkService {
   }
 
   async getGameUrl(slug: string): Promise<string | null> {
-    // SEMPRE GERAR NOVO TOKEN - SEM CACHE
-    console.log(`🎮 Gerando NOVO token para: ${slug}`);
+    console.log(`🎮 Gerando link para: ${slug}`);
 
     try {
       const token = localStorage.getItem('access_token');
       
       if (!token) {
-        console.error('❌ Token não encontrado no localStorage');
+        console.error('❌ Token não encontrado');
         return null;
       }
 
-      console.log(`🔑 Token: ${token.substring(0, 30)}...`);
-
-      // FORÇA GERAÇÃO DE NOVO TOKEN
       const response = await fetch(`/api/start-game-v2?slug=${slug}&_=${Date.now()}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache'
+          'Cache-Control': 'no-cache'
         }
       });
 
@@ -68,27 +63,6 @@ class GameLinkService {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`❌ HTTP ${response.status}: ${errorText}`);
-        
-        if (response.status === 401) {
-          console.log('🔄 Token expirado, tentando renovar...');
-          const refreshToken = localStorage.getItem('refresh_token');
-          
-          if (refreshToken) {
-            const refreshResponse = await fetch('/api/auth/refresh', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ refresh_token: refreshToken })
-            });
-            
-            if (refreshResponse.ok) {
-              const data = await refreshResponse.json();
-              localStorage.setItem('access_token', data.access_token);
-              console.log('✅ Token renovado!');
-              return this.getGameUrl(slug);
-            }
-          }
-        }
-        
         return null;
       }
 
@@ -97,8 +71,7 @@ class GameLinkService {
 
       const gameUrl = data.iframe_url || data.gameURL;
       if (gameUrl) {
-        // NÃO GUARDA EM CACHE - SEMPRE NOVO
-        console.log(`✅ NOVO link gerado para ${slug}`);
+        console.log(`✅ Link gerado para ${slug}`);
         return gameUrl;
       }
 
@@ -109,10 +82,43 @@ class GameLinkService {
     }
   }
 
-  // Força geração de novo token para a roleta atual
+  async getLiveNumbers(limit: number = 500): Promise<any> {
+    try {
+      const token = localStorage.getItem('access_token');
+      if (!token) return null;
+
+      const response = await fetch(`/api/roulette/live?limit=${limit}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) return null;
+      return await response.json();
+    } catch (error) {
+      console.error('❌ Erro ao buscar números ao vivo:', error);
+      return null;
+    }
+  }
+
+  async getWebSocketStatus(): Promise<any> {
+    try {
+      const token = localStorage.getItem('access_token');
+      if (!token) return null;
+
+      const response = await fetch('/api/roulette/status', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) return null;
+      return await response.json();
+    } catch (error) {
+      console.error('❌ Erro ao buscar status:', error);
+      return null;
+    }
+  }
+
   forceRefresh(slug: string): void {
-    console.log(`🔄 Forçando refresh do token para ${slug}`);
     delete this.gameUrls[slug];
+    console.log(`🔄 Refresh forçado para ${slug}`);
   }
 
   clearAllCache(): void {
