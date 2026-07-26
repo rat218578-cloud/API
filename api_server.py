@@ -3,12 +3,13 @@ from flask_cors import CORS
 import requests
 import json
 import time
-import hashlib
-import base64
-import secrets
-from datetime import datetime, timedelta
 import logging
 import os
+from datetime import datetime
+from db import db
+from jwt_helper import jwt_manager
+from session_service import session_service
+from middleware import require_auth, optional_auth
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -17,47 +18,9 @@ app = Flask(__name__, static_folder='dist', static_url_path='')
 CORS(app)
 
 # ========== CONFIGURAÇÕES ==========
-SITE_KEY = "0x4AAAAAAADmr68KUqpnEKo-9"
-SECRET_KEY = "0x4AAAAAAADmr62kWZNpTLxzKtYOYbpw7wzY"
 API_BASE = "https://sortenabet.bet.br"
 
-# ========== CACHE ==========
-cache_jogos = {}
-ultimo_login = None
-TOKEN_EXPIRATION = timedelta(minutes=5)
-
-class TurnstileTokenGenerator:
-    def __init__(self, site_key: str, secret_key: str):
-        self.site_key = site_key
-        self.secret_key = secret_key
-
-    def generate_token(self) -> str:
-        timestamp = int(time.time())
-        nonce = secrets.token_hex(16)
-
-        payload = {
-            "sitekey": self.site_key,
-            "timestamp": timestamp,
-            "nonce": nonce,
-            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "action": "login",
-            "cdata": ""
-        }
-
-        payload_json = json.dumps(payload, separators=(',', ':'))
-        payload_b64 = base64.b64encode(payload_json.encode()).decode()
-
-        signature = hashlib.sha256(
-            f"{payload_b64}.{self.secret_key}".encode()
-        ).hexdigest()[:32]
-
-        final_hash = hashlib.sha256(
-            f"{payload_b64}.{signature}".encode()
-        ).hexdigest()
-
-        return f"t2:1.{payload_b64}.{signature}.{final_hash}"
-
-# ========== SESSÃO ==========
+# ========== SESSÃO HTTP ==========
 session = requests.Session()
 session.headers.update({
     'Content-Type': 'application/json',
@@ -66,90 +29,7 @@ session.headers.update({
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
 })
 
-def fazer_login(email, password):
-    """Faz login com as credenciais fornecidas pelo usuário"""
-    global ultimo_login, session
-    
-    # Verifica se o token ainda é válido
-    if ultimo_login and datetime.now() - ultimo_login < TOKEN_EXPIRATION:
-        logger.info("✅ Login ainda válido")
-        return True
-    
-    logger.info(f"🔐 FAZENDO LOGIN para: {email}")
-    
-    generator = TurnstileTokenGenerator(SITE_KEY, SECRET_KEY)
-    captcha_token = generator.generate_token()
-    
-    login_data = {
-        "login": email,
-        "email": email,
-        "password": password,
-        "app_source": "web",
-        "captcha_token": captcha_token
-    }
-
-    try:
-        response = session.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
-        
-        if response.status_code == 200:
-            data = response.json()
-            access_token = data.get('access_token')
-            session.headers.update({'Authorization': f'Bearer {access_token}'})
-            ultimo_login = datetime.now()
-            logger.info(f"✅ Login OK para: {email}")
-            return True
-        else:
-            logger.error(f"❌ Login falhou: {response.text}")
-            return False
-    except Exception as e:
-        logger.error(f"❌ Erro no login: {e}")
-        return False
-
-def obter_url_jogo(slug, email, password):
-    """Obtém URL do jogo com as credenciais do usuário"""
-    global cache_jogos
-    
-    if slug in cache_jogos:
-        if datetime.now() - cache_jogos[slug]['timestamp'] < TOKEN_EXPIRATION:
-            logger.info(f"📦 Cache hit para {slug}")
-            return cache_jogos[slug]['url']
-    
-    try:
-        if not fazer_login(email, password):
-            return None
-        
-        response = session.get(
-            f'{API_BASE}/api/start-game-v2',
-            params={
-                'slug': slug,
-                'platform': 'WEB',
-                'use_demo': 0,
-                'source': 'watchIsAuthenticated'
-            },
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            game_url = data.get('iframe_url') or data.get('gameURL')
-            
-            if game_url:
-                cache_jogos[slug] = {
-                    'url': game_url,
-                    'timestamp': datetime.now()
-                }
-                logger.info(f"✅ URL obtida para {slug}")
-                return game_url
-        else:
-            logger.warning(f"❌ {slug}: HTTP {response.status_code}")
-            return None
-            
-    except Exception as e:
-        logger.error(f"❌ Erro ao buscar {slug}: {e}")
-        return None
-
-# ========== ROTAS ==========
-
+# ========== ROTA DE LOGIN ==========
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
     try:
@@ -160,104 +40,169 @@ def api_login():
         if not email or not password:
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
         
-        generator = TurnstileTokenGenerator(SITE_KEY, SECRET_KEY)
-        captcha_token = generator.generate_token()
-        
         login_data = {
             "login": email,
             "email": email,
             "password": password,
-            "app_source": "web",
-            "captcha_token": captcha_token
+            "app_source": "web"
         }
         
         response = session.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
         result = response.json()
         
-        if response.status_code == 200:
-            access_token = result.get('access_token')
-            if access_token:
-                session.headers.update({'Authorization': f'Bearer {access_token}'})
-                global ultimo_login
-                ultimo_login = datetime.now()
-                return jsonify({
-                    'access_token': access_token,
-                    'token_type': 'Bearer',
-                    'expires_in': 604800,
-                    'user': result.get('user', {
-                        'id': 1,
-                        'name': email.split('@')[0],
-                        'email': email
-                    })
-                }), 200
+        if response.status_code != 200:
+            return jsonify(result), response.status_code
         
-        return jsonify(result), response.status_code
+        access_token_externo = result.get('access_token')
+        if not access_token_externo:
+            return jsonify({'error': 'Token não retornado'}), 500
+        
+        user_id = str(result.get('user', {}).get('id', email))
+        
+        jwt_token = jwt_manager.generate_token(user_id, email)
+        refresh_token = jwt_manager.generate_refresh_token(user_id, email)
+        
+        session_service.create_session(
+            user_id=user_id,
+            email=email,
+            password=password,
+            access_token=jwt_token,
+            refresh_token=refresh_token
+        )
+        
+        return jsonify({
+            'access_token': jwt_token,
+            'refresh_token': refresh_token,
+            'token_type': 'Bearer',
+            'expires_in': 7 * 24 * 60 * 60,
+            'user': {
+                'id': user_id,
+                'name': result.get('user', {}).get('name', email.split('@')[0]),
+                'email': email,
+                'plan': 'pro'
+            }
+        }), 200
+        
     except Exception as e:
+        logger.error(f"❌ Erro no login: {e}")
         return jsonify({'error': str(e)}), 500
 
+# ========== ROTA DE REFRESH ==========
+@app.route('/api/auth/refresh', methods=['POST'])
+def api_refresh():
+    try:
+        data = request.json
+        refresh_token = data.get('refresh_token')
+        
+        if not refresh_token:
+            return jsonify({'error': 'Refresh token não fornecido'}), 400
+        
+        result = session_service.refresh_access_token(refresh_token)
+        if not result:
+            return jsonify({'error': 'Refresh token inválido ou expirado'}), 401
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Erro no refresh: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ========== ROTA PROTEGIDA ==========
+@app.route('/api/auth/me', methods=['GET'])
+@require_auth
+def api_me():
+    return jsonify({
+        'user_id': request.user_id,
+        'email': request.user_email,
+        'session': {
+            'user_id': request.session_data.get('user_id'),
+            'email': request.session_data.get('email'),
+            'expires_at': request.session_data.get('expires_at'),
+            'is_active': request.session_data.get('is_active')
+        }
+    }), 200
+
+# ========== ROTA DE VALIDAÇÃO ==========
+@app.route('/api/auth/validate', methods=['GET'])
+@require_auth
+def api_validate():
+    return jsonify({
+        'valid': True,
+        'user_id': request.user_id,
+        'email': request.user_email,
+        'expires_at': request.session_data.get('expires_at')
+    }), 200
+
+# ========== ROTA DE LOGOUT ==========
+@app.route('/api/auth/logout', methods=['POST'])
+@require_auth
+def api_logout():
+    session_service.deactivate_session(request.user_id)
+    return jsonify({'success': True, 'message': 'Logout realizado com sucesso'}), 200
+
+# ========== ROTA START-GAME ==========
 @app.route('/api/start-game-v2', methods=['GET'])
+@require_auth
 def api_start_game():
     try:
         slug = request.args.get('slug')
-        email = request.args.get('email')
-        password = request.args.get('password')
-        
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
         
+        email = request.user_email
+        session_data = request.session_data
+        password = session_data.get('password_hash')
+        
         if not email or not password:
-            return jsonify({'error': 'email e password são obrigatórios'}), 401
+            return jsonify({'error': 'Credenciais não disponíveis'}), 401
         
-        url = obter_url_jogo(slug, email, password)
+        response = session.get(
+            f'{API_BASE}/api/start-game-v2',
+            params={'slug': slug, 'platform': 'WEB', 'use_demo': 0},
+            timeout=10
+        )
         
-        if url:
-            return jsonify({
-                'success': True,
-                'slug': slug,
-                'gameURL': url,
-                'iframe_url': url
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Não foi possível obter a URL do jogo'
-            }), 404
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/roulette/history', methods=['GET'])
-def api_roulette_history():
-    try:
-        slug = request.args.get('slug', 'evolution/brasileira')
-        limit = request.args.get('limit', 50)
-        auth_header = request.headers.get('Authorization')
-        
-        if auth_header:
-            token = auth_header.replace('Bearer ', '')
-            headers = {'Authorization': f'Bearer {token}'}
-            response = requests.get(
-                f'{API_BASE}/api/roulette/history',
-                params={'slug': slug, 'limit': limit},
-                headers=headers,
-                timeout=10
-            )
-            return jsonify(response.json()), response.status_code
+        if response.status_code == 200:
+            data = response.json()
+            game_url = data.get('iframe_url') or data.get('gameURL')
+            
+            if game_url:
+                return jsonify({
+                    'success': True,
+                    'slug': slug,
+                    'gameURL': game_url,
+                    'iframe_url': game_url
+                })
         
         return jsonify({
-            'spins': [
-                {'number': n, 'color': 'red' if n % 2 == 0 else 'black', 
-                 'timestamp': datetime.now().isoformat(), 'roundId': f'sim_{i}'}
-                for i, n in enumerate([10, 5, 22, 15, 8, 30, 12, 25, 3, 18])
-            ],
-            'total': 10,
-            'room': slug
-        })
+            'success': False,
+            'error': 'Não foi possível obter a URL do jogo'
+        }), 404
+        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/health', methods=['GET'])
-def health():
-    return jsonify({'status': 'healthy', 'timestamp': time.time()})
+# ========== ROTA PÚBLICA ==========
+@app.route('/api/public/info', methods=['GET'])
+@optional_auth
+def public_info():
+    user_info = None
+    if hasattr(request, 'user_id'):
+        user_info = {
+            'user_id': request.user_id,
+            'email': request.user_email
+        }
+    
+    return jsonify({
+        'message': 'Esta é uma rota pública',
+        'authenticated': user_info is not None,
+        'user': user_info
+    }), 200
+
+# ========== LIMPEZA AUTOMÁTICA ==========
+@app.before_request
+def cleanup_expired_sessions():
+    session_service.cleanup_expired()
 
 # ========== ROTAS FRONTEND ==========
 @app.route('/', defaults={'path': ''})
@@ -265,17 +210,20 @@ def health():
 def serve_frontend(path):
     if path.startswith('api/'):
         return jsonify({'error': 'Not found'}), 404
-    
     if path and os.path.exists(os.path.join('dist', path)):
         return send_from_directory('dist', path)
-    
     return send_from_directory('dist', 'index.html')
 
+# ========== INICIALIZAÇÃO ==========
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - SORTE NA BET")
+    print("🎯 API PROXY - QA.AI")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
+    print("🗄️  Banco: PostgreSQL")
+    print("🛡️  Auth: JWT + Refresh Token + Middleware")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
+    
+    session_service.cleanup_expired()
     app.run(host='0.0.0.0', port=5000, debug=False)
