@@ -29,7 +29,6 @@ export const ROLETAS = [
 class GameLinkService {
   private static instance: GameLinkService;
   private gameUrls: Record<string, { url: string; timestamp: number }> = {};
-  private cacheTTL = 0; // ZERO = SEM CACHE, SEMPRE GERAR NOVO
 
   static getInstance(): GameLinkService {
     if (!GameLinkService.instance) {
@@ -113,7 +112,6 @@ class GameLinkService {
   // Força geração de novo token para a roleta atual
   forceRefresh(slug: string): void {
     console.log(`🔄 Forçando refresh do token para ${slug}`);
-    // Limpa cache específico
     delete this.gameUrls[slug];
   }
 
