@@ -1,9 +1,7 @@
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from datetime import datetime, timedelta
-import hashlib
-import json
+from datetime import datetime
 import logging
 from dotenv import load_dotenv
 
@@ -17,22 +15,52 @@ class Database:
         self.connect()
 
     def connect(self):
-        """Conecta ao PostgreSQL"""
         try:
-            self.conn = psycopg2.connect(
-                host=os.getenv('DB_HOST', 'localhost'),
-                port=os.getenv('DB_PORT', '5432'),
-                dbname=os.getenv('DB_NAME', 'qa_ai_db'),
-                user=os.getenv('DB_USER', 'postgres'),
-                password=os.getenv('DB_PASSWORD', '')
-            )
-            logger.info("✅ Conectado ao PostgreSQL")
+            # Tenta usar DATABASE_URL primeiro
+            database_url = os.getenv('DATABASE_URL')
+            if database_url:
+                self.conn = psycopg2.connect(database_url)
+            else:
+                self.conn = psycopg2.connect(
+                    host=os.getenv('DB_HOST', 'localhost'),
+                    port=os.getenv('DB_PORT', '5432'),
+                    dbname=os.getenv('DB_NAME', 'neondb'),
+                    user=os.getenv('DB_USER', 'neondb_owner'),
+                    password=os.getenv('DB_PASSWORD', '')
+                )
+            logger.info("✅ Conectado ao PostgreSQL (NeonDB)")
+            
+            # Cria tabela se não existir
+            self.create_table_if_not_exists()
+            
         except Exception as e:
             logger.error(f"❌ Erro ao conectar: {e}")
             raise
 
+    def create_table_if_not_exists(self):
+        """Cria a tabela user_sessions se não existir"""
+        query = """
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR(255) UNIQUE NOT NULL,
+                email VARCHAR(255) NOT NULL,
+                access_token TEXT NOT NULL,
+                refresh_token TEXT,
+                password_hash TEXT,
+                session_data JSONB DEFAULT '{}',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP,
+                is_active BOOLEAN DEFAULT true
+            );
+        """
+        try:
+            self.execute(query)
+            logger.info("✅ Tabela user_sessions verificada/criada")
+        except Exception as e:
+            logger.error(f"❌ Erro ao criar tabela: {e}")
+
     def execute(self, query, params=None):
-        """Executa uma query e retorna os resultados"""
         try:
             with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(query, params)
@@ -46,10 +74,8 @@ class Database:
             raise
 
     def close(self):
-        """Fecha conexão"""
         if self.conn:
             self.conn.close()
             logger.info("🔌 Conexão fechada")
 
-# Instância global
 db = Database()

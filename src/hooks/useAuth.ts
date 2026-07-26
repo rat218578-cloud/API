@@ -1,7 +1,14 @@
 import { useState, useEffect } from 'react';
 
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  plan: string;
+}
+
 interface AuthState {
-  user: any;
+  user: User | null;
   loading: boolean;
   error: string | null;
   isAuthenticated: boolean;
@@ -15,14 +22,13 @@ export function useAuth() {
     isAuthenticated: false
   });
 
-  const refreshToken = async (refreshToken: string) => {
+  const refreshToken = async (refreshToken: string): Promise<string | null> => {
     try {
       const response = await fetch('/api/auth/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: refreshToken })
       });
-
       if (response.ok) {
         const data = await response.json();
         localStorage.setItem('access_token', data.access_token);
@@ -34,7 +40,7 @@ export function useAuth() {
     }
   };
 
-  const validateToken = async () => {
+  const validateToken = async (): Promise<boolean> => {
     const accessToken = localStorage.getItem('access_token');
     const refreshToken = localStorage.getItem('refresh_token');
     
@@ -52,7 +58,7 @@ export function useAuth() {
         const data = await response.json();
         setState(prev => ({ 
           ...prev, 
-          user: { id: data.user_id, email: data.email },
+          user: { id: data.user_id, email: data.email, name: data.email?.split('@')[0] || 'Usuário', plan: 'pro' },
           isAuthenticated: true,
           loading: false 
         }));
@@ -70,19 +76,13 @@ export function useAuth() {
       localStorage.removeItem('refresh_token');
       setState(prev => ({ ...prev, loading: false, isAuthenticated: false }));
       return false;
-
-    } catch (error) {
-      setState(prev => ({ 
-        ...prev, 
-        error: 'Erro ao validar token',
-        loading: false,
-        isAuthenticated: false 
-      }));
+    } catch {
+      setState(prev => ({ ...prev, loading: false, isAuthenticated: false }));
       return false;
     }
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<boolean> => {
     setState(prev => ({ ...prev, loading: true, error: null }));
 
     try {
@@ -95,11 +95,7 @@ export function useAuth() {
       const data = await response.json();
 
       if (!response.ok) {
-        setState(prev => ({ 
-          ...prev, 
-          error: data.error || 'Erro ao fazer login',
-          loading: false 
-        }));
+        setState(prev => ({ ...prev, error: data.error || 'Erro ao fazer login', loading: false }));
         return false;
       }
 
@@ -114,24 +110,21 @@ export function useAuth() {
       }));
 
       return true;
-
-    } catch (error) {
-      setState(prev => ({ 
-        ...prev, 
-        error: 'Erro de conexão com o servidor',
-        loading: false 
-      }));
+    } catch {
+      setState(prev => ({ ...prev, error: 'Erro de conexão', loading: false }));
       return false;
     }
   };
 
-  const logout = async () => {
+  const logout = async (): Promise<void> => {
     const accessToken = localStorage.getItem('access_token');
     if (accessToken) {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${accessToken}` }
-      });
+      try {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+      } catch {}
     }
 
     localStorage.removeItem('access_token');
