@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { SignalGenerator } from "./SignalGenerator";
 import { LiveGameView } from "./LiveGameView";
 import { ROLETAS } from "../services/gameLinkService";
@@ -9,46 +9,36 @@ import {
   generateRandomHistory,
   sanitizeHistory
 } from "../utils/roulette";
-import { rouletteApi } from "../services/api";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
 export function RouletteDashboard() {
   const [activeRoom, setActiveRoom] = useState(ROLETAS[0].id);
   const [history, setHistory] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [showVideo, setShowVideo] = useState(false);
   const [showCatalog, setShowCatalog] = useState(true);
 
-  const fetchRouletteData = useCallback(async (roomId: string = activeRoom) => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const historyData = await rouletteApi.getLiveRouletteHistory(roomId, 50);
-      
-      if (historyData && historyData.spins && historyData.spins.length > 0) {
-        const numbers = historyData.spins.map(spin => spin.number);
-        const sanitized = sanitizeHistory(numbers);
-        setHistory(sanitized);
-      } else {
-        const fallbackNumbers = generateRandomHistory(30);
-        setHistory(fallbackNumbers);
-        setError('Dados da API indisponíveis. Usando dados simulados.');
-      }
-    } catch {
-      const fallbackNumbers = generateRandomHistory(30);
-      setHistory(fallbackNumbers);
-      setError('Erro ao carregar dados. Usando dados simulados.');
-    } finally {
-      setLoading(false);
-    }
-  }, [activeRoom]);
-
+  // ===== GERA DADOS SIMULADOS =====
   useEffect(() => {
-    fetchRouletteData(activeRoom);
-  }, [activeRoom, fetchRouletteData]);
+    const simulateHistory = () => {
+      const numbers = [];
+      for (let i = 0; i < 50; i++) {
+        if (Math.random() > 0.3) {
+          numbers.push(Math.floor(Math.random() * 37));
+        } else {
+          const hotNumbers = [0, 7, 14, 17, 21, 23, 26, 32, 35, 36];
+          numbers.push(hotNumbers[Math.floor(Math.random() * hotNumbers.length)]);
+        }
+      }
+      return numbers;
+    };
+
+    const fallbackNumbers = simulateHistory();
+    const sanitized = sanitizeHistory(fallbackNumbers);
+    setHistory(sanitized);
+    setLoading(false);
+  }, [activeRoom]);
 
   const openGame = (slug: string) => {
     setSelectedSlug(slug);
@@ -73,7 +63,11 @@ export function RouletteDashboard() {
   }, [history]);
 
   const refreshHistory = () => {
-    fetchRouletteData(activeRoom);
+    setLoading(true);
+    const newNumbers = generateRandomHistory(30);
+    const sanitized = sanitizeHistory(newNumbers);
+    setHistory(sanitized);
+    setLoading(false);
   };
 
   const getLastThree = () => {
@@ -95,12 +89,6 @@ export function RouletteDashboard() {
 
   return (
     <div className="p-4 space-y-4">
-      {error && (
-        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-sm text-amber-400">
-          {error}
-        </div>
-      )}
-
       <div className="flex items-center gap-2 overflow-x-auto pb-2 flex-wrap">
         {ROLETAS.map((r) => (
           <button
@@ -139,7 +127,7 @@ export function RouletteDashboard() {
                 className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center gap-1"
               >
                 {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
-                LIVE
+                SIM
               </button>
             </div>
 

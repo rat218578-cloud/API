@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader2, RefreshCw, X, Maximize2, Minimize2, ExternalLink, AlertCircle } from 'lucide-react';
+import { Loader2, RefreshCw, X, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
 import { gameLinkService, ROLETAS } from '../services/gameLinkService';
 
 interface LiveGameViewProps {
@@ -85,6 +85,15 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
           )}
         </div>
         <div className="flex items-center gap-1">
+          {gameUrl && (
+            <button
+              onClick={openInNewTab}
+              className="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
+              title="Abrir em nova aba"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </button>
+          )}
           <button
             onClick={loadGame}
             disabled={loading}
@@ -130,26 +139,13 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
             </div>
           </div>
         ) : gameUrl ? (
-          <>
-            <iframe
-              src={gameUrl}
-              className="w-full h-full border-0"
-              allow="autoplay; fullscreen; camera; microphone; accelerometer; gyroscope"
-              loading="lazy"
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-orientation-lock"
-            />
-            {/* Aviso sobre múltiplas roletas */}
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-sm px-4 py-2 rounded-lg text-[10px] text-text-muted flex items-center gap-2 border border-border-default">
-              <AlertCircle className="w-3 h-3 text-amber-400" />
-              <span>Para abrir outra roleta, use o botão </span>
-              <button
-                onClick={openInNewTab}
-                className="text-accent-cyan hover:text-accent-cyan/80 flex items-center gap-1"
-              >
-                <ExternalLink className="w-3 h-3" /> Nova Aba
-              </button>
-            </div>
-          </>
+          <iframe
+            src={gameUrl}
+            className="w-full h-full border-0"
+            allow="autoplay; fullscreen; camera; microphone; accelerometer; gyroscope"
+            loading="lazy"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-orientation-lock"
+          />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
@@ -174,10 +170,10 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
             {gameUrl && (
               <button
                 onClick={openInNewTab}
-                className="text-accent-cyan hover:text-accent-cyan/80 transition-colors flex items-center gap-1 font-medium"
+                className="text-accent-cyan hover:text-accent-cyan/80 transition-colors flex items-center gap-1"
               >
                 <ExternalLink className="w-3 h-3" />
-                Abrir em nova aba
+                Nova aba
               </button>
             )}
             <span className="flex items-center gap-1">
