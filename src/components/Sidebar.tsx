@@ -1,36 +1,36 @@
 import {
-CircleDot,
-Dice5,
-Trophy,
-Plane,
-Clock,
-Bomb,
-Cat,
-ChevronRight,
-ChevronLeft,
-Sparkles,
-Settings,
-Gamepad,
+  CircleDot,
+  Dice5,
+  Trophy,
+  Plane,
+  Clock,
+  Bomb,
+  Cat,
+  ChevronRight,
+  ChevronLeft,
+  Sparkles,
+  Settings,
+  Gamepad,
 } from "lucide-react";
 import type { GameCategory } from "../types";
 
 interface SidebarProps {
-activeGame: GameCategory;
-onGameChange: (game: GameCategory) => void;
-onSettingsClick?: () => void;
-onGameLauncherClick?: () => void;
-collapsed?: boolean;
-onToggleCollapse?: () => void;
+  activeGame: GameCategory;
+  onGameChange: (game: GameCategory) => void;
+  onSettingsClick?: () => void;
+  onGameLauncherClick?: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 const menuItems = [
-{ id: "roleta" as GameCategory, name: "Roleta", icon: CircleDot, status: "active" },
-{ id: "bacbo" as GameCategory, name: "Bac Bo", icon: Dice5, status: "beta" },
-{ id: "football-studio" as GameCategory, name: "Football Studio", icon: Trophy, status: "beta" },
-{ id: "aviator" as GameCategory, name: "Aviator", icon: Plane, status: "beta" },
-{ id: "crazy-time" as GameCategory, name: "Crazy Time", icon: Clock, status: "soon" },
-{ id: "mines" as GameCategory, name: "Mines", icon: Bomb, status: "soon" },
-{ id: "fortune-tiger" as GameCategory, name: "Fortune Tiger", icon: Cat, status: "soon" },
+  { id: "roleta" as GameCategory, name: "Roleta", icon: CircleDot, status: "active" },
+  { id: "bacbo" as GameCategory, name: "Bac Bo", icon: Dice5, status: "beta" },
+  { id: "football-studio" as GameCategory, name: "Football Studio", icon: Trophy, status: "beta" },
+  { id: "aviator" as GameCategory, name: "Aviator", icon: Plane, status: "beta" },
+  { id: "crazy-time" as GameCategory, name: "Crazy Time", icon: Clock, status: "soon" },
+  { id: "mines" as GameCategory, name: "Mines", icon: Bomb, status: "soon" },
+  { id: "fortune-tiger" as GameCategory, name: "Fortune Tiger", icon: Cat, status: "soon" },
 ];
 
 export function Sidebar({ 
