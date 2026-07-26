@@ -16,7 +16,7 @@ const JOGOS = {
 };
 
 export function GameLauncher({ isOpen, onClose }: GameLauncherProps) {
-  const { login, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [links, setLinks] = useState<Record<string, string | null>>({});
   const [loading, setLoading] = useState(false);
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
@@ -33,7 +33,6 @@ export function GameLauncher({ isOpen, onClose }: GameLauncherProps) {
       const newLinks: Record<string, string | null> = {};
       for (const [key, jogo] of Object.entries(JOGOS)) {
         try {
-          // Simula carregamento dos links
           await new Promise(resolve => setTimeout(resolve, 300));
           newLinks[key] = `https://sortenabet.bet.br/game/${jogo.slug}`;
         } catch {
