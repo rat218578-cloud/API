@@ -1,13 +1,7 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { LiveGameView } from "./LiveGameView";
 import { ROLETAS } from "../services/gameLinkService";
-import {
-  STRATEGIES,
-  getNumberInfo,
-  getColorClass,
-  generateRandomHistory,
-  sanitizeHistory
-} from "../utils/roulette";
+import { sanitizeHistory } from "../utils/roulette";
 import { Loader2 } from "lucide-react";
 
 export function RouletteDashboard() {
@@ -46,18 +40,6 @@ export function RouletteDashboard() {
     setShowVideo(false);
     setSelectedSlug(null);
   };
-
-  const topNumbers = useMemo(() => {
-    const validHistory = sanitizeHistory(history);
-    const counts: Record<number, number> = {};
-    validHistory.forEach((n) => {
-      counts[n] = (counts[n] || 0) + 1;
-    });
-    return Object.entries(counts)
-      .map(([n, count]) => ({ number: Number(n), count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8);
-  }, [history]);
 
   if (loading && history.length === 0) {
     return (
