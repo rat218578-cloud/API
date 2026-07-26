@@ -23,6 +23,7 @@ CORS(app)
 
 API_BASE = "https://sortenabet.bet.br"
 
+# ========== SESSÃO HTTP ==========
 session = requests.Session()
 session.headers.update({
     'Content-Type': 'application/json',
@@ -32,6 +33,7 @@ session.headers.update({
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 })
 
+# ========== ROTA DE LOGIN ==========
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
     try:
@@ -64,6 +66,7 @@ def api_login():
         if not access_token_externo:
             return jsonify({'error': 'Token não retornado'}), 500
         
+        # GUARDA TOKEN EXTERNO NA SESSÃO
         session.headers.update({'Authorization': f'Bearer {access_token_externo}'})
         
         user_id = str(result.get('user', {}).get('id', email))
@@ -91,12 +94,13 @@ def api_login():
         logger.error(f"❌ Erro no login: {e}")
         return jsonify({'error': str(e)}), 500
 
+# ========== ROTA START-GAME ==========
 @app.route('/api/start-game-v2', methods=['GET'])
 @require_auth
 def api_start_game():
     try:
         slug = request.args.get('slug')
-        print(f"🎮 Gerando link para: {slug}")
+        print(f"🎮 Gerando NOVO token para: {slug}")
         
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
@@ -105,18 +109,24 @@ def api_start_game():
         auth_header = session.headers.get('Authorization')
         if not auth_header:
             print("⚠️ Token externo não encontrado na sessão")
+            # Tenta renovar via refresh token
+            refresh_token = request.headers.get('X-Refresh-Token')
+            if refresh_token:
+                print("🔄 Tentando renovar com refresh token...")
+                # TODO: Implementar refresh do token externo
             return jsonify({'error': 'Token externo não encontrado'}), 401
         
         print(f"🔑 Token externo: {auth_header[:50]}...")
         
-        # Faz a requisição para a API externa
+        # FAZ REQUISIÇÃO SEMPRE SEM CACHE
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
             params={
                 'slug': slug,
                 'platform': 'WEB',
                 'use_demo': 0,
-                'source': 'watchIsAuthenticated'
+                'source': 'watchIsAuthenticated',
+                '_t': int(__import__('time').time())  # Força no-cache
             },
             timeout=15
         )
@@ -128,7 +138,7 @@ def api_start_game():
             game_url = data.get('iframe_url') or data.get('gameURL')
             
             if game_url:
-                print(f"✅ URL gerada com sucesso!")
+                print(f"✅ NOVO token gerado com sucesso!")
                 return jsonify({
                     'success': True,
                     'slug': slug,
@@ -137,6 +147,16 @@ def api_start_game():
                 })
         
         print(f"❌ Resposta: {response.text[:200]}")
+        
+        # SE DEU ERRO, TENTA FAZER LOGIN NOVAMENTE
+        if response.status_code == 401 or 'EV.12' in response.text:
+            print("🔄 Token EV.12 expirado, tentando relogin...")
+            # TODO: Implementar relogin automático
+            return jsonify({
+                'success': False,
+                'error': 'Token expirado. Faça login novamente.',
+                'code': 'EV.12'
+            }), 401
         
         return jsonify({
             'success': False,
@@ -149,6 +169,7 @@ def api_start_game():
         logger.error(f"❌ Erro ao gerar link: {e}")
         return jsonify({'error': str(e)}), 500
 
+# ========== ROTA DE REFRESH ==========
 @app.route('/api/auth/refresh', methods=['POST'])
 def api_refresh():
     try:
@@ -163,18 +184,7 @@ def api_refresh():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/auth/me', methods=['GET'])
-@require_auth
-def api_me():
-    return jsonify({
-        'user_id': request.user_id,
-        'email': request.user_email,
-        'session': {
-            'expires_at': request.session_data.get('expires_at'),
-            'is_active': request.session_data.get('is_active')
-        }
-    }), 200
-
+# ========== ROTA DE VALIDAÇÃO ==========
 @app.route('/api/auth/validate', methods=['GET'])
 @require_auth
 def api_validate():
@@ -185,6 +195,7 @@ def api_validate():
         'expires_at': request.session_data.get('expires_at')
     }), 200
 
+# ========== ROTA DE LOGOUT ==========
 @app.route('/api/auth/logout', methods=['POST'])
 @require_auth
 def api_logout():
@@ -221,12 +232,11 @@ if __name__ == '__main__':
     print("📡 API Base:", API_BASE)
     print("🗄️  Banco: NeonDB (PostgreSQL)")
     print("🛡️  Auth: JWT + Refresh Token")
+    print("🔄  Evolution: Token único por roleta")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     
     if db:
         session_service.cleanup_expired()
-    else:
-        print("⚠️ Banco de dados não disponível")
     
     app.run(host='0.0.0.0', port=5000, debug=False)

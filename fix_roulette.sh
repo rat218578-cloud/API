@@ -1,3 +1,11 @@
+#!/bin/bash
+
+echo "═══════════════════════════════════════════════════════════════"
+echo "🧹 CORREÇÃO - VARIÁVEIS NÃO USADAS NO ROULETTEDASHBOARD"
+echo "═══════════════════════════════════════════════════════════════"
+
+# ========== CORRIGE ROULETTEDASHBOARD ==========
+cat > src/components/RouletteDashboard.tsx << 'ROULETOEF'
 import { useState, useEffect } from "react";
 import { LiveGameView } from "./LiveGameView";
 import { ROLETAS } from "../services/gameLinkService";
@@ -32,15 +40,8 @@ export function RouletteDashboard() {
   }, [activeRoom]);
 
   const openGame = (slug: string) => {
-    // Fecha o vídeo atual primeiro
-    setShowVideo(false);
-    setSelectedSlug(null);
-    
-    // Pequeno delay para garantir que o estado foi limpo
-    setTimeout(() => {
-      setSelectedSlug(slug);
-      setShowVideo(true);
-    }, 100);
+    setSelectedSlug(slug);
+    setShowVideo(true);
   };
 
   const closeGame = () => {
@@ -84,7 +85,6 @@ export function RouletteDashboard() {
       <div className="grid grid-cols-1 gap-4">
         {showVideo && selectedSlug ? (
           <LiveGameView
-            key={selectedSlug} // FORÇA RECRIAR O COMPONENTE
             slug={selectedSlug}
             isOpen={showVideo}
             onClose={closeGame}
@@ -102,3 +102,20 @@ export function RouletteDashboard() {
     </div>
   );
 }
+ROULETOEF
+
+echo "✅ src/components/RouletteDashboard.tsx corrigido!"
+
+echo "═══════════════════════════════════════════════════════════════"
+echo "✅ CORREÇÃO CONCLUÍDA!"
+echo "═══════════════════════════════════════════════════════════════"
+echo ""
+echo "📦 Faça o commit e push:"
+echo ""
+echo "git add src/components/RouletteDashboard.tsx"
+echo "git commit -m \"fix: remove variáveis não usadas no RouletteDashboard\""
+echo "git push origin main"
+echo ""
+echo "🚀 O Railway vai buildar com sucesso!"
+echo "═══════════════════════════════════════════════════════════════"
+

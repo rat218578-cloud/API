@@ -29,7 +29,7 @@ export const ROLETAS = [
 class GameLinkService {
   private static instance: GameLinkService;
   private gameUrls: Record<string, { url: string; timestamp: number }> = {};
-  private cacheTTL = 5 * 60 * 1000;
+  private cacheTTL = 0; // ZERO = SEM CACHE, SEMPRE GERAR NOVO
 
   static getInstance(): GameLinkService {
     if (!GameLinkService.instance) {
@@ -39,16 +39,10 @@ class GameLinkService {
   }
 
   async getGameUrl(slug: string): Promise<string | null> {
-    const cached = this.gameUrls[slug];
-    if (cached && (Date.now() - cached.timestamp) < this.cacheTTL) {
-      console.log(`📦 Cache hit para ${slug}`);
-      return cached.url;
-    }
-
-    console.log(`🎮 Gerando link para: ${slug}`);
+    // SEMPRE GERAR NOVO TOKEN - SEM CACHE
+    console.log(`🎮 Gerando NOVO token para: ${slug}`);
 
     try {
-      // PEGA O TOKEN DO LOCALSTORAGE
       const token = localStorage.getItem('access_token');
       
       if (!token) {
@@ -56,15 +50,17 @@ class GameLinkService {
         return null;
       }
 
-      console.log(`🔑 Token encontrado: ${token.substring(0, 30)}...`);
+      console.log(`🔑 Token: ${token.substring(0, 30)}...`);
 
-      // FAZ A REQUISIÇÃO COM O TOKEN NO HEADER
-      const response = await fetch(`/api/start-game-v2?slug=${slug}`, {
+      // FORÇA GERAÇÃO DE NOVO TOKEN
+      const response = await fetch(`/api/start-game-v2?slug=${slug}&_=${Date.now()}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
         }
       });
 
@@ -74,7 +70,6 @@ class GameLinkService {
         const errorText = await response.text();
         console.error(`❌ HTTP ${response.status}: ${errorText}`);
         
-        // Se for 401, token expirado - tenta renovar
         if (response.status === 401) {
           console.log('🔄 Token expirado, tentando renovar...');
           const refreshToken = localStorage.getItem('refresh_token');
@@ -89,9 +84,7 @@ class GameLinkService {
             if (refreshResponse.ok) {
               const data = await refreshResponse.json();
               localStorage.setItem('access_token', data.access_token);
-              console.log('✅ Token renovado com sucesso!');
-              
-              // Tenta novamente com o novo token
+              console.log('✅ Token renovado!');
               return this.getGameUrl(slug);
             }
           }
@@ -105,11 +98,8 @@ class GameLinkService {
 
       const gameUrl = data.iframe_url || data.gameURL;
       if (gameUrl) {
-        this.gameUrls[slug] = {
-          url: gameUrl,
-          timestamp: Date.now()
-        };
-        console.log(`✅ Link gerado para ${slug}`);
+        // NÃO GUARDA EM CACHE - SEMPRE NOVO
+        console.log(`✅ NOVO link gerado para ${slug}`);
         return gameUrl;
       }
 
@@ -120,9 +110,11 @@ class GameLinkService {
     }
   }
 
-  refreshGame(slug: string): void {
+  // Força geração de novo token para a roleta atual
+  forceRefresh(slug: string): void {
+    console.log(`🔄 Forçando refresh do token para ${slug}`);
+    // Limpa cache específico
     delete this.gameUrls[slug];
-    console.log(`🔄 Refresh forçado para ${slug}`);
   }
 
   clearAllCache(): void {

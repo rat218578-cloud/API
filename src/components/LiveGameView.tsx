@@ -17,8 +17,11 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
   const roleta = ROLETAS.find(r => r.slug === slug);
   const cor = roleta?.cor || '#6C3CE1';
 
+  // CARREGA SEMPRE QUE ABRIR OU MUDAR O SLUG
   useEffect(() => {
     if (isOpen && slug) {
+      // Força refresh do cache
+      gameLinkService.forceRefresh(slug);
       loadGame();
     }
   }, [isOpen, slug]);
@@ -36,6 +39,7 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
         return;
       }
 
+      // SEMPRE GERAR NOVO TOKEN
       const url = await gameLinkService.getGameUrl(slug);
       if (url) {
         setGameUrl(url);
@@ -102,9 +106,13 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
             </button>
           )}
           <button
-            onClick={loadGame}
+            onClick={() => {
+              gameLinkService.forceRefresh(slug);
+              loadGame();
+            }}
             disabled={loading}
             className="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors disabled:opacity-50"
+            title="Gerar novo token"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -128,7 +136,7 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
               <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4" style={{ color: cor }} />
-              <p className="text-text-muted text-sm">Carregando...</p>
+              <p className="text-text-muted text-sm">Gerando novo token...</p>
             </div>
           </div>
         ) : error ? (
@@ -137,11 +145,14 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
               <div className="text-6xl mb-4">🎰</div>
               <p className="text-red-400 text-sm mb-2">{error}</p>
               <button
-                onClick={loadGame}
+                onClick={() => {
+                  gameLinkService.forceRefresh(slug);
+                  loadGame();
+                }}
                 className="px-6 py-2 rounded-xl text-sm font-medium text-white"
                 style={{ backgroundColor: cor }}
               >
-                <RefreshCw className="w-4 h-4 inline mr-2" /> Tentar novamente
+                <RefreshCw className="w-4 h-4 inline mr-2" /> Gerar novo token
               </button>
             </div>
           </div>
@@ -157,13 +168,16 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
               <div className="text-6xl mb-4">🎰</div>
-              <p className="text-text-muted">Clique em "Gerar link" para começar</p>
+              <p className="text-text-muted">Clique em "Gerar novo token" para começar</p>
               <button
-                onClick={loadGame}
+                onClick={() => {
+                  gameLinkService.forceRefresh(slug);
+                  loadGame();
+                }}
                 className="mt-4 px-6 py-2 rounded-xl text-sm font-medium text-white"
                 style={{ backgroundColor: cor }}
               >
-                ▶ Gerar link
+                ▶ Gerar novo token
               </button>
             </div>
           </div>
@@ -174,15 +188,17 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
         <div className="flex items-center justify-between text-[10px] text-text-muted">
           <span>{roleta?.nome || slug}</span>
           <div className="flex items-center gap-3">
-            {gameUrl && (
-              <button
-                onClick={openInNewTab}
-                className="text-accent-cyan hover:text-accent-cyan/80 transition-colors flex items-center gap-1"
-              >
-                <ExternalLink className="w-3 h-3" />
-                Nova aba
-              </button>
-            )}
+            <span className="text-[8px] text-amber-400">Token único por sessão</span>
+            <button
+              onClick={() => {
+                gameLinkService.forceRefresh(slug);
+                loadGame();
+              }}
+              className="text-accent-cyan hover:text-accent-cyan/80 transition-colors flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" />
+              Novo token
+            </button>
             <span className="flex items-center gap-1">
               {gameUrl ? (
                 <>
