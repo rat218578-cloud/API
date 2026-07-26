@@ -1,17 +1,19 @@
 import { useState, useEffect } from 'react';
-
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  plan: string;
-}
+import type { User } from '../types';
 
 interface AuthState {
   user: User | null;
   loading: boolean;
   error: string | null;
   isAuthenticated: boolean;
+}
+
+interface LoginResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
+  user: User;
 }
 
 export function useAuth() {
@@ -42,7 +44,7 @@ export function useAuth() {
 
   const validateToken = async (): Promise<boolean> => {
     const accessToken = localStorage.getItem('access_token');
-    const refreshToken = localStorage.getItem('refresh_token');
+    const refreshTokenStored = localStorage.getItem('refresh_token');
     
     if (!accessToken) {
       setState(prev => ({ ...prev, loading: false, isAuthenticated: false }));
@@ -58,15 +60,20 @@ export function useAuth() {
         const data = await response.json();
         setState(prev => ({ 
           ...prev, 
-          user: { id: data.user_id, email: data.email, name: data.email?.split('@')[0] || 'Usuário', plan: 'pro' },
+          user: { 
+            id: data.user_id, 
+            email: data.email, 
+            name: data.email?.split('@')[0] || 'Usuário', 
+            plan: 'pro' as const 
+          },
           isAuthenticated: true,
           loading: false 
         }));
         return true;
       }
 
-      if (refreshToken) {
-        const newAccessToken = await refreshToken(refreshToken);
+      if (refreshTokenStored) {
+        const newAccessToken = await refreshToken(refreshTokenStored);
         if (newAccessToken) {
           return await validateToken();
         }
@@ -92,10 +99,10 @@ export function useAuth() {
         body: JSON.stringify({ email, password })
       });
 
-      const data = await response.json();
+      const data: LoginResponse = await response.json();
 
       if (!response.ok) {
-        setState(prev => ({ ...prev, error: data.error || 'Erro ao fazer login', loading: false }));
+        setState(prev => ({ ...prev, error: (data as any).error || 'Erro ao fazer login', loading: false }));
         return false;
       }
 

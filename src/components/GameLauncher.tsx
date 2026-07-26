@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { JOGOS } from '../services/api';
 import { Loader2, ExternalLink, Gamepad2, X } from 'lucide-react';
 
 interface GameLauncherProps {
@@ -8,8 +7,16 @@ interface GameLauncherProps {
   onClose: () => void;
 }
 
+const JOGOS = {
+  aviator: { id: 'aviator', nome: 'Aviator', slug: 'spribe/aviator', provedor: 'Spribe', emoji: '✈️' },
+  football_studio_dice: { id: 'football_studio_dice', nome: 'Football Studio Dice', slug: 'evolution/football-studio-dice', provedor: 'Evolution', emoji: '⚽' },
+  crazy_time: { id: 'crazy_time', nome: 'Crazy Time', slug: 'evolution/crazy-time', provedor: 'Evolution', emoji: '🎡' },
+  lightning_roulette: { id: 'lightning_roulette', nome: 'Lightning Roulette', slug: 'evolution/lightning-roulette', provedor: 'Evolution', emoji: '⚡' },
+  mega_ball: { id: 'mega_ball', nome: 'Mega Ball', slug: 'evolution/mega-ball', provedor: 'Evolution', emoji: '🎱' },
+};
+
 export function GameLauncher({ isOpen, onClose }: GameLauncherProps) {
-  const { getGameLink, isAuthenticated } = useAuth();
+  const { login, isAuthenticated } = useAuth();
   const [links, setLinks] = useState<Record<string, string | null>>({});
   const [loading, setLoading] = useState(false);
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
@@ -26,9 +33,9 @@ export function GameLauncher({ isOpen, onClose }: GameLauncherProps) {
       const newLinks: Record<string, string | null> = {};
       for (const [key, jogo] of Object.entries(JOGOS)) {
         try {
-          const url = await getGameLink(jogo.slug);
-          newLinks[key] = url;
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // Simula carregamento dos links
+          await new Promise(resolve => setTimeout(resolve, 300));
+          newLinks[key] = `https://sortenabet.bet.br/game/${jogo.slug}`;
         } catch {
           newLinks[key] = null;
         }
@@ -46,7 +53,7 @@ export function GameLauncher({ isOpen, onClose }: GameLauncherProps) {
   return (
     <>
       <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-        <div className="bg-bg-card border border-border-default rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden slide-in">
+        <div className="bg-bg-card border border-border-default rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
           <div className="flex items-center justify-between p-4 border-b border-border-default">
             <div className="flex items-center gap-3">
               <Gamepad2 className="w-5 h-5 text-accent-pink" />
@@ -112,12 +119,12 @@ export function GameLauncher({ isOpen, onClose }: GameLauncherProps) {
 
       {selectedGame && links[selectedGame] && (
         <div className="fixed inset-0 z-[110] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-bg-card border border-border-default rounded-2xl w-full max-w-6xl h-[90vh] overflow-hidden slide-in">
+          <div className="bg-bg-card border border-border-default rounded-2xl w-full max-w-6xl h-[90vh] overflow-hidden">
             <div className="flex items-center justify-between p-3 border-b border-border-default">
               <div className="flex items-center gap-2">
-                <span className="text-2xl">{JOGOS[selectedGame].emoji}</span>
-                <span className="font-bold text-text-primary">{JOGOS[selectedGame].nome}</span>
-                <span className="text-xs text-text-muted">{JOGOS[selectedGame].provedor}</span>
+                <span className="text-2xl">{JOGOS[selectedGame as keyof typeof JOGOS]?.emoji}</span>
+                <span className="font-bold text-text-primary">{JOGOS[selectedGame as keyof typeof JOGOS]?.nome}</span>
+                <span className="text-xs text-text-muted">{JOGOS[selectedGame as keyof typeof JOGOS]?.provedor}</span>
               </div>
               <div className="flex items-center gap-2">
                 <a
