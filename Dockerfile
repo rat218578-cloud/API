@@ -8,22 +8,22 @@ RUN apt-get update && apt-get install -y curl && \
     apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/*
 
-# Copiar arquivos
+# Copiar arquivos de dependências primeiro (melhor caching)
 COPY package*.json ./
 COPY requirements.txt ./
 
 # Instalar dependências Python e Node
-RUN pip install flask flask-cors requests
+RUN pip install --no-cache-dir -r requirements.txt
 RUN npm install
 
-# Copiar o resto
+# Copiar o resto do código
 COPY . .
 
 # Build do frontend
 RUN npm run build
 
 # Expor porta
-EXPOSE 8080
+EXPOSE 5000
 
 # Comando para iniciar
 CMD ["python3", "api_server.py"]

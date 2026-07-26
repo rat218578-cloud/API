@@ -1,8 +1,18 @@
 import os
-import psycopg2
-from psycopg2.extras import RealDictCursor
-from datetime import datetime
+import sys
 import logging
+
+# Tenta importar psycopg2 com fallback
+try:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+except ImportError:
+    print("❌ psycopg2 não instalado. Instalando...")
+    os.system("pip install psycopg2-binary")
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -16,7 +26,6 @@ class Database:
 
     def connect(self):
         try:
-            # Tenta usar DATABASE_URL primeiro
             database_url = os.getenv('DATABASE_URL')
             if database_url:
                 self.conn = psycopg2.connect(database_url)
@@ -28,17 +37,15 @@ class Database:
                     user=os.getenv('DB_USER', 'neondb_owner'),
                     password=os.getenv('DB_PASSWORD', '')
                 )
-            logger.info("✅ Conectado ao PostgreSQL (NeonDB)")
+            print("✅ Conectado ao PostgreSQL (NeonDB)")
             
-            # Cria tabela se não existir
             self.create_table_if_not_exists()
             
         except Exception as e:
-            logger.error(f"❌ Erro ao conectar: {e}")
+            print(f"❌ Erro ao conectar: {e}")
             raise
 
     def create_table_if_not_exists(self):
-        """Cria a tabela user_sessions se não existir"""
         query = """
             CREATE TABLE IF NOT EXISTS user_sessions (
                 id SERIAL PRIMARY KEY,
@@ -56,9 +63,9 @@ class Database:
         """
         try:
             self.execute(query)
-            logger.info("✅ Tabela user_sessions verificada/criada")
+            print("✅ Tabela user_sessions verificada/criada")
         except Exception as e:
-            logger.error(f"❌ Erro ao criar tabela: {e}")
+            print(f"❌ Erro ao criar tabela: {e}")
 
     def execute(self, query, params=None):
         try:
@@ -76,6 +83,11 @@ class Database:
     def close(self):
         if self.conn:
             self.conn.close()
-            logger.info("🔌 Conexão fechada")
+            print("🔌 Conexão fechada")
 
-db = Database()
+# Instância global com fallback
+try:
+    db = Database()
+except Exception as e:
+    print(f"⚠️ Erro ao conectar: {e}")
+    db = None

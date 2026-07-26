@@ -1,3 +1,175 @@
+#!/bin/bash
+
+echo "═══════════════════════════════════════════════════════════════"
+echo "🔧 CORREÇÃO - PSYCOPG2 NÃO INSTALADO"
+echo "═══════════════════════════════════════════════════════════════"
+
+# ========== 1. ATUALIZA REQUIREMENTS.TXT ==========
+cat > requirements.txt << 'REQEOF'
+flask==2.3.3
+flask-cors==4.0.0
+requests==2.31.0
+psycopg2-binary==2.9.9
+python-dotenv==1.0.0
+REQEOF
+
+echo "✅ requirements.txt atualizado!"
+
+# ========== 2. CORRIGE DOCKERFILE ==========
+cat > Dockerfile << 'DOCEOF'
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Instalar Node.js para build do frontend
+RUN apt-get update && apt-get install -y curl && \
+    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copiar arquivos de dependências primeiro (melhor caching)
+COPY package*.json ./
+COPY requirements.txt ./
+
+# Instalar dependências Python e Node
+RUN pip install --no-cache-dir -r requirements.txt
+RUN npm install
+
+# Copiar o resto do código
+COPY . .
+
+# Build do frontend
+RUN npm run build
+
+# Expor porta
+EXPOSE 5000
+
+# Comando para iniciar
+CMD ["python3", "api_server.py"]
+DOCEOF
+
+echo "✅ Dockerfile atualizado!"
+
+# ========== 3. CRIA SCRIPT DE START ==========
+cat > start.sh << 'STARTEOF'
+#!/bin/bash
+
+echo "═══════════════════════════════════════════════════════════════"
+echo "🚀 INICIANDO API - QA.AI"
+echo "═══════════════════════════════════════════════════════════════"
+
+# Instala dependências se necessário
+pip install -r requirements.txt --no-cache-dir
+
+# Inicia o servidor
+python3 api_server.py
+STARTEOF
+
+chmod +x start.sh
+
+echo "✅ start.sh criado!"
+
+# ========== 4. CORRIGE DB.PY ==========
+cat > db.py << 'DBEOF'
+import os
+import sys
+import logging
+
+# Tenta importar psycopg2 com fallback
+try:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+except ImportError:
+    print("❌ psycopg2 não instalado. Instalando...")
+    os.system("pip install psycopg2-binary")
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+
+from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+class Database:
+    def __init__(self):
+        self.conn = None
+        self.connect()
+
+    def connect(self):
+        try:
+            database_url = os.getenv('DATABASE_URL')
+            if database_url:
+                self.conn = psycopg2.connect(database_url)
+            else:
+                self.conn = psycopg2.connect(
+                    host=os.getenv('DB_HOST', 'localhost'),
+                    port=os.getenv('DB_PORT', '5432'),
+                    dbname=os.getenv('DB_NAME', 'neondb'),
+                    user=os.getenv('DB_USER', 'neondb_owner'),
+                    password=os.getenv('DB_PASSWORD', '')
+                )
+            print("✅ Conectado ao PostgreSQL (NeonDB)")
+            
+            self.create_table_if_not_exists()
+            
+        except Exception as e:
+            print(f"❌ Erro ao conectar: {e}")
+            raise
+
+    def create_table_if_not_exists(self):
+        query = """
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR(255) UNIQUE NOT NULL,
+                email VARCHAR(255) NOT NULL,
+                access_token TEXT NOT NULL,
+                refresh_token TEXT,
+                password_hash TEXT,
+                session_data JSONB DEFAULT '{}',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP,
+                is_active BOOLEAN DEFAULT true
+            );
+        """
+        try:
+            self.execute(query)
+            print("✅ Tabela user_sessions verificada/criada")
+        except Exception as e:
+            print(f"❌ Erro ao criar tabela: {e}")
+
+    def execute(self, query, params=None):
+        try:
+            with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(query, params)
+                if query.strip().upper().startswith('SELECT'):
+                    return cur.fetchall()
+                self.conn.commit()
+                return cur.rowcount
+        except Exception as e:
+            self.conn.rollback()
+            logger.error(f"❌ Erro na query: {e}")
+            raise
+
+    def close(self):
+        if self.conn:
+            self.conn.close()
+            print("🔌 Conexão fechada")
+
+# Instância global com fallback
+try:
+    db = Database()
+except Exception as e:
+    print(f"⚠️ Erro ao conectar: {e}")
+    db = None
+DBEOF
+
+echo "✅ db.py atualizado!"
+
+# ========== 5. CORRIGE API_SERVER.PY ==========
+cat > api_server.py << 'APIOEF'
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import requests
@@ -182,3 +354,20 @@ if __name__ == '__main__':
         print("⚠️ Banco de dados não disponível - continuando sem persistência")
     
     app.run(host='0.0.0.0', port=5000, debug=False)
+APIOEF
+
+echo "✅ api_server.py atualizado!"
+
+echo "═══════════════════════════════════════════════════════════════"
+echo "✅ TODAS AS CORREÇÕES CONCLUÍDAS!"
+echo "═══════════════════════════════════════════════════════════════"
+echo ""
+echo "📦 Faça o commit e push:"
+echo ""
+echo "git add ."
+echo "git commit -m \"fix: adiciona psycopg2 e fallback para banco\""
+echo "git push origin main"
+echo ""
+echo "🚀 O Railway vai buildar com sucesso!"
+echo "═══════════════════════════════════════════════════════════════"
+
