@@ -2,27 +2,40 @@ import json
 import logging
 import threading
 import time
-from datetime import datetime
-import websocket
 import ssl
+import websocket
+from datetime import datetime
+from collections import Counter
+import requests
 
 logger = logging.getLogger(__name__)
 
-class EvolutionWebSocket:
+class EvolutionWebSocketService:
     def __init__(self):
         self.ws = None
         self.connected = False
         self.session_id = None
-        self.last_numbers = []
-        self.history = []
+        self.history = []  # Lista de números com detalhes
+        self.last_numbers = []  # Últimos 10 números
+        self.total_numbers = 0
         self.callbacks = []
         self.running = False
         self.thread = None
+        self.api_base = "https://sortenabet.bet.br"
+        self.access_token = None
         
-    def set_session_id(self, session_id: str):
+    def set_access_token(self, token):
+        """Define o token de acesso para salvar no banco"""
+        self.access_token = token
+        
+    def set_session_id(self, session_id):
         """Define o EVOSESSIONID da Evolution"""
         self.session_id = session_id
         logger.info(f"🔑 Session ID definido: {session_id[:20]}...")
+        
+        # Tenta conectar automaticamente
+        if session_id:
+            self.connect()
 
     def get_websocket_url(self) -> str:
         """Monta a URL do WebSocket"""
@@ -30,113 +43,141 @@ class EvolutionWebSocket:
             raise ValueError("EVOSESSIONID não definido!")
         
         # URL do WebSocket da Evolution
-        return f"wss://ws-evolution.sortenabet.bet.br/ws?messageFormat=json&EVOSESSIONID={self.session_id}&client_version=6.20260724.73611.63604-633bb6d1d6-r2"
+        return f"wss://sortenabet.evo-games.com/public/roulette/player/game/7x0b1tgh7agmf6hv/socket?messageFormat=json&EVOSESSIONID={self.session_id}&instance=i4ea0l-tztnmffxax4bftio-7x0b1tgh7agmf6hv&client_version=6.20260724.73611.63604-633bb6d1d6-r2"
 
-    def on_message(self, ws, message):
-        """Processa mensagem recebida"""
-        try:
-            data = json.loads(message)
-            logger.info(f"📩 Mensagem recebida: {data.get('type', 'unknown')}")
-            
-            # Procura por números da roleta
-            if 'data' in data:
-                game_data = data.get('data', {})
-                
-                # Verifica se tem número da roleta
-                number = game_data.get('number')
-                if number is not None:
-                    self.process_number(number, game_data)
-                    
-                # Verifica se tem histórico de números
-                history = game_data.get('history', [])
-                if history:
-                    for item in history:
-                        if 'number' in item:
-                            self.process_number(item['number'], item)
-                            
-                # Verifica se tem últimos números
-                last_numbers = game_data.get('lastNumbers', [])
-                if last_numbers:
-                    for num in last_numbers:
-                        self.process_number(num, {'number': num})
-            
-            # Procura por números em qualquer lugar
-            self.extract_numbers_from_data(data)
-            
-        except json.JSONDecodeError:
-            logger.warning(f"⚠️ JSON inválido: {message[:100]}...")
-        except Exception as e:
-            logger.error(f"❌ Erro ao processar mensagem: {e}")
-
-    def extract_numbers_from_data(self, data):
-        """Extrai números de qualquer lugar do JSON"""
-        if isinstance(data, dict):
-            # Procura números em campos comuns
-            for key in ['number', 'result', 'winningNumber', 'lastNumber']:
-                if key in data and isinstance(data[key], (int, str)):
+    def extrair_numero(self, data):
+        """Extrai número do JSON da Evolution"""
+        # winSpots
+        if data.get('type') == 'roulette.winSpots':
+            args = data.get('args', {})
+            result = args.get('result', [])
+            if result:
+                for item in result:
+                    if isinstance(item, dict) and 'number' in item:
+                        try:
+                            return int(item['number'])
+                        except:
+                            pass
+                    elif isinstance(item, str):
+                        try:
+                            return int(item)
+                        except:
+                            pass
+        
+        # tableState com GAME_RESOLVED
+        if data.get('type') == 'roulette.tableState':
+            args = data.get('args', {})
+            if args.get('state') == 'GAME_RESOLVED':
+                result = args.get('result', [])
+                if result:
                     try:
-                        num = int(data[key])
-                        if 0 <= num <= 36:
-                            self.process_number(num, {key: num})
+                        return int(result[0])
                     except:
                         pass
-            
-            # Procura em listas
-            for key in ['numbers', 'results', 'history', 'spins']:
-                if key in data and isinstance(data[key], list):
-                    for item in data[key]:
-                        if isinstance(item, (int, str)):
-                            try:
-                                num = int(item)
-                                if 0 <= num <= 36:
-                                    self.process_number(num, {key: num})
-                            except:
-                                pass
-                        elif isinstance(item, dict):
-                            self.extract_numbers_from_data(item)
         
-        elif isinstance(data, list):
-            for item in data:
-                self.extract_numbers_from_data(item)
+        # Busca em qualquer lugar
+        def buscar(obj):
+            if isinstance(obj, dict):
+                for key, value in obj.items():
+                    if key in ['number', 'result']:
+                        try:
+                            num = int(value)
+                            if 0 <= num <= 36:
+                                return num
+                        except:
+                            pass
+                    result = buscar(value)
+                    if result is not None:
+                        return result
+            elif isinstance(obj, list):
+                for item in obj:
+                    result = buscar(item)
+                    if result is not None:
+                        return result
+            return None
+        
+        return buscar(data)
 
-    def process_number(self, number: int, raw_data: dict):
-        """Processa um número recebido"""
-        timestamp = datetime.now().isoformat()
+    def get_cor(self, numero):
+        red = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]
+        if numero == 0:
+            return "green"
+        return "red" if numero in red else "black"
+
+    def salvar_no_banco(self, numero):
+        """Salva o número no banco via API"""
+        if not self.access_token:
+            return False
         
-        # Calcula cor
-        red_numbers = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]
-        color = "red" if number in red_numbers else "black" if number != 0 else "green"
+        try:
+            response = requests.post(
+                f'{self.api_base}/api/roulette/add',
+                json={'number': numero},
+                headers={'Authorization': f'Bearer {self.access_token}'},
+                timeout=5
+            )
+            return response.status_code == 200
+        except:
+            return False
+
+    def processar_numero(self, numero, raw_data):
+        """Processa número recebido do WebSocket"""
+        self.total_numbers += 1
+        timestamp = datetime.now()
+        cor = self.get_cor(numero)
         
-        number_data = {
-            'number': number,
-            'color': color,
-            'timestamp': timestamp,
+        # Cria registro
+        registro = {
+            'number': numero,
+            'color': cor,
+            'timestamp': timestamp.isoformat(),
             'raw': raw_data
         }
         
         # Adiciona ao histórico
-        self.history.append(number_data)
-        
-        # Mantém apenas os últimos 500 números
+        self.history.append(registro)
         if len(self.history) > 500:
             self.history = self.history[-500:]
         
         # Atualiza últimos números
-        self.last_numbers.insert(0, number)
+        self.last_numbers.insert(0, numero)
         if len(self.last_numbers) > 10:
             self.last_numbers = self.last_numbers[:10]
         
-        logger.info(f"🎯 Número AO VIVO: {number} ({color}) - Total: {len(self.history)}")
+        # Salva no banco
+        if self.salvar_no_banco(numero):
+            logger.info(f"💾 Número {numero} salvo no banco")
+        else:
+            logger.warning(f"⚠️ Não foi possível salvar {numero} no banco")
         
-        # Notifica callbacks
+        # Notifica callbacks (frontend)
         for callback in self.callbacks:
             try:
-                callback(number_data)
+                callback(registro)
             except Exception as e:
                 logger.error(f"❌ Erro no callback: {e}")
+        
+        # Log
+        cor_emoji = "🔴" if cor == "red" else "⚫" if cor == "black" else "🟢"
+        logger.info(f"🎯 NÚMERO REAL: {numero} {cor_emoji} - Total: {self.total_numbers}")
+        
+        return registro
+
+    def on_message(self, ws, message):
+        try:
+            data = json.loads(message)
+            numero = self.extrair_numero(data)
+            
+            if numero is not None and 0 <= numero <= 36:
+                self.processar_numero(numero, data)
+                
+        except json.JSONDecodeError:
+            pass
+        except Exception as e:
+            logger.error(f"⚠️ Erro: {e}")
 
     def on_error(self, ws, error):
-        logger.error(f"❌ WebSocket error: {error}")
+        logger.error(f"❌ WebSocket Error: {error}")
 
     def on_close(self, ws, close_status_code, close_msg):
         self.connected = False
@@ -151,13 +192,7 @@ class EvolutionWebSocket:
     def on_open(self, ws):
         self.connected = True
         logger.info("✅ WebSocket conectado com sucesso!")
-        
-        # Envia mensagem de ping inicial
-        ping_msg = json.dumps({
-            "type": "ping",
-            "timestamp": int(time.time() * 1000)
-        })
-        ws.send(ping_msg)
+        logger.info(f"📡 Aguardando números REAIS da Evolution...")
 
     def connect(self):
         """Conecta ao WebSocket"""
@@ -166,7 +201,7 @@ class EvolutionWebSocket:
             return False
         
         url = self.get_websocket_url()
-        logger.info(f"🌐 Conectando ao WebSocket: {url[:80]}...")
+        logger.info(f"🔌 Conectando ao WebSocket...")
         
         try:
             self.ws = websocket.WebSocketApp(
@@ -177,7 +212,6 @@ class EvolutionWebSocket:
                 on_close=self.on_close
             )
             
-            # Executa em thread separada
             self.thread = threading.Thread(target=self.ws.run_forever, kwargs={
                 'sslopt': {'cert_reqs': ssl.CERT_NONE}
             })
@@ -185,6 +219,7 @@ class EvolutionWebSocket:
             self.thread.start()
             
             self.running = True
+            time.sleep(2)
             return True
             
         except Exception as e:
@@ -207,14 +242,34 @@ class EvolutionWebSocket:
         """Retorna os últimos números"""
         return self.last_numbers[:count]
 
+    def get_statistics(self) -> dict:
+        """Retorna estatísticas"""
+        if not self.history:
+            return {}
+        
+        cores = Counter([n['color'] for n in self.history[-100:]])
+        numeros = [n['number'] for n in self.history[-100:]]
+        freq = Counter(numeros).most_common(5)
+        
+        return {
+            'total': len(self.history),
+            'colors': {
+                'red': cores.get('red', 0),
+                'black': cores.get('black', 0),
+                'green': cores.get('green', 0)
+            },
+            'most_frequent': freq,
+            'last_numbers': self.last_numbers[:10]
+        }
+
     def add_callback(self, callback):
-        """Adiciona um callback para receber números AO VIVO"""
+        """Adiciona callback para receber números em tempo real"""
         self.callbacks.append(callback)
 
     def remove_callback(self, callback):
-        """Remove um callback"""
+        """Remove callback"""
         if callback in self.callbacks:
             self.callbacks.remove(callback)
 
 # Instância global
-evolution_ws = EvolutionWebSocket()
+evolution_ws = EvolutionWebSocketService()

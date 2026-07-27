@@ -5,7 +5,6 @@ import logging
 import os
 import json
 from datetime import datetime
-import random
 
 try:
     from db import db
@@ -16,6 +15,7 @@ except Exception as e:
 from jwt_helper import jwt_manager
 from session_service import session_service
 from middleware import require_auth, optional_auth
+from websocket_service import evolution_ws
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,7 +25,6 @@ CORS(app)
 
 API_BASE = "https://sortenabet.bet.br"
 
-# ========== SESSÃO HTTP ==========
 session = requests.Session()
 session.headers.update({
     'Content-Type': 'application/json',
@@ -34,11 +33,6 @@ session.headers.update({
     'Referer': 'https://sortenabet.bet.br/',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 })
-
-# ========== HISTÓRICO DE NÚMEROS REAIS ==========
-real_history = []
-evo_session_id = None
-ws_connected = False
 
 # ========== ROTA DE LOGIN ==========
 @app.route('/api/auth/login', methods=['POST'])
@@ -61,7 +55,6 @@ def api_login():
         }
         
         response = session.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=15)
-        print(f"📥 Status login: {response.status_code}")
         
         if response.status_code != 200:
             return jsonify({'error': 'Credenciais inválidas'}), 401
@@ -103,8 +96,6 @@ def api_login():
 @app.route('/api/start-game-v2', methods=['GET'])
 @require_auth
 def api_start_game():
-    global evo_session_id, real_history, ws_connected
-    
     try:
         slug = request.args.get('slug')
         print(f"🎮 Gerando link para: {slug}")
@@ -127,38 +118,27 @@ def api_start_game():
             timeout=15
         )
         
-        print(f"📥 Status start-game: {response.status_code}")
-        
         if response.status_code == 200:
             data = response.json()
             game_url = data.get('iframe_url') or data.get('gameURL')
             
             if game_url:
-                # Extrai EVOSESSIONID
                 import re
                 match = re.search(r'EVOSESSIONID=([^&]+)', game_url)
                 if match:
                     evo_session_id = match.group(1)
-                    ws_connected = True
                     print(f"🔑 EVOSESSIONID extraído: {evo_session_id[:20]}...")
                     
-                    # Gera alguns números de exemplo para teste
-                    if len(real_history) == 0:
-                        sample_numbers = [7, 26, 0, 18, 28, 31, 14, 21, 23, 35]
-                        for num in sample_numbers:
-                            real_history.append({
-                                'number': num,
-                                'color': 'red' if num in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 'black' if num != 0 else 'green',
-                                'timestamp': datetime.now().isoformat()
-                            })
-                        print(f"📊 {len(real_history)} números de exemplo carregados")
+                    # Conecta WebSocket automaticamente
+                    evolution_ws.set_access_token(request.headers.get('Authorization', '').replace('Bearer ', ''))
+                    evolution_ws.set_session_id(evo_session_id)
                 
                 return jsonify({
                     'success': True,
                     'slug': slug,
                     'gameURL': game_url,
                     'iframe_url': game_url,
-                    'evo_session_id': evo_session_id if evo_session_id else None
+                    'evo_session_id': evo_session_id if 'evo_session_id' in locals() else None
                 })
         
         return jsonify({'success': False, 'error': 'Não foi possível gerar o link'}), 404
@@ -167,54 +147,35 @@ def api_start_game():
         logger.error(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
-# ========== ROTA PARA NÚMEROS AO VIVO ==========
+# ========== ROTA PARA NÚMEROS REAIS ==========
 @app.route('/api/roulette/live', methods=['GET'])
 @require_auth
 def get_live_numbers():
-    """Retorna números AO VIVO do WebSocket"""
-    global real_history, ws_connected
-    
+    """Retorna números REAIS do WebSocket"""
     try:
         limit = int(request.args.get('limit', 50))
-        
-        # Se não tem histórico real, gera alguns números aleatórios para teste
-        if len(real_history) == 0:
-            # Gera números aleatórios realistas
-            for _ in range(20):
-                num = random.randint(0, 36)
-                color = 'red' if num in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 'black' if num != 0 else 'green'
-                real_history.append({
-                    'number': num,
-                    'color': color,
-                    'timestamp': datetime.now().isoformat()
-                })
-            print(f"📊 Gerados {len(real_history)} números de exemplo")
-        
-        # Pega os últimos 'limit' números
-        history = real_history[-limit:] if real_history else []
-        
-        # Últimos 10 números
-        last_numbers = [h['number'] for h in history[-10:]] if history else []
+        history = evolution_ws.get_history(limit)
+        last_numbers = evolution_ws.get_last_numbers(10)
+        stats = evolution_ws.get_statistics()
         
         return jsonify({
             'success': True,
-            'connected': ws_connected,
-            'total': len(real_history),
+            'connected': evolution_ws.connected,
+            'total': len(history),
             'last_numbers': last_numbers,
             'history': history,
+            'statistics': stats,
             'timestamp': datetime.now().isoformat()
         }), 200
         
     except Exception as e:
-        logger.error(f"❌ Erro em get_live_numbers: {e}")
+        logger.error(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
-# ========== ROTA PARA ADICIONAR NÚMERO (WEBHOOK) ==========
+# ========== ROTA PARA ADICIONAR NÚMERO ==========
 @app.route('/api/roulette/add', methods=['POST'])
 def add_number():
-    """Adiciona um número ao histórico (para integração com WebSocket)"""
-    global real_history
-    
+    """Adiciona um número ao histórico (via WebSocket)"""
     try:
         data = request.json
         number = data.get('number')
@@ -222,29 +183,48 @@ def add_number():
         if number is None or number < 0 or number > 36:
             return jsonify({'error': 'Número inválido'}), 400
         
-        color = 'red' if number in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 'black' if number != 0 else 'green'
+        # Processa via WebSocket service
+        cor = "red" if number in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else "black" if number != 0 else "green"
         
-        real_history.append({
+        registro = {
             'number': number,
-            'color': color,
+            'color': cor,
             'timestamp': datetime.now().isoformat()
-        })
+        }
         
-        # Mantém apenas os últimos 500
-        if len(real_history) > 500:
-            real_history = real_history[-500:]
+        # Adiciona ao histórico do WebSocket service
+        evolution_ws.history.append(registro)
+        if len(evolution_ws.history) > 500:
+            evolution_ws.history = evolution_ws.history[-500:]
         
-        print(f"🎯 Número adicionado: {number} ({color})")
+        evolution_ws.last_numbers.insert(0, number)
+        if len(evolution_ws.last_numbers) > 10:
+            evolution_ws.last_numbers = evolution_ws.last_numbers[:10]
+        
+        print(f"🎯 Número adicionado via API: {number}")
         
         return jsonify({
             'success': True,
             'number': number,
-            'total': len(real_history)
+            'total': len(evolution_ws.history)
         }), 200
         
     except Exception as e:
-        logger.error(f"❌ Erro em add_number: {e}")
+        logger.error(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
+
+# ========== ROTA DE STATUS ==========
+@app.route('/api/roulette/status', methods=['GET'])
+@require_auth
+def get_ws_status():
+    """Retorna status do WebSocket"""
+    return jsonify({
+        'connected': evolution_ws.connected,
+        'session_id': bool(evolution_ws.session_id),
+        'history_count': len(evolution_ws.history),
+        'last_numbers': evolution_ws.get_last_numbers(5),
+        'total_numbers': evolution_ws.total_numbers
+    }), 200
 
 # ========== ROTA DE REFRESH ==========
 @app.route('/api/auth/refresh', methods=['POST'])
@@ -286,6 +266,7 @@ def api_validate():
 @app.route('/api/auth/logout', methods=['POST'])
 @require_auth
 def api_logout():
+    evolution_ws.disconnect()
     if db:
         session_service.deactivate_session(request.user_id)
     return jsonify({'success': True}), 200
@@ -322,7 +303,8 @@ if __name__ == '__main__':
     print("📡 API Base:", API_BASE)
     print("🗄️  Banco: NeonDB (PostgreSQL)")
     print("🛡️  Auth: JWT + Refresh Token")
-    print("📊  Roulette: Números AO VIVO")
+    print("🔌 WebSocket: Evolution AO VIVO")
+    print("📊  Números REAIS em tempo real")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     
