@@ -11,6 +11,13 @@ import {
 } from "../utils/roulette";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
+// ========== WEBSOCKET PARA NÚMEROS REAIS ==========
+interface LiveNumber {
+  number: number;
+  color: string;
+  timestamp: string;
+}
+
 export function RouletteDashboard() {
   const [activeRoom, setActiveRoom] = useState(ROLETAS[0].id);
   const [history, setHistory] = useState<number[]>([]);
@@ -18,9 +25,50 @@ export function RouletteDashboard() {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [showVideo, setShowVideo] = useState(false);
   const [showCatalog, setShowCatalog] = useState(true);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [evoSessionId, setEvoSessionId] = useState<string | null>(null);
+  const [liveNumbers, setLiveNumbers] = useState<LiveNumber[]>([]);
 
+  // ========== CARREGA HISTÓRICO INICIAL ==========
   useEffect(() => {
-    const simulateHistory = () => {
+    // Tenta carregar números reais do banco via API
+    const loadRealHistory = async () => {
+      try {
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+          // Fallback para números simulados
+          loadSimulatedHistory();
+          return;
+        }
+
+        const response = await fetch('/api/roulette/live?limit=50', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.history && data.history.length > 0) {
+            // Usa números REAIS do banco
+            const realNumbers = data.history.map((item: any) => item.number);
+            const sanitized = sanitizeHistory(realNumbers);
+            setHistory(sanitized);
+            setLiveNumbers(data.history);
+            setWsConnected(data.connected || false);
+            setLoading(false);
+            console.log(`✅ Carregados ${sanitized.length} números REAIS do banco`);
+            return;
+          }
+        }
+        
+        // Fallback para números simulados
+        loadSimulatedHistory();
+      } catch (error) {
+        console.error('❌ Erro ao carregar números reais:', error);
+        loadSimulatedHistory();
+      }
+    };
+
+    const loadSimulatedHistory = () => {
       const numbers = [];
       for (let i = 0; i < 50; i++) {
         if (Math.random() > 0.3) {
@@ -30,15 +78,150 @@ export function RouletteDashboard() {
           numbers.push(hotNumbers[Math.floor(Math.random() * hotNumbers.length)]);
         }
       }
-      return numbers;
+      const sanitized = sanitizeHistory(numbers);
+      setHistory(sanitized);
+      setLoading(false);
+      console.log('⚠️ Usando números SIMULADOS (fallback)');
     };
 
-    const fallbackNumbers = simulateHistory();
-    const sanitized = sanitizeHistory(fallbackNumbers);
-    setHistory(sanitized);
-    setLoading(false);
-  }, [activeRoom]);
+    loadRealHistory();
 
+    // ========== WEBSOCKET EM TEMPO REAL ==========
+    const evoId = localStorage.getItem('evo_session_id');
+    if (evoId) {
+      setEvoSessionId(evoId);
+      connectWebSocket(evoId);
+    }
+
+    // Limpa WebSocket ao desmontar
+    return () => {
+      if (window.evoWebSocket) {
+        window.evoWebSocket.close();
+      }
+    };
+  }, []);
+
+  // ========== CONECTA WEBSOCKET ==========
+  const connectWebSocket = (sessionId: string) => {
+    if (!sessionId) return;
+
+    console.log(`🔌 Conectando WebSocket com ID: ${sessionId.substring(0, 20)}...`);
+
+    try {
+      const ws = new WebSocket(
+        `wss://ws-evolution.sortenabet.bet.br/ws?messageFormat=json&EVOSESSIONID=${sessionId}&client_version=6.20260724.73611.63604-633bb6d1d6-r2`
+      );
+
+      ws.onopen = () => {
+        setWsConnected(true);
+        console.log('✅ WebSocket conectado!');
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          // Extrai número do JSON
+          let numero: number | null = null;
+          
+          // winSpots
+          if (data.type === 'roulette.winSpots') {
+            const result = data.args?.result;
+            if (result && result.length > 0) {
+              if (typeof result[0] === 'object' && result[0].number) {
+                numero = parseInt(result[0].number);
+              } else {
+                numero = parseInt(result[0]);
+              }
+            }
+          }
+          
+          // tableState com GAME_RESOLVED
+          if (data.type === 'roulette.tableState' && data.args?.state === 'GAME_RESOLVED') {
+            const result = data.args?.result;
+            if (result && result.length > 0) {
+              numero = parseInt(result[0]);
+            }
+          }
+
+          // Se encontrou número válido
+          if (numero !== null && numero >= 0 && numero <= 36) {
+            console.log(`🎯 NÚMERO REAL: ${numero}`);
+            
+            // Atualiza histórico
+            setHistory(prev => {
+              const newHistory = [numero, ...prev];
+              return newHistory.slice(0, 500); // Mantém 500
+            });
+
+            // Atualiza live numbers
+            const color = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(numero) 
+              ? 'red' 
+              : numero === 0 ? 'green' : 'black';
+            
+            setLiveNumbers(prev => {
+              const newLive = [{ number: numero, color, timestamp: new Date().toISOString() }, ...prev];
+              return newLive.slice(0, 100);
+            });
+          }
+        } catch (e) {
+          // Ignora erros de parse
+        }
+      };
+
+      ws.onclose = () => {
+        setWsConnected(false);
+        console.log('🔌 WebSocket desconectado');
+      };
+
+      ws.onerror = (error) => {
+        console.error('❌ WebSocket error:', error);
+      };
+
+      // Salva para cleanup
+      window.evoWebSocket = ws;
+
+    } catch (error) {
+      console.error('❌ Erro ao conectar WebSocket:', error);
+    }
+  };
+
+  // ========== ATUALIZAÇÃO PERIÓDICA ==========
+  useEffect(() => {
+    // Busca números reais a cada 2 segundos (fallback)
+    const interval = setInterval(async () => {
+      try {
+        const token = localStorage.getItem('access_token');
+        if (!token) return;
+
+        const response = await fetch('/api/roulette/live?limit=10', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.history && data.history.length > 0) {
+            const realNumbers = data.history.map((item: any) => item.number);
+            setHistory(prev => {
+              // Adiciona números novos que não estão no histórico
+              const newNumbers = realNumbers.filter(n => !prev.includes(n));
+              if (newNumbers.length > 0) {
+                console.log(`📊 +${newNumbers.length} novos números reais`);
+                return [...newNumbers, ...prev].slice(0, 500);
+              }
+              return prev;
+            });
+          }
+        }
+      } catch (error) {
+        // Ignora
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // ========== FUNÇÕES EXISTENTES ==========
   const openGame = (slug: string) => {
     setSelectedSlug(slug);
     setShowVideo(true);
@@ -63,10 +246,35 @@ export function RouletteDashboard() {
 
   const refreshHistory = () => {
     setLoading(true);
-    const newNumbers = generateRandomHistory(30);
-    const sanitized = sanitizeHistory(newNumbers);
-    setHistory(sanitized);
-    setLoading(false);
+    // Tenta recarregar números reais
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      fetch('/api/roulette/live?limit=50', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.history) {
+            const realNumbers = data.history.map((item: any) => item.number);
+            const sanitized = sanitizeHistory(realNumbers);
+            setHistory(sanitized);
+            console.log(`✅ Atualizado com ${sanitized.length} números REAIS`);
+          }
+          setLoading(false);
+        })
+        .catch(() => {
+          // Fallback
+          const newNumbers = generateRandomHistory(30);
+          const sanitized = sanitizeHistory(newNumbers);
+          setHistory(sanitized);
+          setLoading(false);
+        });
+    } else {
+      const newNumbers = generateRandomHistory(30);
+      const sanitized = sanitizeHistory(newNumbers);
+      setHistory(sanitized);
+      setLoading(false);
+    }
   };
 
   const getLastThree = () => {
@@ -86,8 +294,22 @@ export function RouletteDashboard() {
 
   const lastThree = getLastThree();
 
+  // ========== RENDER ==========
   return (
     <div className="p-4 space-y-4">
+      {/* Status do WebSocket */}
+      <div className="flex items-center gap-2 text-xs">
+        <span className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+        <span className="text-text-muted">
+          {wsConnected ? '📡 Números REAIS ao vivo' : '⚠️ Números simulados (fallback)'}
+        </span>
+        {liveNumbers.length > 0 && (
+          <span className="text-text-muted">
+            • Último: <span className="text-emerald-400 font-bold">{liveNumbers[0]?.number}</span>
+          </span>
+        )}
+      </div>
+
       <div className="flex items-center gap-2 overflow-x-auto pb-2 flex-wrap">
         {ROLETAS.map((r) => (
           <button
@@ -109,11 +331,13 @@ export function RouletteDashboard() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        
+        {/* CATÁLOGO */}
         <div className={`xl:col-span-2 transition-all duration-300 ${showCatalog ? 'block' : 'hidden xl:block'}`}>
           <div className="bg-bg-card border border-border-default rounded-2xl p-3">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider">📊 Catalogo</h3>
+              <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider">
+                📊 Catalogo {wsConnected && '🔴'}
+              </h3>
               <button 
                 onClick={() => setShowCatalog(!showCatalog)}
                 className="xl:hidden p-1 rounded-lg hover:bg-bg-tertiary"
@@ -126,7 +350,7 @@ export function RouletteDashboard() {
                 className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center gap-1"
               >
                 {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
-                SIM
+                {wsConnected ? 'REAL' : 'SIM'}
               </button>
             </div>
 
@@ -167,14 +391,10 @@ export function RouletteDashboard() {
                 );
               })}
             </div>
-            {topNumbers.length > 5 && (
-              <button className="w-full text-[10px] text-text-muted hover:text-text-primary py-1 mt-1">
-                Ver mais ↓
-              </button>
-            )}
           </div>
         </div>
 
+        {/* VÍDEO */}
         <div className="xl:col-span-7">
           {showVideo && selectedSlug ? (
             <LiveGameView
@@ -193,6 +413,7 @@ export function RouletteDashboard() {
           )}
         </div>
 
+        {/* GRUPOS E ASSERTIVIDADE */}
         <div className="xl:col-span-3 space-y-4">
           <div className="bg-bg-card border border-border-default rounded-2xl p-4">
             <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">📈 Grupos</h3>
@@ -206,6 +427,9 @@ export function RouletteDashboard() {
                     </span>
                     <span>—</span>
                     <span className="text-text-secondary">{getNumberInfo(history[0] || 0).range.toUpperCase()}</span>
+                    {wsConnected && (
+                      <span className="text-[8px] text-emerald-400">● REAL</span>
+                    )}
                   </span>
                 ) : "---"}
               </div>
