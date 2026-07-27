@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { SignalGenerator } from "./SignalGenerator";
 import { LiveGameView } from "./LiveGameView";
 import { ROLETAS } from "../services/gameLinkService";
@@ -11,13 +11,14 @@ import {
 } from "../utils/roulette";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
-// ========== WEBSOCKET PARA NÚMEROS REAIS ==========
+// ========== TIPOS ==========
 interface LiveNumber {
   number: number;
   color: string;
   timestamp: string;
 }
 
+// ========== COMPONENTE ==========
 export function RouletteDashboard() {
   const [activeRoom, setActiveRoom] = useState(ROLETAS[0].id);
   const [history, setHistory] = useState<number[]>([]);
@@ -26,17 +27,15 @@ export function RouletteDashboard() {
   const [showVideo, setShowVideo] = useState(false);
   const [showCatalog, setShowCatalog] = useState(true);
   const [wsConnected, setWsConnected] = useState(false);
-  const [evoSessionId, setEvoSessionId] = useState<string | null>(null);
   const [liveNumbers, setLiveNumbers] = useState<LiveNumber[]>([]);
+  const wsRef = useRef<WebSocket | null>(null);
 
   // ========== CARREGA HISTÓRICO INICIAL ==========
   useEffect(() => {
-    // Tenta carregar números reais do banco via API
     const loadRealHistory = async () => {
       try {
         const token = localStorage.getItem('access_token');
         if (!token) {
-          // Fallback para números simulados
           loadSimulatedHistory();
           return;
         }
@@ -48,8 +47,7 @@ export function RouletteDashboard() {
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.history && data.history.length > 0) {
-            // Usa números REAIS do banco
-            const realNumbers = data.history.map((item: any) => item.number);
+            const realNumbers = data.history.map((item: LiveNumber) => item.number);
             const sanitized = sanitizeHistory(realNumbers);
             setHistory(sanitized);
             setLiveNumbers(data.history);
@@ -60,7 +58,6 @@ export function RouletteDashboard() {
           }
         }
         
-        // Fallback para números simulados
         loadSimulatedHistory();
       } catch (error) {
         console.error('❌ Erro ao carregar números reais:', error);
@@ -89,14 +86,14 @@ export function RouletteDashboard() {
     // ========== WEBSOCKET EM TEMPO REAL ==========
     const evoId = localStorage.getItem('evo_session_id');
     if (evoId) {
-      setEvoSessionId(evoId);
       connectWebSocket(evoId);
     }
 
     // Limpa WebSocket ao desmontar
     return () => {
-      if (window.evoWebSocket) {
-        window.evoWebSocket.close();
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
       }
     };
   }, []);
@@ -121,7 +118,6 @@ export function RouletteDashboard() {
         try {
           const data = JSON.parse(event.data);
           
-          // Extrai número do JSON
           let numero: number | null = null;
           
           // winSpots
@@ -144,17 +140,14 @@ export function RouletteDashboard() {
             }
           }
 
-          // Se encontrou número válido
           if (numero !== null && numero >= 0 && numero <= 36) {
             console.log(`🎯 NÚMERO REAL: ${numero}`);
             
-            // Atualiza histórico
             setHistory(prev => {
               const newHistory = [numero, ...prev];
-              return newHistory.slice(0, 500); // Mantém 500
+              return newHistory.slice(0, 500);
             });
 
-            // Atualiza live numbers
             const color = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(numero) 
               ? 'red' 
               : numero === 0 ? 'green' : 'black';
@@ -165,7 +158,7 @@ export function RouletteDashboard() {
             });
           }
         } catch (e) {
-          // Ignora erros de parse
+          // Ignora
         }
       };
 
@@ -178,8 +171,7 @@ export function RouletteDashboard() {
         console.error('❌ WebSocket error:', error);
       };
 
-      // Salva para cleanup
-      window.evoWebSocket = ws;
+      wsRef.current = ws;
 
     } catch (error) {
       console.error('❌ Erro ao conectar WebSocket:', error);
@@ -188,7 +180,6 @@ export function RouletteDashboard() {
 
   // ========== ATUALIZAÇÃO PERIÓDICA ==========
   useEffect(() => {
-    // Busca números reais a cada 2 segundos (fallback)
     const interval = setInterval(async () => {
       try {
         const token = localStorage.getItem('access_token');
@@ -201,13 +192,12 @@ export function RouletteDashboard() {
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.history && data.history.length > 0) {
-            const realNumbers = data.history.map((item: any) => item.number);
+            const realNumbers = data.history.map((item: LiveNumber) => item.number);
             setHistory(prev => {
-              // Adiciona números novos que não estão no histórico
-              const newNumbers = realNumbers.filter(n => !prev.includes(n));
-              if (newNumbers.length > 0) {
-                console.log(`📊 +${newNumbers.length} novos números reais`);
-                return [...newNumbers, ...prev].slice(0, 500);
+              const novos = realNumbers.filter((n: number) => !prev.includes(n));
+              if (novos.length > 0) {
+                console.log(`📊 +${novos.length} novos números reais`);
+                return [...novos, ...prev].slice(0, 500);
               }
               return prev;
             });
@@ -221,7 +211,7 @@ export function RouletteDashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // ========== FUNÇÕES EXISTENTES ==========
+  // ========== FUNÇÕES ==========
   const openGame = (slug: string) => {
     setSelectedSlug(slug);
     setShowVideo(true);
@@ -246,7 +236,6 @@ export function RouletteDashboard() {
 
   const refreshHistory = () => {
     setLoading(true);
-    // Tenta recarregar números reais
     const token = localStorage.getItem('access_token');
     if (token) {
       fetch('/api/roulette/live?limit=50', {
@@ -255,7 +244,7 @@ export function RouletteDashboard() {
         .then(res => res.json())
         .then(data => {
           if (data.success && data.history) {
-            const realNumbers = data.history.map((item: any) => item.number);
+            const realNumbers = data.history.map((item: LiveNumber) => item.number);
             const sanitized = sanitizeHistory(realNumbers);
             setHistory(sanitized);
             console.log(`✅ Atualizado com ${sanitized.length} números REAIS`);
@@ -263,7 +252,6 @@ export function RouletteDashboard() {
           setLoading(false);
         })
         .catch(() => {
-          // Fallback
           const newNumbers = generateRandomHistory(30);
           const sanitized = sanitizeHistory(newNumbers);
           setHistory(sanitized);
@@ -294,7 +282,6 @@ export function RouletteDashboard() {
 
   const lastThree = getLastThree();
 
-  // ========== RENDER ==========
   return (
     <div className="p-4 space-y-4">
       {/* Status do WebSocket */}
