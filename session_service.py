@@ -12,6 +12,10 @@ class SessionService:
     @staticmethod
     def create_session(user_id: str, email: str, password: str, access_token: str, refresh_token: str) -> bool:
         try:
+            if db is None:
+                logger.error("❌ Banco não disponível")
+                return False
+                
             access_expires = jwt_manager.get_expires_at('access')
             refresh_expires = jwt_manager.get_expires_at('refresh')
             password_hash = hashlib.sha256(password.encode()).hexdigest()
@@ -53,6 +57,8 @@ class SessionService:
     @staticmethod
     def get_session_by_user_id(user_id: str) -> dict:
         try:
+            if db is None:
+                return None
             query = "SELECT * FROM user_sessions WHERE user_id = %s AND is_active = true"
             result = db.execute(query, (user_id,))
             return result[0] if result else None
@@ -62,6 +68,9 @@ class SessionService:
 
     @staticmethod
     def validate_session(token: str) -> dict:
+        if db is None:
+            return None
+            
         payload = jwt_manager.verify_token(token, 'access')
         if not payload:
             return None
@@ -81,6 +90,9 @@ class SessionService:
 
     @staticmethod
     def refresh_access_token(refresh_token: str) -> dict:
+        if db is None:
+            return None
+            
         payload = jwt_manager.verify_token(refresh_token, 'refresh')
         if not payload:
             return None
@@ -116,6 +128,8 @@ class SessionService:
     @staticmethod
     def deactivate_session(user_id: str) -> bool:
         try:
+            if db is None:
+                return False
             query = "UPDATE user_sessions SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE user_id = %s"
             db.execute(query, (user_id,))
             return True
@@ -126,6 +140,8 @@ class SessionService:
     @staticmethod
     def cleanup_expired() -> int:
         try:
+            if db is None:
+                return 0
             query = "UPDATE user_sessions SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE expires_at < NOW() AND is_active = true"
             return db.execute(query)
         except Exception as e:

@@ -1,19 +1,11 @@
 import os
-import sys
-import logging
-
-# Tenta importar psycopg2 com fallback
-try:
-    import psycopg2
-    from psycopg2.extras import RealDictCursor
-except ImportError:
-    print("❌ psycopg2 não instalado. Instalando...")
-    os.system("pip install psycopg2-binary")
-    import psycopg2
-    from psycopg2.extras import RealDictCursor
-
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from psycopg2 import pool
 from datetime import datetime
+import logging
 from dotenv import load_dotenv
+import time
 
 load_dotenv()
 
@@ -22,30 +14,58 @@ logger = logging.getLogger(__name__)
 class Database:
     def __init__(self):
         self.conn = None
+        self.max_retries = 3
+        self.retry_delay = 1
         self.connect()
 
     def connect(self):
+        """Conecta ao PostgreSQL com retry"""
+        for attempt in range(self.max_retries):
+            try:
+                database_url = os.getenv('DATABASE_URL')
+                if database_url:
+                    self.conn = psycopg2.connect(database_url)
+                else:
+                    self.conn = psycopg2.connect(
+                        host=os.getenv('DB_HOST', 'localhost'),
+                        port=os.getenv('DB_PORT', '5432'),
+                        dbname=os.getenv('DB_NAME', 'neondb'),
+                        user=os.getenv('DB_USER', 'neondb_owner'),
+                        password=os.getenv('DB_PASSWORD', '')
+                    )
+                
+                # Configurações para manter conexão viva
+                self.conn.autocommit = False
+                self.conn.set_session(autocommit=False)
+                
+                logger.info(f"✅ Conectado ao PostgreSQL (NeonDB) - tentativa {attempt + 1}")
+                
+                # Cria tabela se não existir
+                self.create_table_if_not_exists()
+                return
+                
+            except Exception as e:
+                logger.error(f"❌ Erro ao conectar (tentativa {attempt + 1}/{self.max_retries}): {e}")
+                if attempt < self.max_retries - 1:
+                    time.sleep(self.retry_delay)
+                else:
+                    raise
+
+    def ensure_connection(self):
+        """Verifica e reconecta se necessário"""
         try:
-            database_url = os.getenv('DATABASE_URL')
-            if database_url:
-                self.conn = psycopg2.connect(database_url)
+            # Testa se a conexão está viva
+            if self.conn:
+                with self.conn.cursor() as cur:
+                    cur.execute("SELECT 1")
             else:
-                self.conn = psycopg2.connect(
-                    host=os.getenv('DB_HOST', 'localhost'),
-                    port=os.getenv('DB_PORT', '5432'),
-                    dbname=os.getenv('DB_NAME', 'neondb'),
-                    user=os.getenv('DB_USER', 'neondb_owner'),
-                    password=os.getenv('DB_PASSWORD', '')
-                )
-            print("✅ Conectado ao PostgreSQL (NeonDB)")
-            
-            self.create_table_if_not_exists()
-            
+                self.connect()
         except Exception as e:
-            print(f"❌ Erro ao conectar: {e}")
-            raise
+            logger.warning(f"⚠️ Conexão perdida, reconectando... {e}")
+            self.connect()
 
     def create_table_if_not_exists(self):
+        """Cria a tabela user_sessions se não existir"""
         query = """
             CREATE TABLE IF NOT EXISTS user_sessions (
                 id SERIAL PRIMARY KEY,
@@ -63,16 +83,34 @@ class Database:
         """
         try:
             self.execute(query)
-            print("✅ Tabela user_sessions verificada/criada")
+            logger.info("✅ Tabela user_sessions verificada/criada")
         except Exception as e:
-            print(f"❌ Erro ao criar tabela: {e}")
+            logger.error(f"❌ Erro ao criar tabela: {e}")
 
     def execute(self, query, params=None):
+        """Executa uma query com reconexão automática"""
+        self.ensure_connection()
+        
         try:
             with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(query, params)
                 if query.strip().upper().startswith('SELECT'):
-                    return cur.fetchall()
+                    result = cur.fetchall()
+                    # Mantém conexão aberta
+                    self.conn.commit()
+                    return result
+                self.conn.commit()
+                return cur.rowcount
+        except psycopg2.OperationalError as e:
+            logger.error(f"❌ Erro operacional: {e}")
+            # Tenta reconectar e executar novamente
+            self.connect()
+            with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(query, params)
+                if query.strip().upper().startswith('SELECT'):
+                    result = cur.fetchall()
+                    self.conn.commit()
+                    return result
                 self.conn.commit()
                 return cur.rowcount
         except Exception as e:
@@ -81,13 +119,14 @@ class Database:
             raise
 
     def close(self):
+        """Fecha conexão"""
         if self.conn:
             self.conn.close()
-            print("🔌 Conexão fechada")
+            logger.info("🔌 Conexão fechada")
 
-# Instância global com fallback
+# Instância global
 try:
     db = Database()
 except Exception as e:
-    print(f"⚠️ Erro ao conectar: {e}")
+    logger.error(f"❌ Erro ao criar instância do banco: {e}")
     db = None

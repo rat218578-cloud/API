@@ -6,8 +6,11 @@ import os
 import json
 from datetime import datetime
 
+# Importa db com fallback
 try:
     from db import db
+    if db is None:
+        print("⚠️ Banco de dados não disponível")
 except Exception as e:
     print(f"⚠️ Erro ao importar db: {e}")
     db = None
@@ -15,7 +18,6 @@ except Exception as e:
 from jwt_helper import jwt_manager
 from session_service import session_service
 from middleware import require_auth, optional_auth
-from websocket_service import evolution_ws
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -34,7 +36,8 @@ session.headers.update({
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 })
 
-# ========== ROTA DE LOGIN ==========
+# ========== ROTAS ==========
+
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
     try:
@@ -55,7 +58,6 @@ def api_login():
         }
         
         response = session.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=15)
-        print(f"📥 Status login: {response.status_code}")
         
         if response.status_code != 200:
             return jsonify({'error': 'Credenciais inválidas'}), 401
@@ -93,14 +95,11 @@ def api_login():
         logger.error(f"❌ Erro no login: {e}")
         return jsonify({'error': str(e)}), 500
 
-# ========== ROTA START-GAME COM WEBSOCKET ==========
 @app.route('/api/start-game-v2', methods=['GET'])
 @require_auth
 def api_start_game():
     try:
         slug = request.args.get('slug')
-        print(f"🎮 Gerando link para: {slug}")
-        
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
         
@@ -119,76 +118,23 @@ def api_start_game():
             timeout=15
         )
         
-        print(f"📥 Status start-game: {response.status_code}")
-        
         if response.status_code == 200:
             data = response.json()
             game_url = data.get('iframe_url') or data.get('gameURL')
-            
             if game_url:
-                # Extrai EVOSESSIONID da URL
-                import re
-                match = re.search(r'EVOSESSIONID=([^&]+)', game_url)
-                if match:
-                    evo_session_id = match.group(1)
-                    print(f"🔑 EVOSESSIONID extraído: {evo_session_id[:20]}...")
-                    
-                    # Conecta WebSocket
-                    evolution_ws.set_session_id(evo_session_id)
-                    evolution_ws.connect()
-                
                 return jsonify({
                     'success': True,
                     'slug': slug,
                     'gameURL': game_url,
-                    'iframe_url': game_url,
-                    'evo_session_id': evo_session_id if 'evo_session_id' in locals() else None
+                    'iframe_url': game_url
                 })
         
-        return jsonify({
-            'success': False,
-            'error': 'Não foi possível gerar o link'
-        }), 404
+        return jsonify({'success': False, 'error': 'Não foi possível gerar o link'}), 404
         
     except Exception as e:
         logger.error(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
-# ========== ROTA PARA PEGAR NÚMEROS AO VIVO ==========
-@app.route('/api/roulette/live', methods=['GET'])
-@require_auth
-def get_live_numbers():
-    """Retorna os números AO VIVO do WebSocket"""
-    try:
-        limit = int(request.args.get('limit', 500))
-        history = evolution_ws.get_history(limit)
-        last_numbers = evolution_ws.get_last_numbers(10)
-        
-        return jsonify({
-            'success': True,
-            'connected': evolution_ws.connected,
-            'total': len(history),
-            'last_numbers': last_numbers,
-            'history': history,
-            'timestamp': datetime.now().isoformat()
-        }), 200
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# ========== ROTA DE STATUS DO WEBSOCKET ==========
-@app.route('/api/roulette/status', methods=['GET'])
-@require_auth
-def get_ws_status():
-    """Retorna status do WebSocket"""
-    return jsonify({
-        'connected': evolution_ws.connected,
-        'session_id': bool(evolution_ws.session_id),
-        'history_count': len(evolution_ws.history),
-        'last_numbers': evolution_ws.get_last_numbers(5)
-    }), 200
-
-# ========== ROTA DE REFRESH ==========
 @app.route('/api/auth/refresh', methods=['POST'])
 def api_refresh():
     try:
@@ -228,7 +174,6 @@ def api_validate():
 @app.route('/api/auth/logout', methods=['POST'])
 @require_auth
 def api_logout():
-    evolution_ws.disconnect()
     if db:
         session_service.deactivate_session(request.user_id)
     return jsonify({'success': True}), 200
@@ -244,7 +189,10 @@ def public_info():
 @app.before_request
 def cleanup_expired_sessions():
     if db:
-        session_service.cleanup_expired()
+        try:
+            session_service.cleanup_expired()
+        except Exception as e:
+            logger.error(f"❌ Erro ao limpar sessões: {e}")
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
@@ -262,11 +210,13 @@ if __name__ == '__main__':
     print("📡 API Base:", API_BASE)
     print("🗄️  Banco: NeonDB (PostgreSQL)")
     print("🛡️  Auth: JWT + Refresh Token")
-    print("🔌 WebSocket: Evolution AO VIVO")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     
     if db:
-        session_service.cleanup_expired()
+        try:
+            session_service.cleanup_expired()
+        except Exception as e:
+            print(f"⚠️ Erro ao limpar sessões: {e}")
     
     app.run(host='0.0.0.0', port=5000, debug=False)
