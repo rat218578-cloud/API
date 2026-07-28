@@ -16,8 +16,8 @@ class EvolutionWebSocketService:
         self.ws = None
         self.connected = False
         self.session_id = None
-        self.history = []  # Lista de números com detalhes
-        self.last_numbers = []  # Últimos 10 números
+        self.history = []
+        self.last_numbers = []
         self.total_numbers = 0
         self.callbacks = []
         self.running = False
@@ -26,8 +26,32 @@ class EvolutionWebSocketService:
         self.access_token = None
         self.game_id = None
         self.instance = None
-        self.ultimos_500 = []  # Últimos 500 números
-        self.historico_completo = []  # Histórico completo
+        self.ultimos_500 = []
+        self.historico_completo = []
+        self.game_url = None
+        self.evo_session_id = None
+        
+    def set_game_url(self, url):
+        """Extrai EVOSESSIONID da URL do jogo"""
+        self.game_url = url
+        logger.info(f"🔗 URL do jogo recebida")
+        
+        # Extrai EVOSESSIONID
+        match = re.search(r'EVOSESSIONID=([^&]+)', url)
+        if match:
+            self.evo_session_id = match.group(1)
+            logger.info(f"🔑 EVOSESSIONID extraído: {self.evo_session_id[:30]}...")
+            self.session_id = self.evo_session_id
+            self.connect()
+            return self.evo_session_id
+        
+        # Tenta extrair game_id
+        match = re.search(r'game/([^/]+)/', url)
+        if match:
+            self.game_id = match.group(1)
+            logger.info(f"🎮 Game ID: {self.game_id}")
+        
+        return None
         
     def set_access_token(self, token):
         self.access_token = token
@@ -36,9 +60,8 @@ class EvolutionWebSocketService:
         self.session_id = session_id
         logger.info(f"🔑 Session ID definido: {session_id[:30]}...")
         
-        # Extrai game_id e instance
         if session_id:
-            self.game_id = "7x0b1tgh7agmf6hv"  # Game ID padrão
+            self.game_id = "7x0b1tgh7agmf6hv"
             self.instance = f"i4ea0l-tztnmffxax4bftio-{self.game_id}"
             self.connect()
 
@@ -49,13 +72,13 @@ class EvolutionWebSocketService:
         game_id = self.game_id or "7x0b1tgh7agmf6hv"
         instance = self.instance or f"i4ea0l-tztnmffxax4bftio-{game_id}"
         
+        # Usa o mesmo EVOSESSIONID da URL
         url = f"wss://sortenabet.evo-games.com/public/roulette/player/game/{game_id}/socket?messageFormat=json&EVOSESSIONID={self.session_id}&instance={instance}&client_version=6.20260728.73539.63676-d2334f2327-r2"
         
-        logger.info(f"🌐 URL WebSocket: {url[:100]}...")
+        logger.info(f"🌐 WebSocket URL: {url[:100]}...")
         return url
 
     def extrair_numero(self, data):
-        """Extrai número do JSON da Evolution"""
         # winSpots
         if data.get('type') == 'roulette.winSpots':
             args = data.get('args', {})
@@ -127,6 +150,15 @@ class EvolutionWebSocketService:
                 self.ultimos_500 = numeros[:500]
                 self.total_numbers = len(numeros)
                 logger.info(f"📊 Carregados {len(self.ultimos_500)} números da tabela")
+                
+                # Salva no histórico
+                for num in numeros[:500]:
+                    self.historico_completo.append({
+                        'number': num,
+                        'color': self.get_cor(num),
+                        'timestamp': datetime.now().isoformat()
+                    })
+                
                 return numeros
         return None
 
@@ -152,7 +184,6 @@ class EvolutionWebSocketService:
             return False
 
     def processar_numero(self, numero, raw_data):
-        """Processa número recebido do WebSocket"""
         timestamp = datetime.now()
         cor = self.get_cor(numero)
         
@@ -163,32 +194,26 @@ class EvolutionWebSocketService:
             'raw': raw_data
         }
         
-        # Adiciona ao histórico
         self.historico_completo.append(registro)
         
-        # Atualiza últimos 500
         self.ultimos_500.append(numero)
         if len(self.ultimos_500) > 500:
             self.ultimos_500 = self.ultimos_500[-500:]
         
-        # Atualiza últimos números
         self.last_numbers.insert(0, numero)
         if len(self.last_numbers) > 10:
             self.last_numbers = self.last_numbers[:10]
         
         self.total_numbers += 1
         
-        # Salva no banco
         self.salvar_no_banco(numero)
         
-        # Notifica callbacks
         for callback in self.callbacks:
             try:
                 callback(registro)
             except Exception as e:
                 logger.error(f"❌ Erro no callback: {e}")
         
-        # Log
         cor_emoji = "🔴" if cor == "red" else "⚫" if cor == "black" else "🟢"
         logger.info(f"🎯 NÚMERO REAL: {numero} {cor_emoji} - Total: {self.total_numbers}")
         
