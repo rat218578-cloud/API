@@ -7,6 +7,7 @@ import websocket
 from datetime import datetime
 from collections import Counter
 import requests
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -15,39 +16,60 @@ class EvolutionWebSocketService:
         self.ws = None
         self.connected = False
         self.session_id = None
-        self.history = []  # Lista de números com detalhes
-        self.last_numbers = []  # Últimos 10 números
+        self.history = []
+        self.last_numbers = []
         self.total_numbers = 0
         self.callbacks = []
         self.running = False
         self.thread = None
         self.api_base = "https://sortenabet.bet.br"
         self.access_token = None
+        self.game_id = None
+        self.instance = None
         
     def set_access_token(self, token):
-        """Define o token de acesso para salvar no banco"""
         self.access_token = token
         
     def set_session_id(self, session_id):
         """Define o EVOSESSIONID da Evolution"""
         self.session_id = session_id
-        logger.info(f"🔑 Session ID definido: {session_id[:20]}...")
+        logger.info(f"🔑 Session ID definido: {session_id[:30]}...")
         
-        # Tenta conectar automaticamente
+        # Extrai game_id e instance da URL
+        # Exemplo: game/7x0b1tgh7agmf6hv/socket
+        # instance=i4ea0l-tztnmffxax4bftio-7x0b1tgh7agmf6hv
         if session_id:
+            # Tenta extrair game_id da sessão
+            # O game_id geralmente vem depois de "game/"
+            match = re.search(r'game/([^/]+)/socket', str(session_id))
+            if match:
+                self.game_id = match.group(1)
+                logger.info(f"🎮 Game ID: {self.game_id}")
+            
+            # Tenta conectar automaticamente
             self.connect()
 
     def get_websocket_url(self) -> str:
-        """Monta a URL do WebSocket"""
+        """Monta a URL do WebSocket com os parâmetros corretos"""
         if not self.session_id:
             raise ValueError("EVOSESSIONID não definido!")
         
-        # URL do WebSocket da Evolution
-        return f"wss://sortenabet.evo-games.com/public/roulette/player/game/7x0b1tgh7agmf6hv/socket?messageFormat=json&EVOSESSIONID={self.session_id}&instance=i4ea0l-tztnmffxax4bftio-7x0b1tgh7agmf6hv&client_version=6.20260724.73611.63604-633bb6d1d6-r2"
+        # URL base do WebSocket da Evolution
+        # Usando o formato correto com game_id
+        base_url = "wss://sortenabet.evo-games.com/public/roulette/player/game"
+        
+        # Se não temos game_id, usamos o padrão
+        game_id = self.game_id or "7x0b1tgh7agmf6hv"
+        instance = self.instance or f"i4ea0l-tztnmffxax4bftio-{game_id}"
+        
+        url = f"{base_url}/{game_id}/socket?messageFormat=json&EVOSESSIONID={self.session_id}&instance={instance}&client_version=6.20260724.73611.63604-633bb6d1d6-r2"
+        
+        logger.info(f"🌐 URL WebSocket: {url[:100]}...")
+        return url
 
     def extrair_numero(self, data):
         """Extrai número do JSON da Evolution"""
-        # winSpots
+        # winSpots - MAIS COMUM!
         if data.get('type') == 'roulette.winSpots':
             args = data.get('args', {})
             result = args.get('result', [])
@@ -63,6 +85,8 @@ class EvolutionWebSocketService:
                             return int(item)
                         except:
                             pass
+                    elif isinstance(item, (int, float)):
+                        return int(item)
         
         # tableState com GAME_RESOLVED
         if data.get('type') == 'roulette.tableState':
@@ -75,11 +99,11 @@ class EvolutionWebSocketService:
                     except:
                         pass
         
-        # Busca em qualquer lugar
+        # Busca em qualquer lugar do JSON
         def buscar(obj):
             if isinstance(obj, dict):
                 for key, value in obj.items():
-                    if key in ['number', 'result']:
+                    if key in ['number', 'result', 'winningNumber']:
                         try:
                             num = int(value)
                             if 0 <= num <= 36:
@@ -116,8 +140,12 @@ class EvolutionWebSocketService:
                 headers={'Authorization': f'Bearer {self.access_token}'},
                 timeout=5
             )
-            return response.status_code == 200
-        except:
+            if response.status_code == 200:
+                logger.info(f"💾 Número {numero} salvo no banco")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"❌ Erro ao salvar: {e}")
             return False
 
     def processar_numero(self, numero, raw_data):
@@ -126,7 +154,6 @@ class EvolutionWebSocketService:
         timestamp = datetime.now()
         cor = self.get_cor(numero)
         
-        # Cria registro
         registro = {
             'number': numero,
             'color': cor,
@@ -145,12 +172,9 @@ class EvolutionWebSocketService:
             self.last_numbers = self.last_numbers[:10]
         
         # Salva no banco
-        if self.salvar_no_banco(numero):
-            logger.info(f"💾 Número {numero} salvo no banco")
-        else:
-            logger.warning(f"⚠️ Não foi possível salvar {numero} no banco")
+        self.salvar_no_banco(numero)
         
-        # Notifica callbacks (frontend)
+        # Notifica callbacks
         for callback in self.callbacks:
             try:
                 callback(registro)
@@ -166,6 +190,12 @@ class EvolutionWebSocketService:
     def on_message(self, ws, message):
         try:
             data = json.loads(message)
+            
+            # Log para debug
+            msg_type = data.get('type', 'unknown')
+            if msg_type in ['roulette.winSpots', 'roulette.tableState']:
+                logger.info(f"📩 Mensagem recebida: {msg_type}")
+            
             numero = self.extrair_numero(data)
             
             if numero is not None and 0 <= numero <= 36:
@@ -183,16 +213,16 @@ class EvolutionWebSocketService:
         self.connected = False
         logger.info(f"🔌 WebSocket fechado: {close_status_code} - {close_msg}")
         
-        # Tenta reconectar após 5 segundos
         if self.running:
-            logger.info("🔄 Tentando reconectar em 5 segundos...")
-            time.sleep(5)
+            logger.info("🔄 Tentando reconectar em 3 segundos...")
+            time.sleep(3)
             self.connect()
 
     def on_open(self, ws):
         self.connected = True
-        logger.info("✅ WebSocket conectado com sucesso!")
-        logger.info(f"📡 Aguardando números REAIS da Evolution...")
+        logger.info("✅ WebSocket CONECTADO com sucesso!")
+        logger.info("📡 Aguardando números REAIS da Evolution...")
+        logger.info(f"🎯 Total de números até agora: {self.total_numbers}")
 
     def connect(self):
         """Conecta ao WebSocket"""
@@ -200,10 +230,11 @@ class EvolutionWebSocketService:
             logger.error("❌ EVOSESSIONID não definido!")
             return False
         
-        url = self.get_websocket_url()
-        logger.info(f"🔌 Conectando ao WebSocket...")
-        
         try:
+            url = self.get_websocket_url()
+            logger.info(f"🔌 Conectando ao WebSocket...")
+            logger.info(f"   🔑 Session ID: {self.session_id[:30]}...")
+            
             self.ws = websocket.WebSocketApp(
                 url,
                 on_open=self.on_open,
@@ -219,15 +250,20 @@ class EvolutionWebSocketService:
             self.thread.start()
             
             self.running = True
-            time.sleep(2)
-            return True
+            time.sleep(3)
+            
+            if self.connected:
+                logger.info("✅ WebSocket conectado e pronto!")
+                return True
+            else:
+                logger.warning("⚠️ WebSocket não conectou após 3 segundos")
+                return False
             
         except Exception as e:
             logger.error(f"❌ Erro ao conectar: {e}")
             return False
 
     def disconnect(self):
-        """Desconecta do WebSocket"""
         self.running = False
         if self.ws:
             self.ws.close()
@@ -235,15 +271,12 @@ class EvolutionWebSocketService:
         logger.info("🔌 Desconectado do WebSocket")
 
     def get_history(self, limit: int = 500) -> list:
-        """Retorna o histórico de números"""
         return self.history[-limit:] if self.history else []
 
     def get_last_numbers(self, count: int = 10) -> list:
-        """Retorna os últimos números"""
         return self.last_numbers[:count]
 
     def get_statistics(self) -> dict:
-        """Retorna estatísticas"""
         if not self.history:
             return {}
         
@@ -263,11 +296,9 @@ class EvolutionWebSocketService:
         }
 
     def add_callback(self, callback):
-        """Adiciona callback para receber números em tempo real"""
         self.callbacks.append(callback)
 
     def remove_callback(self, callback):
-        """Remove callback"""
         if callback in self.callbacks:
             self.callbacks.remove(callback)
 
