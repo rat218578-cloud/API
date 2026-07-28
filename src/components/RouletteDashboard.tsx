@@ -10,13 +10,6 @@ import {
 } from "../utils/roulette";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
-// ========== TIPOS ==========
-interface LiveNumber {
-  number: number;
-  color: string;
-  timestamp: string;
-}
-
 // ========== COMPONENTE ==========
 export function RouletteDashboard() {
   const [activeRoom, setActiveRoom] = useState(ROLETAS[0].id);
