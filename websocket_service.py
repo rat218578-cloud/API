@@ -31,91 +31,81 @@ class EvolutionWebSocketService:
         self.ultimos_500 = []
         self.evo_session_id = None
         self.game_url = None
+        self.ws_url = None
         
     def set_game_url(self, url):
-        """Extrai EVOSESSIONID da URL do jogo (decodificando base64 se necessário)"""
+        """Extrai EVOSESSIONID e monta URL exata do WebSocket"""
         self.game_url = url
         logger.info(f"🔗 URL do jogo: {url[:120]}...")
         
-        # Tenta encontrar EVOSESSIONID diretamente
+        # Extrai EVOSESSIONID
+        evo_id = None
+        
+        # Tenta encontrar diretamente
         match = re.search(r'EVOSESSIONID=([^&]+)', url)
         if match:
-            self.evo_session_id = match.group(1)
-            self.session_id = self.evo_session_id
-            logger.info(f"🔑 EVOSESSIONID encontrado diretamente: {self.session_id[:30]}...")
-            self._extract_game_id(url)
-            self.connect()
-            return self.session_id
+            evo_id = match.group(1)
         
-        # Tenta extrair do parâmetro 'params' (base64)
-        match = re.search(r'params=([^&]+)', url)
-        if match:
-            params_b64 = match.group(1)
-            logger.info(f"📦 Params base64 encontrado: {params_b64[:50]}...")
-            
-            try:
-                # Decodifica base64 (adiciona padding se necessário)
-                params_b64_padded = params_b64 + '=' * (4 - len(params_b64) % 4) if len(params_b64) % 4 else params_b64
-                decoded = base64.b64decode(params_b64_padded).decode('utf-8', errors='ignore')
-                logger.info(f"📄 Params decodificado: {decoded[:100]}...")
-                
-                # Procura EVOSESSIONID no texto decodificado
-                match_evo = re.search(r'EVOSESSIONID[=:]([A-Za-z0-9_\-]+)', decoded)
-                if match_evo:
-                    self.evo_session_id = match_evo.group(1)
-                    self.session_id = self.evo_session_id
-                    logger.info(f"🔑 EVOSESSIONID encontrado no base64: {self.session_id[:30]}...")
-                    self._extract_game_id(url)
-                    self.connect()
-                    return self.session_id
-                
-                # Procura por token no formato tzt...
-                match_token = re.search(r'(tzt[A-Za-z0-9_\-]{20,})', decoded)
-                if match_token:
-                    self.evo_session_id = match_token.group(1)
-                    self.session_id = self.evo_session_id
-                    logger.info(f"🔑 Token encontrado no base64: {self.session_id[:30]}...")
-                    self._extract_game_id(url)
-                    self.connect()
-                    return self.session_id
-                    
-            except Exception as e:
-                logger.error(f"❌ Erro ao decodificar base64: {e}")
+        # Tenta encontrar no base64
+        if not evo_id:
+            match = re.search(r'params=([^&]+)', url)
+            if match:
+                try:
+                    params_b64 = match.group(1)
+                    params_b64_padded = params_b64 + '=' * (4 - len(params_b64) % 4) if len(params_b64) % 4 else params_b64
+                    decoded = base64.b64decode(params_b64_padded).decode('utf-8', errors='ignore')
+                    match_evo = re.search(r'EVOSESSIONID[=:]([A-Za-z0-9_\-]+)', decoded)
+                    if match_evo:
+                        evo_id = match_evo.group(1)
+                    else:
+                        match_token = re.search(r'(tzt[A-Za-z0-9_\-]{20,})', decoded)
+                        if match_token:
+                            evo_id = match_token.group(1)
+                except Exception as e:
+                    logger.error(f"❌ Erro ao decodificar: {e}")
         
-        # Tenta extrair de qualquer token na URL
-        match = re.search(r'(tzt[A-Za-z0-9_\-]{20,})', url)
-        if match:
-            self.evo_session_id = match.group(1)
-            self.session_id = self.evo_session_id
-            logger.info(f"🔑 Token encontrado na URL: {self.session_id[:30]}...")
-            self._extract_game_id(url)
-            self.connect()
-            return self.session_id
+        # Tenta encontrar token solto
+        if not evo_id:
+            match = re.search(r'(tzt[A-Za-z0-9_\-]{20,})', url)
+            if match:
+                evo_id = match.group(1)
         
-        logger.error("❌ EVOSESSIONID não encontrado em nenhum lugar da URL")
-        return None
-    
-    def _extract_game_id(self, url):
-        """Extrai game_id da URL"""
+        if not evo_id:
+            logger.error("❌ EVOSESSIONID não encontrado")
+            return None
+        
+        self.evo_session_id = evo_id
+        self.session_id = evo_id
+        logger.info(f"🔑 EVOSESSIONID: {evo_id[:30]}...")
+        
+        # Extrai game_id
         match = re.search(r'game[/:]([^/&]+)', url)
         if match:
             self.game_id = match.group(1)
             logger.info(f"🎮 Game ID: {self.game_id}")
-        self.instance = f"i4ea0l-{self.evo_session_id[:20]}-{self.game_id}" if self.evo_session_id else None
+        
+        # Monta URL do WebSocket IGUAL à do navegador
+        self.instance = f"i4ea0l-tztnmffxax4bftio-{self.game_id}"
+        
+        # URL EXATA do WebSocket (igual à do navegador)
+        self.ws_url = f"wss://sortenabet.evo-games.com/public/roulette/player/game/{self.game_id}/socket?messageFormat=json&EVOSESSIONID={evo_id}&instance={self.instance}&client_version=6.20260728.73539.63676-d2334f2327-r2"
+        
+        logger.info(f"🌐 WebSocket URL: {self.ws_url[:120]}...")
+        
+        # Conecta
+        self.connect()
+        return evo_id
         
     def set_access_token(self, token):
         self.access_token = token
 
     def get_websocket_url(self) -> str:
-        if not self.session_id:
-            raise ValueError("EVOSESSIONID não definido!")
-        
-        url = f"wss://sortenabet.evo-games.com/public/roulette/player/game/{self.game_id}/socket?messageFormat=json&EVOSESSIONID={self.session_id}&instance={self.instance}&client_version=6.20260728.73539.63676-d2334f2327-r2"
-        
-        logger.info(f"🌐 WebSocket URL: {url[:120]}...")
-        return url
+        if not self.ws_url:
+            raise ValueError("URL do WebSocket não definida!")
+        return self.ws_url
 
     def extrair_numero(self, data):
+        # winSpots
         if data.get('type') == 'roulette.winSpots':
             args = data.get('args', {})
             result = args.get('result', [])
@@ -132,6 +122,7 @@ class EvolutionWebSocketService:
                         except:
                             pass
         
+        # tableState com GAME_RESOLVED
         if data.get('type') == 'roulette.tableState':
             args = data.get('args', {})
             if args.get('state') == 'GAME_RESOLVED':
@@ -238,8 +229,8 @@ class EvolutionWebSocketService:
         self.connected = False
         logger.info(f"🔌 WebSocket fechado: {close_status_code} - {close_msg}")
         if self.running:
-            logger.info("🔄 Tentando reconectar em 3 segundos...")
-            time.sleep(3)
+            logger.info("🔄 Tentando reconectar em 5 segundos...")
+            time.sleep(5)
             self.connect()
 
     def on_open(self, ws):
@@ -248,7 +239,7 @@ class EvolutionWebSocketService:
         logger.info("📡 Aguardando números REAIS da Evolution...")
 
     def connect(self):
-        if not self.session_id:
+        if not self.evo_session_id:
             logger.error("❌ EVOSESSIONID não definido!")
             return False
         
