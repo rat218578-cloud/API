@@ -6,7 +6,6 @@ import {
   STRATEGIES,
   getNumberInfo,
   getColorClass,
-  generateRandomHistory,
   sanitizeHistory
 } from "../utils/roulette";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
@@ -27,14 +26,11 @@ export function RouletteDashboard() {
   const [showVideo, setShowVideo] = useState(false);
   const [showCatalog, setShowCatalog] = useState(true);
   const [wsConnected, setWsConnected] = useState(false);
-  const [liveNumbers, setLiveNumbers] = useState<LiveNumber[]>([]);
   const [isRealData, setIsRealData] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
   // ========== CARREGA HISTÓRICO INICIAL ==========
   useEffect(() => {
-    // NÃO CARREGA NÚMEROS FALSOS!
-    // Só mostra "Aguardando números reais..."
     setLoading(false);
     console.log('📡 Aguardando números REAIS do WebSocket...');
   }, []);
@@ -109,15 +105,6 @@ export function RouletteDashboard() {
               const newHistory = [numero, ...prev];
               return newHistory.slice(0, 500);
             });
-
-            const color = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(numero) 
-              ? 'red' 
-              : numero === 0 ? 'green' : 'black';
-            
-            setLiveNumbers(prev => {
-              const newLive = [{ number: numero, color, timestamp: new Date().toISOString() }, ...prev];
-              return newLive.slice(0, 100);
-            });
           }
         } catch (e) {
           // Ignora
@@ -181,7 +168,6 @@ export function RouletteDashboard() {
     setSelectedSlug(slug);
     setShowVideo(true);
     
-    // Tenta conectar WebSocket via API
     const token = localStorage.getItem('access_token');
     if (token) {
       fetch(`/api/start-game-v2?slug=${slug}`, {
@@ -221,7 +207,6 @@ export function RouletteDashboard() {
   }, [history, isRealData]);
 
   const refreshHistory = () => {
-    // Só recarrega se tiver dados reais
     if (!isRealData) return;
     
     setLoading(true);
