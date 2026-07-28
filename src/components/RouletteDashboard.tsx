@@ -28,74 +28,15 @@ export function RouletteDashboard() {
   const [showCatalog, setShowCatalog] = useState(true);
   const [wsConnected, setWsConnected] = useState(false);
   const [liveNumbers, setLiveNumbers] = useState<LiveNumber[]>([]);
+  const [isRealData, setIsRealData] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
   // ========== CARREGA HISTÓRICO INICIAL ==========
   useEffect(() => {
-    const loadRealHistory = async () => {
-      try {
-        const token = localStorage.getItem('access_token');
-        if (!token) {
-          loadSimulatedHistory();
-          return;
-        }
-
-        const response = await fetch('/api/roulette/live?limit=50', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.history && data.history.length > 0) {
-            const realNumbers = data.history.map((item: LiveNumber) => item.number);
-            const sanitized = sanitizeHistory(realNumbers);
-            setHistory(sanitized);
-            setLiveNumbers(data.history);
-            setWsConnected(data.connected || false);
-            setLoading(false);
-            console.log(`✅ Carregados ${sanitized.length} números REAIS do banco`);
-            return;
-          }
-        }
-        
-        loadSimulatedHistory();
-      } catch (error) {
-        console.error('❌ Erro ao carregar números reais:', error);
-        loadSimulatedHistory();
-      }
-    };
-
-    const loadSimulatedHistory = () => {
-      const numbers = [];
-      for (let i = 0; i < 50; i++) {
-        if (Math.random() > 0.3) {
-          numbers.push(Math.floor(Math.random() * 37));
-        } else {
-          const hotNumbers = [0, 7, 14, 17, 21, 23, 26, 32, 35, 36];
-          numbers.push(hotNumbers[Math.floor(Math.random() * hotNumbers.length)]);
-        }
-      }
-      const sanitized = sanitizeHistory(numbers);
-      setHistory(sanitized);
-      setLoading(false);
-      console.log('⚠️ Usando números SIMULADOS (fallback)');
-    };
-
-    loadRealHistory();
-
-    // ========== WEBSOCKET EM TEMPO REAL ==========
-    const evoId = localStorage.getItem('evo_session_id');
-    if (evoId) {
-      connectWebSocket(evoId);
-    }
-
-    // Limpa WebSocket ao desmontar
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-    };
+    // NÃO CARREGA NÚMEROS FALSOS!
+    // Só mostra "Aguardando números reais..."
+    setLoading(false);
+    console.log('📡 Aguardando números REAIS do WebSocket...');
   }, []);
 
   // ========== CONECTA WEBSOCKET ==========
@@ -106,7 +47,7 @@ export function RouletteDashboard() {
 
     try {
       const ws = new WebSocket(
-        `wss://ws-evolution.sortenabet.bet.br/ws?messageFormat=json&EVOSESSIONID=${sessionId}&client_version=6.20260724.73611.63604-633bb6d1d6-r2`
+        `wss://sortenabet.evo-games.com/public/roulette/player/game/7x0b1tgh7agmf6hv/socket?messageFormat=json&EVOSESSIONID=${sessionId}&instance=i4ea0l-tztnmffxax4bftio-7x0b1tgh7agmf6hv&client_version=6.20260728.73539.63676-d2334f2327-r2`
       );
 
       ws.onopen = () => {
@@ -118,9 +59,30 @@ export function RouletteDashboard() {
         try {
           const data = JSON.parse(event.data);
           
+          // PROCESSA RECENTRESULTS (TABELA COMPLETA)
+          if (data.type === 'roulette.recentResults' || data.args?.recentResults) {
+            const recentResults = data.args?.recentResults || [];
+            const numeros = [];
+            for (const item of recentResults) {
+              if (Array.isArray(item) && item.length > 0) {
+                try {
+                  const num = parseInt(item[0]);
+                  if (!isNaN(num) && num >= 0 && num <= 36) {
+                    numeros.push(num);
+                  }
+                } catch {}
+              }
+            }
+            if (numeros.length > 0) {
+              setHistory(numeros.slice(0, 500));
+              setIsRealData(true);
+              console.log(`📊 Carregados ${numeros.length} números REAIS da tabela`);
+            }
+          }
+
+          // EXTRAI NÚMERO AO VIVO
           let numero: number | null = null;
           
-          // winSpots
           if (data.type === 'roulette.winSpots') {
             const result = data.args?.result;
             if (result && result.length > 0) {
@@ -132,7 +94,6 @@ export function RouletteDashboard() {
             }
           }
           
-          // tableState com GAME_RESOLVED
           if (data.type === 'roulette.tableState' && data.args?.state === 'GAME_RESOLVED') {
             const result = data.args?.result;
             if (result && result.length > 0) {
@@ -141,7 +102,8 @@ export function RouletteDashboard() {
           }
 
           if (numero !== null && numero >= 0 && numero <= 36) {
-            console.log(`🎯 NÚMERO REAL: ${numero}`);
+            console.log(`🎯 NÚMERO REAL AO VIVO: ${numero}`);
+            setIsRealData(true);
             
             setHistory(prev => {
               const newHistory = [numero, ...prev];
@@ -192,15 +154,18 @@ export function RouletteDashboard() {
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.history && data.history.length > 0) {
-            const realNumbers = data.history.map((item: LiveNumber) => item.number);
-            setHistory(prev => {
-              const novos = realNumbers.filter((n: number) => !prev.includes(n));
-              if (novos.length > 0) {
-                console.log(`📊 +${novos.length} novos números reais`);
-                return [...novos, ...prev].slice(0, 500);
-              }
-              return prev;
-            });
+            const realNumbers = data.history.map((item: any) => item.number);
+            if (realNumbers.length > 0) {
+              setHistory(prev => {
+                const novos = realNumbers.filter((n: number) => !prev.includes(n));
+                if (novos.length > 0) {
+                  console.log(`📊 +${novos.length} novos números reais`);
+                  setIsRealData(true);
+                  return [...novos, ...prev].slice(0, 500);
+                }
+                return prev;
+              });
+            }
           }
         }
       } catch (error) {
@@ -215,14 +180,35 @@ export function RouletteDashboard() {
   const openGame = (slug: string) => {
     setSelectedSlug(slug);
     setShowVideo(true);
+    
+    // Tenta conectar WebSocket via API
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      fetch(`/api/start-game-v2?slug=${slug}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.evo_session_id) {
+            connectWebSocket(data.evo_session_id);
+          }
+        })
+        .catch(console.error);
+    }
   };
 
   const closeGame = () => {
     setShowVideo(false);
     setSelectedSlug(null);
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
   };
 
   const topNumbers = useMemo(() => {
+    if (!isRealData || history.length === 0) return [];
+    
     const validHistory = sanitizeHistory(history);
     const counts: Record<number, number> = {};
     validHistory.forEach((n) => {
@@ -232,9 +218,12 @@ export function RouletteDashboard() {
       .map(([n, count]) => ({ number: Number(n), count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
-  }, [history]);
+  }, [history, isRealData]);
 
   const refreshHistory = () => {
+    // Só recarrega se tiver dados reais
+    if (!isRealData) return;
+    
     setLoading(true);
     const token = localStorage.getItem('access_token');
     if (token) {
@@ -244,32 +233,24 @@ export function RouletteDashboard() {
         .then(res => res.json())
         .then(data => {
           if (data.success && data.history) {
-            const realNumbers = data.history.map((item: LiveNumber) => item.number);
-            const sanitized = sanitizeHistory(realNumbers);
-            setHistory(sanitized);
-            console.log(`✅ Atualizado com ${sanitized.length} números REAIS`);
+            const realNumbers = data.history.map((item: any) => item.number);
+            setHistory(realNumbers);
+            console.log(`✅ Atualizado com ${realNumbers.length} números REAIS`);
           }
           setLoading(false);
         })
-        .catch(() => {
-          const newNumbers = generateRandomHistory(30);
-          const sanitized = sanitizeHistory(newNumbers);
-          setHistory(sanitized);
-          setLoading(false);
-        });
+        .catch(() => setLoading(false));
     } else {
-      const newNumbers = generateRandomHistory(30);
-      const sanitized = sanitizeHistory(newNumbers);
-      setHistory(sanitized);
       setLoading(false);
     }
   };
 
   const getLastThree = () => {
+    if (!isRealData || history.length === 0) return ['--', '--', '--'];
     return history.slice(0, 3);
   };
 
-  if (loading && history.length === 0) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
         <div className="text-center">
@@ -286,14 +267,15 @@ export function RouletteDashboard() {
     <div className="p-4 space-y-4">
       {/* Status do WebSocket */}
       <div className="flex items-center gap-2 text-xs">
-        <span className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
-        <span className="text-text-muted">
-          {wsConnected ? '📡 Números REAIS ao vivo' : '⚠️ Números simulados (fallback)'}
+        <span className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
+        <span className={wsConnected ? 'text-emerald-400' : 'text-yellow-400'}>
+          {wsConnected ? '📡 Números REAIS ao vivo' : '⏳ Aguardando conexão...'}
         </span>
-        {liveNumbers.length > 0 && (
-          <span className="text-text-muted">
-            • Último: <span className="text-emerald-400 font-bold">{liveNumbers[0]?.number}</span>
-          </span>
+        {isRealData && (
+          <span className="text-emerald-400">✅ {history.length} números carregados</span>
+        )}
+        {!isRealData && (
+          <span className="text-yellow-400">⚠️ Aguardando primeiro número...</span>
         )}
       </div>
 
@@ -323,7 +305,7 @@ export function RouletteDashboard() {
           <div className="bg-bg-card border border-border-default rounded-2xl p-3">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider">
-                📊 Catalogo {wsConnected && '🔴'}
+                📊 Catalogo {wsConnected && isRealData ? '🔴' : '⏳'}
               </h3>
               <button 
                 onClick={() => setShowCatalog(!showCatalog)}
@@ -333,11 +315,11 @@ export function RouletteDashboard() {
               </button>
               <button
                 onClick={refreshHistory}
-                disabled={loading}
+                disabled={loading || !isRealData}
                 className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center gap-1"
               >
                 {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
-                {wsConnected ? 'REAL' : 'SIM'}
+                {isRealData ? 'REAL' : '⏳'}
               </button>
             </div>
 
@@ -360,23 +342,29 @@ export function RouletteDashboard() {
               <div className="grid grid-cols-6 text-[8px] text-text-muted uppercase py-1 border-b border-border-default text-center">
                 <span>N</span><span>A/B</span><span>I/P</span><span>COL</span><span>DUZ</span><span>SET</span>
               </div>
-              {topNumbers.map((item) => {
-                const info = getNumberInfo(item.number);
-                return (
-                  <div key={item.number} className="grid grid-cols-6 items-center py-1 text-[10px] border-b border-border-default/30 text-center">
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[8px] mx-auto ${getColorClass(item.number)}`}>
-                      {item.number}
+              {topNumbers.length > 0 ? (
+                topNumbers.map((item) => {
+                  const info = getNumberInfo(item.number);
+                  return (
+                    <div key={item.number} className="grid grid-cols-6 items-center py-1 text-[10px] border-b border-border-default/30 text-center">
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[8px] mx-auto ${getColorClass(item.number)}`}>
+                        {item.number}
+                      </div>
+                      <span className={info.range === "high" ? "text-accent-amber" : "text-text-secondary"}>
+                        {info.range === "zero" ? "Z" : info.range === "high" ? "A" : "B"}
+                      </span>
+                      <span className="text-text-secondary">{info.parity === "zero" ? "Z" : info.parity === "even" ? "P" : "I"}</span>
+                      <span className="text-violet-400">{info.column}</span>
+                      <span className="text-blue-400">{info.dozen}</span>
+                      <span className="text-emerald-400">{info.sector.slice(0,3)}</span>
                     </div>
-                    <span className={info.range === "high" ? "text-accent-amber" : "text-text-secondary"}>
-                      {info.range === "zero" ? "Z" : info.range === "high" ? "A" : "B"}
-                    </span>
-                    <span className="text-text-secondary">{info.parity === "zero" ? "Z" : info.parity === "even" ? "P" : "I"}</span>
-                    <span className="text-violet-400">{info.column}</span>
-                    <span className="text-blue-400">{info.dozen}</span>
-                    <span className="text-emerald-400">{info.sector.slice(0,3)}</span>
-                  </div>
-                );
-              })}
+                  );
+                })
+              ) : (
+                <div className="text-center py-4 text-text-muted text-xs">
+                  ⏳ Aguardando números...
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -407,7 +395,7 @@ export function RouletteDashboard() {
             <div className="text-[10px] text-text-muted uppercase mb-2">Sequência atual</div>
             <div className="p-3 rounded-xl bg-gradient-to-r from-bg-tertiary to-bg-secondary border border-border-default text-center mb-3">
               <div className="text-xs font-bold text-text-primary">
-                {history.length > 0 ? (
+                {isRealData && history.length > 0 ? (
                   <span className="flex items-center justify-center gap-2">
                     <span className={`px-2 py-0.5 rounded ${getColorClass(history[0] || 0)} text-[10px] font-bold`}>
                       {getNumberInfo(history[0] || 0).color.toUpperCase()}
@@ -418,14 +406,16 @@ export function RouletteDashboard() {
                       <span className="text-[8px] text-emerald-400">● REAL</span>
                     )}
                   </span>
-                ) : "---"}
+                ) : (
+                  <span className="text-yellow-400">⏳ Aguardando...</span>
+                )}
               </div>
             </div>
             <div className="flex items-center justify-center gap-3 text-center">
               {lastThree.map((num, idx) => (
                 <div key={idx} className="text-center">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${getColorClass(num)}`}>
-                    {num || '--'}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${num !== '--' ? getColorClass(Number(num)) : 'bg-bg-tertiary text-text-muted'}`}>
+                    {num}
                   </div>
                   <div className="text-[8px] text-text-muted mt-0.5">
                     {idx === 0 ? 'Último' : idx === 1 ? 'Penúlt' : 'Antep'}
@@ -435,7 +425,9 @@ export function RouletteDashboard() {
             </div>
             <div className="mt-3 p-2 rounded-lg bg-bg-tertiary border border-border-default text-center">
               <div className="text-[10px] text-text-muted">Tendência</div>
-              <div className="text-sm font-bold text-emerald-400">⬆ Forte</div>
+              <div className="text-sm font-bold text-emerald-400">
+                {isRealData ? '⬆ Forte' : '⏳ Aguardando...'}
+              </div>
             </div>
           </div>
 
@@ -447,13 +439,13 @@ export function RouletteDashboard() {
                   <div className="flex items-center justify-between text-xs mb-1">
                     <span className="text-text-secondary">{s.name}</span>
                     <span className="font-bold" style={{ color: s.color }}>
-                      {s.assertiveness}%
+                      {isRealData ? s.assertiveness : '--'}%
                     </span>
                   </div>
                   <div className="h-1.5 rounded-full bg-bg-tertiary overflow-hidden">
                     <div 
                       className="h-full rounded-full transition-all duration-500" 
-                      style={{ width: `${s.assertiveness}%`, backgroundColor: s.color }} 
+                      style={{ width: isRealData ? `${s.assertiveness}%` : '0%', backgroundColor: s.color }} 
                     />
                   </div>
                 </div>
@@ -464,7 +456,7 @@ export function RouletteDashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-4">
-        <SignalGenerator history={history} />
+        <SignalGenerator history={isRealData ? history : []} />
       </div>
     </div>
   );
