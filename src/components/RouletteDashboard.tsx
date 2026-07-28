@@ -20,19 +20,50 @@ export function RouletteDashboard() {
   const [showCatalog, setShowCatalog] = useState(true);
   const [wsConnected, setWsConnected] = useState(false);
   const [isRealData, setIsRealData] = useState(false);
+  const [evoSessionId, setEvoSessionId] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   // ========== CARREGA HISTÓRICO INICIAL ==========
   useEffect(() => {
-    setLoading(false);
-    console.log('📡 Aguardando números REAIS do WebSocket...');
+    // Tenta carregar do backend primeiro
+    const loadHistory = async () => {
+      try {
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+          setLoading(false);
+          return;
+        }
+
+        const response = await fetch('/api/roulette/live?limit=50', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.history && data.history.length > 0) {
+            const numbers = data.history.map((item: any) => item.number);
+            setHistory(numbers);
+            setIsRealData(true);
+            setWsConnected(data.connected || false);
+            console.log(`📊 Carregados ${numbers.length} números do backend`);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Erro ao carregar histórico:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadHistory();
   }, []);
 
   // ========== CONECTA WEBSOCKET ==========
   const connectWebSocket = (sessionId: string) => {
     if (!sessionId) return;
 
-    console.log(`🔌 Conectando WebSocket com ID: ${sessionId.substring(0, 20)}...`);
+    setEvoSessionId(sessionId);
+    console.log(`🔌 Conectando WebSocket com ID: ${sessionId.substring(0, 30)}...`);
 
     try {
       const ws = new WebSocket(
@@ -42,16 +73,29 @@ export function RouletteDashboard() {
       ws.onopen = () => {
         setWsConnected(true);
         console.log('✅ WebSocket conectado!');
+        
+        // Pede a tabela completa
+        const request = JSON.stringify({
+          type: 'roulette.recentResults',
+          args: { limit: 500 }
+        });
+        ws.send(request);
       };
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
           
+          // LOG para debug
+          if (data.type === 'roulette.recentResults') {
+            console.log('📊 Tabela recebida!');
+          }
+          
           // PROCESSA RECENTRESULTS (TABELA COMPLETA)
           if (data.type === 'roulette.recentResults' || data.args?.recentResults) {
             const recentResults = data.args?.recentResults || [];
-            const numeros = [];
+            const numeros: number[] = [];
+            
             for (const item of recentResults) {
               if (Array.isArray(item) && item.length > 0) {
                 try {
@@ -62,6 +106,7 @@ export function RouletteDashboard() {
                 } catch {}
               }
             }
+            
             if (numeros.length > 0) {
               setHistory(numeros.slice(0, 500));
               setIsRealData(true);
@@ -100,7 +145,7 @@ export function RouletteDashboard() {
             });
           }
         } catch (e) {
-          // Ignora
+          // Ignora erros de parse
         }
       };
 
@@ -135,26 +180,20 @@ export function RouletteDashboard() {
           const data = await response.json();
           if (data.success && data.history && data.history.length > 0) {
             const realNumbers = data.history.map((item: any) => item.number);
-            if (realNumbers.length > 0) {
-              setHistory(prev => {
-                const novos = realNumbers.filter((n: number) => !prev.includes(n));
-                if (novos.length > 0) {
-                  console.log(`📊 +${novos.length} novos números reais`);
-                  setIsRealData(true);
-                  return [...novos, ...prev].slice(0, 500);
-                }
-                return prev;
-              });
+            if (realNumbers.length > 0 && realNumbers.length > history.length) {
+              setHistory(realNumbers.slice(0, 500));
+              setIsRealData(true);
+              console.log(`📊 Atualizado com ${realNumbers.length} números`);
             }
           }
         }
       } catch (error) {
         // Ignora
       }
-    }, 3000);
+    }, 5000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [history]);
 
   // ========== FUNÇÕES ==========
   const openGame = (slug: string) => {
@@ -169,7 +208,10 @@ export function RouletteDashboard() {
         .then(res => res.json())
         .then(data => {
           if (data.evo_session_id) {
+            console.log(`🔑 EVOSESSIONID recebido: ${data.evo_session_id.substring(0, 30)}...`);
             connectWebSocket(data.evo_session_id);
+          } else {
+            console.warn('⚠️ Nenhum EVOSESSIONID retornado');
           }
         })
         .catch(console.error);
@@ -183,6 +225,7 @@ export function RouletteDashboard() {
       wsRef.current.close();
       wsRef.current = null;
     }
+    setWsConnected(false);
   };
 
   const topNumbers = useMemo(() => {
@@ -254,6 +297,9 @@ export function RouletteDashboard() {
         )}
         {!isRealData && (
           <span className="text-yellow-400">⚠️ Aguardando primeiro número...</span>
+        )}
+        {evoSessionId && (
+          <span className="text-text-muted text-[8px]">ID: {evoSessionId.substring(0, 10)}...</span>
         )}
       </div>
 
