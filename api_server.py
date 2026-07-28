@@ -3,21 +3,22 @@ from flask_cors import CORS
 import requests
 import logging
 import os
-import re
 from datetime import datetime
 
+# ========== CRIA APP ==========
 app = Flask(__name__, static_folder='dist', static_url_path='')
 CORS(app)
 
+# ========== IMPORTAÇÕES ==========
 try:
     from db import db
-except:
+except Exception as e:
+    print(f"⚠️ Erro ao importar db: {e}")
     db = None
 
 from jwt_helper import jwt_manager
 from session_service import session_service
 from middleware import require_auth, optional_auth
-from scraping_service import scraping_service
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -33,6 +34,27 @@ session.headers.update({
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 })
 
+# ========== HISTÓRICO DE NÚMEROS (VAZIO INICIALMENTE) ==========
+historico_numeros = []
+
+def get_cor(numero):
+    """Retorna a cor do número"""
+    red = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]
+    if numero == 0:
+        return "green"
+    return "red" if numero in red else "black"
+
+def adicionar_numero_ao_historico(numero):
+    """Adiciona um número ao histórico"""
+    global historico_numeros
+    historico_numeros.append({
+        'number': numero,
+        'color': get_cor(numero),
+        'timestamp': datetime.now().isoformat()
+    })
+    if len(historico_numeros) > 500:
+        historico_numeros = historico_numeros[-500:]
+
 # ========== ROTA DE LOGIN ==========
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
@@ -43,6 +65,8 @@ def api_login():
         
         if not email or not password:
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
+        
+        print(f"🔐 Tentando login para: {email}")
         
         login_data = {
             "login": email,
@@ -65,6 +89,7 @@ def api_login():
         session.headers.update({'Authorization': f'Bearer {access_token_externo}'})
         
         user_id = str(result.get('user', {}).get('id', email))
+        
         jwt_token = jwt_manager.generate_token(user_id, email)
         refresh_token = jwt_manager.generate_refresh_token(user_id, email)
         
@@ -85,6 +110,7 @@ def api_login():
         }), 200
         
     except Exception as e:
+        logger.error(f"❌ Erro no login: {e}")
         return jsonify({'error': str(e)}), 500
 
 # ========== ROTA START-GAME ==========
@@ -118,22 +144,11 @@ def api_start_game():
             game_url = data.get('iframe_url') or data.get('gameURL')
             
             if game_url:
-                # 🔥 INICIA SCRAPING DO IFRAME
-                token = request.headers.get('Authorization', '').replace('Bearer ', '')
-                
-                # Extrai URL do iframe para scraping
-                iframe_url = game_url
-                scraping_service.set_iframe_url(iframe_url)
-                scraping_service.start_scraping(interval=3)
-                
-                print(f"🔍 Scraping do iframe iniciado!")
-                
                 return jsonify({
                     'success': True,
                     'slug': slug,
                     'gameURL': game_url,
-                    'iframe_url': game_url,
-                    'scraping': True
+                    'iframe_url': game_url
                 })
         
         return jsonify({'success': False, 'error': 'Não foi possível gerar o link'}), 404
@@ -142,27 +157,51 @@ def api_start_game():
         logger.error(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
-# ========== ROTA PARA NÚMEROS REAIS ==========
+# ========== ROTA PARA NÚMEROS ==========
 @app.route('/api/roulette/live', methods=['GET'])
 @require_auth
 def get_live_numbers():
+    """Retorna números da roleta (apenas o que foi adicionado via POST)"""
     try:
         limit = int(request.args.get('limit', 50))
-        history = scraping_service.get_history(limit)
-        last_numbers = scraping_service.get_last_numbers(10)
-        stats = scraping_service.get_statistics()
+        
+        history = historico_numeros[-limit:] if historico_numeros else []
+        last_numbers = [h['number'] for h in history[-10:]] if history else []
         
         return jsonify({
             'success': True,
-            'connected': scraping_service.running,
-            'total': len(history),
+            'connected': False,
+            'total': len(historico_numeros),
             'last_numbers': last_numbers,
             'history': history,
-            'statistics': stats,
             'timestamp': datetime.now().isoformat()
         }), 200
         
     except Exception as e:
+        logger.error(f"❌ Erro: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ========== ROTA PARA ADICIONAR NÚMERO ==========
+@app.route('/api/roulette/add', methods=['POST'])
+def add_number():
+    """Adiciona um número ao histórico"""
+    try:
+        data = request.json
+        number = data.get('number')
+        
+        if number is None or number < 0 or number > 36:
+            return jsonify({'error': 'Número inválido'}), 400
+        
+        adicionar_numero_ao_historico(number)
+        
+        return jsonify({
+            'success': True,
+            'number': number,
+            'total': len(historico_numeros)
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
 # ========== ROTA DE STATUS ==========
@@ -170,9 +209,8 @@ def get_live_numbers():
 @require_auth
 def get_status():
     return jsonify({
-        'scraping': scraping_service.running,
-        'total_numbers': scraping_service.total_numeros,
-        'last_numbers': scraping_service.get_last_numbers(5)
+        'total': len(historico_numeros),
+        'last_numbers': [h['number'] for h in historico_numeros[-10:]] if historico_numeros else []
     }), 200
 
 # ========== ROTA DE REFRESH ==========
@@ -215,7 +253,6 @@ def api_validate():
 @app.route('/api/auth/logout', methods=['POST'])
 @require_auth
 def api_logout():
-    scraping_service.stop_scraping()
     if db:
         session_service.deactivate_session(request.user_id)
     return jsonify({'success': True}), 200
@@ -233,8 +270,8 @@ def cleanup_expired_sessions():
     if db:
         try:
             session_service.cleanup_expired()
-        except:
-            pass
+        except Exception as e:
+            logger.error(f"❌ Erro ao limpar sessões: {e}")
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
@@ -247,17 +284,19 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - QA.AI (SCRAPING MODE)")
+    print("🎯 API PROXY - QA.AI (REST MODE - SEM NÚMEROS FALSOS)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
-    print("🔍 Scraping: Ativado!")
+    print("🗄️  Banco: NeonDB (PostgreSQL)")
+    print("🛡️  Auth: JWT + Refresh Token")
+    print("📊  Números: Vazios (aguardando POST /api/roulette/add)")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     
     if db:
         try:
             session_service.cleanup_expired()
-        except:
-            pass
+        except Exception as e:
+            print(f"⚠️ Erro ao limpar sessões: {e}")
     
     app.run(host='0.0.0.0', port=5000, debug=False)
