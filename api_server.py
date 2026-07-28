@@ -7,7 +7,7 @@ import json
 import re
 from datetime import datetime
 
-# ========== CRIA APP PRIMEIRO ==========
+# ========== CRIA APP ==========
 app = Flask(__name__, static_folder='dist', static_url_path='')
 CORS(app)
 
@@ -126,14 +126,15 @@ def api_start_game():
             game_url = data.get('iframe_url') or data.get('gameURL')
             
             if game_url:
-                # 🔑 CAPTURA O EVOSESSIONID DA URL
+                # 🔑 CAPTURA O EVOSESSIONID
                 token = request.headers.get('Authorization', '').replace('Bearer ', '')
                 evolution_ws.set_access_token(token)
                 
-                # EXTRAI E CONECTA AUTOMATICAMENTE
+                # EXTRAI EVOSESSIONID E CONECTA
                 evo_id = evolution_ws.set_game_url(game_url)
                 
-                print(f"🔑 EVOSESSIONID capturado e conectado!")
+                print(f"🔑 EVOSESSIONID capturado: {evo_id[:30] if evo_id else 'NENHUM'}...")
+                print(f"🔌 WebSocket conectado: {evolution_ws.connected}")
                 
                 return jsonify({
                     'success': True,
@@ -157,7 +158,6 @@ def get_live_numbers():
         limit = int(request.args.get('limit', 50))
         history = evolution_ws.get_history(limit)
         last_numbers = evolution_ws.get_last_numbers(10)
-        stats = evolution_ws.get_statistics()
         
         return jsonify({
             'success': True,
@@ -165,46 +165,7 @@ def get_live_numbers():
             'total': len(history),
             'last_numbers': last_numbers,
             'history': history,
-            'statistics': stats,
             'timestamp': datetime.now().isoformat()
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"❌ Erro: {e}")
-        return jsonify({'error': str(e)}), 500
-
-# ========== ROTA PARA ADICIONAR NÚMERO ==========
-@app.route('/api/roulette/add', methods=['POST'])
-def add_number():
-    try:
-        data = request.json
-        number = data.get('number')
-        
-        if number is None or number < 0 or number > 36:
-            return jsonify({'error': 'Número inválido'}), 400
-        
-        cor = "red" if number in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else "black" if number != 0 else "green"
-        
-        registro = {
-            'number': number,
-            'color': cor,
-            'timestamp': datetime.now().isoformat()
-        }
-        
-        evolution_ws.history.append(registro)
-        if len(evolution_ws.history) > 500:
-            evolution_ws.history = evolution_ws.history[-500:]
-        
-        evolution_ws.last_numbers.insert(0, number)
-        if len(evolution_ws.last_numbers) > 10:
-            evolution_ws.last_numbers = evolution_ws.last_numbers[:10]
-        
-        print(f"🎯 Número adicionado via API: {number}")
-        
-        return jsonify({
-            'success': True,
-            'number': number,
-            'total': len(evolution_ws.history)
         }), 200
         
     except Exception as e:
@@ -301,7 +262,6 @@ if __name__ == '__main__':
     print("🗄️  Banco: NeonDB (PostgreSQL)")
     print("🛡️  Auth: JWT + Refresh Token")
     print("🔌 WebSocket: Evolution AO VIVO")
-    print("📊  Números REAIS em tempo real")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     
