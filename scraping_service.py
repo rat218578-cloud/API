@@ -25,7 +25,7 @@ class ScrapingService:
     def set_iframe_url(self, url):
         """Define a URL do iframe para scraping"""
         self.iframe_url = url
-        logger.info(f"🔗 URL do iframe definida: {url[:80]}...")
+        logger.info(f"🔗 URL do iframe definida: {url[:100]}...")
         
     def extrair_numeros_do_html(self, html):
         """Extrai números do HTML do iframe"""
@@ -42,7 +42,7 @@ class ScrapingService:
                     if num.isdigit():
                         numeros.append(int(num))
             
-            # 2. spans com classe YLMNPL
+            # 2. spans com classe YLMNPL (números)
             for span in soup.find_all('span', class_='YLMNPL'):
                 try:
                     num = int(span.text.strip())
@@ -51,7 +51,17 @@ class ScrapingService:
                 except:
                     pass
             
-            # 3. Regex no texto
+            # 3. Classe statisticsBranding_black/red/green
+            for elem in soup.find_all(class_=re.compile(r'statisticsBranding')):
+                try:
+                    texto = elem.text.strip()
+                    num = int(texto)
+                    if 0 <= num <= 36:
+                        numeros.append(num)
+                except:
+                    pass
+            
+            # 4. Regex no texto
             texto = soup.get_text()
             nums = re.findall(r'\b([0-9]|[1-2][0-9]|3[0-6])\b', texto)
             for num in nums:
@@ -60,6 +70,9 @@ class ScrapingService:
             
             # Remove duplicatas mantendo ordem
             numeros = list(dict.fromkeys(numeros))
+            
+            if numeros:
+                logger.info(f"🔍 Extraídos {len(numeros)} números do HTML")
             
         except Exception as e:
             logger.error(f"❌ Erro ao extrair HTML: {e}")
@@ -93,7 +106,6 @@ class ScrapingService:
     def fetch_and_process(self):
         """Busca o iframe e processa os números"""
         if not self.iframe_url:
-            logger.warning("⚠️ URL do iframe não definida!")
             return
         
         try:
@@ -103,14 +115,12 @@ class ScrapingService:
                 if numeros:
                     self.processar_numeros(numeros)
                     return True
-            else:
-                logger.warning(f"⚠️ Status: {response.status_code}")
         except Exception as e:
             logger.error(f"❌ Erro: {e}")
         
         return False
     
-    def start_scraping(self, interval=2):
+    def start_scraping(self, interval=3):
         """Inicia o scraping contínuo"""
         self.running = True
         

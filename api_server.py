@@ -3,25 +3,21 @@ from flask_cors import CORS
 import requests
 import logging
 import os
-import json
 import re
 from datetime import datetime
 
-# ========== CRIA APP ==========
 app = Flask(__name__, static_folder='dist', static_url_path='')
 CORS(app)
 
-# ========== IMPORTAÇÕES ==========
 try:
     from db import db
-except Exception as e:
-    print(f"⚠️ Erro ao importar db: {e}")
+except:
     db = None
 
 from jwt_helper import jwt_manager
 from session_service import session_service
 from middleware import require_auth, optional_auth
-from websocket_service import evolution_ws
+from scraping_service import scraping_service
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -48,8 +44,6 @@ def api_login():
         if not email or not password:
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
         
-        print(f"🔐 Tentando login para: {email}")
-        
         login_data = {
             "login": email,
             "email": email,
@@ -71,7 +65,6 @@ def api_login():
         session.headers.update({'Authorization': f'Bearer {access_token_externo}'})
         
         user_id = str(result.get('user', {}).get('id', email))
-        
         jwt_token = jwt_manager.generate_token(user_id, email)
         refresh_token = jwt_manager.generate_refresh_token(user_id, email)
         
@@ -92,7 +85,6 @@ def api_login():
         }), 200
         
     except Exception as e:
-        logger.error(f"❌ Erro no login: {e}")
         return jsonify({'error': str(e)}), 500
 
 # ========== ROTA START-GAME ==========
@@ -126,22 +118,22 @@ def api_start_game():
             game_url = data.get('iframe_url') or data.get('gameURL')
             
             if game_url:
-                # 🔑 CAPTURA O EVOSESSIONID
+                # 🔥 INICIA SCRAPING DO IFRAME
                 token = request.headers.get('Authorization', '').replace('Bearer ', '')
-                evolution_ws.set_access_token(token)
                 
-                # EXTRAI EVOSESSIONID E CONECTA
-                evo_id = evolution_ws.set_game_url(game_url)
+                # Extrai URL do iframe para scraping
+                iframe_url = game_url
+                scraping_service.set_iframe_url(iframe_url)
+                scraping_service.start_scraping(interval=3)
                 
-                print(f"🔑 EVOSESSIONID capturado: {evo_id[:30] if evo_id else 'NENHUM'}...")
-                print(f"🔌 WebSocket conectado: {evolution_ws.connected}")
+                print(f"🔍 Scraping do iframe iniciado!")
                 
                 return jsonify({
                     'success': True,
                     'slug': slug,
                     'gameURL': game_url,
                     'iframe_url': game_url,
-                    'evo_session_id': evo_id
+                    'scraping': True
                 })
         
         return jsonify({'success': False, 'error': 'Não foi possível gerar o link'}), 404
@@ -156,32 +148,31 @@ def api_start_game():
 def get_live_numbers():
     try:
         limit = int(request.args.get('limit', 50))
-        history = evolution_ws.get_history(limit)
-        last_numbers = evolution_ws.get_last_numbers(10)
+        history = scraping_service.get_history(limit)
+        last_numbers = scraping_service.get_last_numbers(10)
+        stats = scraping_service.get_statistics()
         
         return jsonify({
             'success': True,
-            'connected': evolution_ws.connected,
+            'connected': scraping_service.running,
             'total': len(history),
             'last_numbers': last_numbers,
             'history': history,
+            'statistics': stats,
             'timestamp': datetime.now().isoformat()
         }), 200
         
     except Exception as e:
-        logger.error(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
 # ========== ROTA DE STATUS ==========
 @app.route('/api/roulette/status', methods=['GET'])
 @require_auth
-def get_ws_status():
+def get_status():
     return jsonify({
-        'connected': evolution_ws.connected,
-        'session_id': bool(evolution_ws.session_id),
-        'history_count': len(evolution_ws.history),
-        'last_numbers': evolution_ws.get_last_numbers(5),
-        'total_numbers': evolution_ws.total_numbers
+        'scraping': scraping_service.running,
+        'total_numbers': scraping_service.total_numeros,
+        'last_numbers': scraping_service.get_last_numbers(5)
     }), 200
 
 # ========== ROTA DE REFRESH ==========
@@ -224,7 +215,7 @@ def api_validate():
 @app.route('/api/auth/logout', methods=['POST'])
 @require_auth
 def api_logout():
-    evolution_ws.disconnect()
+    scraping_service.stop_scraping()
     if db:
         session_service.deactivate_session(request.user_id)
     return jsonify({'success': True}), 200
@@ -242,8 +233,8 @@ def cleanup_expired_sessions():
     if db:
         try:
             session_service.cleanup_expired()
-        except Exception as e:
-            logger.error(f"❌ Erro ao limpar sessões: {e}")
+        except:
+            pass
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
@@ -256,19 +247,17 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - QA.AI")
+    print("🎯 API PROXY - QA.AI (SCRAPING MODE)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
-    print("🗄️  Banco: NeonDB (PostgreSQL)")
-    print("🛡️  Auth: JWT + Refresh Token")
-    print("🔌 WebSocket: Evolution AO VIVO")
+    print("🔍 Scraping: Ativado!")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     
     if db:
         try:
             session_service.cleanup_expired()
-        except Exception as e:
-            print(f"⚠️ Erro ao limpar sessões: {e}")
+        except:
+            pass
     
     app.run(host='0.0.0.0', port=5000, debug=False)
