@@ -43,6 +43,8 @@ def api_login():
         if not email or not password:
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
         
+        logger.info(f"🔐 Tentando login para: {email}")
+        
         login_data = {
             "login": email,
             "email": email,
@@ -70,7 +72,8 @@ def api_login():
         if db:
             session_service.create_session(user_id, email, password, jwt_token, refresh_token)
         
-        # Inicia polling da Smart API
+        # 🔥 INICIA SMART API
+        logger.info(f"📧 Configurando Smart API para: {email}")
         smart_api.set_email(email)
         smart_api.start_polling(interval=3)
         
@@ -97,7 +100,6 @@ def api_login():
 def api_start_game():
     try:
         slug = request.args.get('slug')
-        
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
         
@@ -119,7 +121,6 @@ def api_start_game():
         if response.status_code == 200:
             data = response.json()
             game_url = data.get('iframe_url') or data.get('gameURL')
-            
             if game_url:
                 return jsonify({
                     'success': True,
@@ -138,7 +139,6 @@ def api_start_game():
 @app.route('/api/roulette/live', methods=['GET'])
 @require_auth
 def get_live_numbers():
-    """Retorna números da Smart API"""
     try:
         limit = int(request.args.get('limit', 50))
         history = smart_api.get_history(limit)
@@ -148,7 +148,7 @@ def get_live_numbers():
         return jsonify({
             'success': True,
             'connected': smart_api.running,
-            'total': len(history),
+            'total': smart_api.total_numeros,
             'last_numbers': [n['number'] for n in last_numbers],
             'history': history,
             'statistics': stats,
@@ -196,7 +196,7 @@ def api_me():
         }
     }), 200
 
-@app.route('/api/auth/validate', methods=['GET'])
+@app.route('/api/auth/validate', methods(['GET'])
 @require_auth
 def api_validate():
     return jsonify({
