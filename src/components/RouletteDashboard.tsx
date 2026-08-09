@@ -10,6 +10,9 @@ import {
 } from "../utils/roulette";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
+// ========== CONFIGURAÇÕES ==========
+const API_URL = "https://tool-api.smartanalise.com.br/api/history-delta";
+
 // ========== COMPONENTE ==========
 export function RouletteDashboard() {
   const [activeRoom, setActiveRoom] = useState(ROLETAS[0].id);
@@ -21,36 +24,64 @@ export function RouletteDashboard() {
   const [isConnected, setIsConnected] = useState(false);
   const [isRealData, setIsRealData] = useState(false);
   const [totalNumbers, setTotalNumbers] = useState(0);
+  const [lastSignalId, setLastSignalId] = useState<string | null>(null);
 
-  // ========== CARREGA HISTÓRICO DA SMART API ==========
-  const loadHistory = async () => {
+  // ========== BUSCAR NÚMEROS DA API ==========
+  const fetchNumbers = async (since: string | null = null) => {
     try {
-      const token = localStorage.getItem('access_token');
-      if (!token) {
-        setLoading(false);
-        return;
+      const email = localStorage.getItem('user_email') || 'gcriste268@gmail.com';
+      
+      let url = `${API_URL}?source=immersivevip&userEmail=${encodeURIComponent(email)}`;
+      if (since) {
+        url += `&since=${encodeURIComponent(since)}`;
       }
-
-      const response = await fetch('/api/roulette/live?limit=50', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('📊 Dados da Smart API:', data);
+      
+      console.log('📡 Buscando números da API:', url);
+      
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        console.error('❌ Erro na API:', response.status);
+        return [];
+      }
+      
+      const data = await response.json();
+      console.log('📦 Dados recebidos:', data);
+      
+      if (data.data && data.data.length > 0) {
+        const numbers = data.data.map((item: any) => parseInt(item.signal));
+        const validNumbers = numbers.filter(n => !isNaN(n) && n >= 0 && n <= 36);
         
-        if (data.success && data.history && data.history.length > 0) {
-          const numbers = data.history.map((item: any) => item.number);
-          setHistory(numbers);
-          setIsRealData(true);
-          setIsConnected(data.connected || false);
-          setTotalNumbers(data.total || numbers.length);
-          console.log(`✅ Carregados ${numbers.length} números da Smart API`);
-        } else {
-          console.warn('⚠️ Nenhum número retornado da Smart API');
+        // Atualiza último signalId
+        if (data.data.length > 0) {
+          setLastSignalId(data.data[0].signalId);
         }
+        
+        return validNumbers;
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('❌ Erro ao buscar números:', error);
+      return [];
+    }
+  };
+
+  // ========== CARREGA HISTÓRICO INICIAL ==========
+  const loadHistory = async () => {
+    setLoading(true);
+    
+    try {
+      const numbers = await fetchNumbers();
+      
+      if (numbers.length > 0) {
+        setHistory(numbers);
+        setIsRealData(true);
+        setIsConnected(true);
+        setTotalNumbers(numbers.length);
+        console.log(`✅ Carregados ${numbers.length} números da API`);
       } else {
-        console.error('❌ Erro ao carregar histórico:', response.status);
+        console.warn('⚠️ Nenhum número retornado da API');
       }
     } catch (error) {
       console.error('❌ Erro ao carregar histórico:', error);
@@ -67,24 +98,21 @@ export function RouletteDashboard() {
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const token = localStorage.getItem('access_token');
-        if (!token) return;
-
-        const response = await fetch('/api/roulette/live?limit=10', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.history && data.history.length > 0) {
-            const numbers = data.history.map((item: any) => item.number);
-            if (numbers.length > 0) {
-              setHistory(numbers.slice(0, 500));
-              setIsRealData(true);
-              setIsConnected(data.connected || false);
-              setTotalNumbers(data.total || numbers.length);
+        const numbers = await fetchNumbers(lastSignalId);
+        
+        if (numbers.length > 0) {
+          setHistory(prev => {
+            // Adiciona números novos que não existem
+            const novos = numbers.filter(n => !prev.includes(n));
+            if (novos.length > 0) {
+              console.log(`📊 +${novos.length} novos números`);
+              return [...novos, ...prev].slice(0, 500);
             }
-          }
+            return prev;
+          });
+          setIsRealData(true);
+          setIsConnected(true);
+          setTotalNumbers(prev => prev + numbers.length);
         }
       } catch (error) {
         // Ignora
@@ -92,14 +120,12 @@ export function RouletteDashboard() {
     }, 3000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [lastSignalId]);
 
   // ========== FUNÇÕES ==========
   const openGame = (slug: string) => {
     setSelectedSlug(slug);
     setShowVideo(true);
-    
-    // Força recarga do histórico ao abrir o jogo
     setTimeout(loadHistory, 2000);
   };
 
@@ -151,7 +177,7 @@ export function RouletteDashboard() {
       <div className="flex items-center gap-2 text-xs">
         <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
         <span className={isConnected ? 'text-emerald-400' : 'text-yellow-400'}>
-          {isConnected ? '📡 Smart API Conectada' : '⏳ Aguardando dados...'}
+          {isConnected ? '📡 API Conectada' : '⏳ Aguardando dados...'}
         </span>
         {isRealData && (
           <span className="text-emerald-400">✅ {totalNumbers} números</span>
