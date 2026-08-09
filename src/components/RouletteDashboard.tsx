@@ -13,6 +13,19 @@ import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 // ========== CONFIGURAÇÕES ==========
 const API_URL = "https://tool-api.smartanalise.com.br/api/history-delta";
 
+// ========== TIPOS ==========
+interface HistoryItem {
+  signalId: string;
+  gameId: string;
+  signal: string;
+  timestamp: string;
+}
+
+interface ApiResponse {
+  full: boolean;
+  data: HistoryItem[];
+}
+
 // ========== COMPONENTE ==========
 export function RouletteDashboard() {
   const [activeRoom, setActiveRoom] = useState(ROLETAS[0].id);
@@ -27,7 +40,7 @@ export function RouletteDashboard() {
   const [lastSignalId, setLastSignalId] = useState<string | null>(null);
 
   // ========== BUSCAR NÚMEROS DA API ==========
-  const fetchNumbers = async (since: string | null = null) => {
+  const fetchNumbers = async (since: string | null = null): Promise<number[]> => {
     try {
       const email = localStorage.getItem('user_email') || 'gcriste268@gmail.com';
       
@@ -45,14 +58,13 @@ export function RouletteDashboard() {
         return [];
       }
       
-      const data = await response.json();
+      const data: ApiResponse = await response.json();
       console.log('📦 Dados recebidos:', data);
       
       if (data.data && data.data.length > 0) {
-        const numbers = data.data.map((item: any) => parseInt(item.signal));
-        const validNumbers = numbers.filter(n => !isNaN(n) && n >= 0 && n <= 36);
+        const numbers = data.data.map((item: HistoryItem) => parseInt(item.signal));
+        const validNumbers = numbers.filter((n: number) => !isNaN(n) && n >= 0 && n <= 36);
         
-        // Atualiza último signalId
         if (data.data.length > 0) {
           setLastSignalId(data.data[0].signalId);
         }
@@ -101,9 +113,8 @@ export function RouletteDashboard() {
         const numbers = await fetchNumbers(lastSignalId);
         
         if (numbers.length > 0) {
-          setHistory(prev => {
-            // Adiciona números novos que não existem
-            const novos = numbers.filter(n => !prev.includes(n));
+          setHistory((prev: number[]) => {
+            const novos = numbers.filter((n: number) => !prev.includes(n));
             if (novos.length > 0) {
               console.log(`📊 +${novos.length} novos números`);
               return [...novos, ...prev].slice(0, 500);
@@ -112,7 +123,7 @@ export function RouletteDashboard() {
           });
           setIsRealData(true);
           setIsConnected(true);
-          setTotalNumbers(prev => prev + numbers.length);
+          setTotalNumbers((prev: number) => prev + numbers.length);
         }
       } catch (error) {
         // Ignora
@@ -139,7 +150,7 @@ export function RouletteDashboard() {
     
     const validHistory = sanitizeHistory(history);
     const counts: Record<number, number> = {};
-    validHistory.forEach((n) => {
+    validHistory.forEach((n: number) => {
       counts[n] = (counts[n] || 0) + 1;
     });
     return Object.entries(counts)
@@ -153,7 +164,7 @@ export function RouletteDashboard() {
     loadHistory();
   };
 
-  const getLastThree = () => {
+  const getLastThree = (): (number | string)[] => {
     if (!isRealData || history.length === 0) return ['--', '--', '--'];
     return history.slice(0, 3);
   };
@@ -320,7 +331,7 @@ export function RouletteDashboard() {
               </div>
             </div>
             <div className="flex items-center justify-center gap-3 text-center">
-              {lastThree.map((num, idx) => (
+              {lastThree.map((num: number | string, idx: number) => (
                 <div key={idx} className="text-center">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${num !== '--' ? getColorClass(Number(num)) : 'bg-bg-tertiary text-text-muted'}`}>
                     {num}
