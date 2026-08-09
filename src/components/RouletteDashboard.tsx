@@ -1,173 +1,51 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { SignalGenerator } from "./SignalGenerator";
 import { LiveGameView } from "./LiveGameView";
 import { ROLETAS } from "../services/gameLinkService";
 import {
   STRATEGIES,
   getNumberInfo,
-  getColorClass,
-  sanitizeHistory
+  getColorClass
 } from "../utils/roulette";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
-
-// ========== CONFIGURAÇÕES ==========
-const API_URL = "https://tool-api.smartanalise.com.br/api/history-delta";
-
-// ========== TIPOS ==========
-interface HistoryItem {
-  signalId: string;
-  gameId: string;
-  signal: string;
-  timestamp: string;
-}
-
-interface ApiResponse {
-  full: boolean;
-  data: HistoryItem[];
-}
+import { useSmartApi } from "../hooks/useSmartApi";
 
 // ========== COMPONENTE ==========
 export function RouletteDashboard() {
   const [activeRoom, setActiveRoom] = useState(ROLETAS[0].id);
-  const [history, setHistory] = useState<number[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [showVideo, setShowVideo] = useState(false);
   const [showCatalog, setShowCatalog] = useState(true);
-  const [isConnected, setIsConnected] = useState(false);
-  const [isRealData, setIsRealData] = useState(false);
-  const [totalNumbers, setTotalNumbers] = useState(0);
-  const [lastSignalId, setLastSignalId] = useState<string | null>(null);
+  const [email, setEmail] = useState('gcriste268@gmail.com');
 
-  // ========== PEGAR EMAIL ==========
-  const getUserEmail = (): string => {
-    // Tenta pegar do localStorage
-    const userData = localStorage.getItem('user_data');
-    if (userData) {
-      try {
-        const parsed = JSON.parse(userData);
-        if (parsed.email) return parsed.email;
-      } catch {}
-    }
-    // Fallback
-    return 'gcriste268@gmail.com';
-  };
-
-  // ========== BUSCAR NÚMEROS DA API DIRETA ==========
-  const fetchNumbers = async (since: string | null = null): Promise<number[]> => {
-    try {
-      const email = getUserEmail();
-      
-      let url = `${API_URL}?source=immersivevip&userEmail=${encodeURIComponent(email)}`;
-      if (since) {
-        url += `&since=${encodeURIComponent(since)}`;
-      }
-      
-      console.log('📡 Buscando números da API:', url);
-      
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        console.error('❌ Erro na API:', response.status);
-        return [];
-      }
-      
-      const data: ApiResponse = await response.json();
-      console.log('📦 Dados recebidos:', data.data?.length || 0, 'números');
-      
-      if (data.data && data.data.length > 0) {
-        const numbers = data.data.map((item: HistoryItem) => parseInt(item.signal));
-        const validNumbers = numbers.filter((n: number) => !isNaN(n) && n >= 0 && n <= 36);
-        
-        // Atualiza último signalId
-        if (data.data.length > 0) {
-          setLastSignalId(data.data[0].signalId);
-        }
-        
-        return validNumbers;
-      }
-      
-      return [];
-    } catch (error) {
-      console.error('❌ Erro ao buscar números:', error);
-      return [];
-    }
-  };
-
-  // ========== CARREGA HISTÓRICO INICIAL ==========
-  const loadHistory = async () => {
-    setLoading(true);
-    
-    try {
-      const numbers = await fetchNumbers();
-      
-      if (numbers.length > 0) {
-        setHistory(numbers);
-        setIsRealData(true);
-        setIsConnected(true);
-        setTotalNumbers(numbers.length);
-        console.log(`✅ Carregados ${numbers.length} números da API direta`);
-      } else {
-        console.warn('⚠️ Nenhum número retornado da API');
-        // Tenta novamente após 2 segundos
-        setTimeout(() => {
-          loadHistory();
-        }, 2000);
-      }
-    } catch (error) {
-      console.error('❌ Erro ao carregar histórico:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // ========== PEGAR EMAIL DO USUÁRIO ==========
   useEffect(() => {
-    loadHistory();
-    
-    // Tenta recarregar a cada 10 segundos se não tiver dados
-    const retryInterval = setInterval(() => {
-      if (!isRealData) {
-        loadHistory();
+    try {
+      const userData = localStorage.getItem('user_data');
+      if (userData) {
+        const parsed = JSON.parse(userData);
+        if (parsed.email) setEmail(parsed.email);
       }
-    }, 10000);
-    
-    return () => clearInterval(retryInterval);
+    } catch {}
   }, []);
 
-  // ========== POLLING PARA ATUALIZAR ==========
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const numbers = await fetchNumbers(lastSignalId);
-        
-        if (numbers.length > 0) {
-          setHistory((prev: number[]) => {
-            // Adiciona números novos
-            const novos = numbers.filter((n: number) => !prev.includes(n));
-            if (novos.length > 0) {
-              console.log(`📊 +${novos.length} novos números`);
-              return [...novos, ...prev].slice(0, 500);
-            }
-            return prev;
-          });
-          setIsRealData(true);
-          setIsConnected(true);
-          setTotalNumbers((prev: number) => prev + numbers.length);
-        }
-      } catch (error) {
-        // Ignora
-      }
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [lastSignalId]);
+  // ========== HOOK DA SMART API ==========
+  const {
+    numbers,
+    loading,
+    connected,
+    total,
+    getLastThree,
+    getTopNumbers,
+    getStatistics,
+    refresh
+  } = useSmartApi(email);
 
   // ========== FUNÇÕES ==========
   const openGame = (slug: string) => {
     setSelectedSlug(slug);
     setShowVideo(true);
-    // Força recarga do histórico
-    setTimeout(loadHistory, 3000);
+    setTimeout(refresh, 2000);
   };
 
   const closeGame = () => {
@@ -175,53 +53,32 @@ export function RouletteDashboard() {
     setSelectedSlug(null);
   };
 
-  const topNumbers = useMemo(() => {
-    if (!isRealData || history.length === 0) return [];
-    
-    const validHistory = sanitizeHistory(history);
-    const counts: Record<number, number> = {};
-    validHistory.forEach((n: number) => {
-      counts[n] = (counts[n] || 0) + 1;
-    });
-    return Object.entries(counts)
-      .map(([n, count]) => ({ number: Number(n), count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8);
-  }, [history, isRealData]);
-
-  const refreshHistory = () => {
-    setLoading(true);
-    loadHistory();
-  };
-
-  const getLastThree = (): (number | string)[] => {
-    if (!isRealData || history.length === 0) return ['--', '--', '--'];
-    return history.slice(0, 3);
-  };
+  const topNumbers = getTopNumbers();
+  const lastThree = getLastThree();
+  const stats = getStatistics();
+  const isRealData = numbers.length > 0;
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-accent-pink mx-auto mb-4" />
-          <p className="text-text-muted">Carregando dados da roleta...</p>
+          <p className="text-text-muted">Carregando dados da Smart API...</p>
         </div>
       </div>
     );
   }
 
-  const lastThree = getLastThree();
-
   return (
     <div className="p-4 space-y-4">
       {/* Status */}
       <div className="flex items-center gap-2 text-xs">
-        <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
-        <span className={isConnected ? 'text-emerald-400' : 'text-yellow-400'}>
-          {isConnected ? '📡 API Conectada' : '⏳ Aguardando dados...'}
+        <span className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
+        <span className={connected ? 'text-emerald-400' : 'text-yellow-400'}>
+          {connected ? '📡 Smart API Conectada' : '⏳ Aguardando dados...'}
         </span>
         {isRealData && (
-          <span className="text-emerald-400">✅ {totalNumbers} números</span>
+          <span className="text-emerald-400">✅ {total} números</span>
         )}
         {!isRealData && (
           <span className="text-yellow-400">⚠️ Aguardando números...</span>
@@ -263,7 +120,7 @@ export function RouletteDashboard() {
                 {showCatalog ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
               <button
-                onClick={refreshHistory}
+                onClick={refresh}
                 disabled={loading || !isRealData}
                 className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center gap-1"
               >
@@ -344,14 +201,14 @@ export function RouletteDashboard() {
             <div className="text-[10px] text-text-muted uppercase mb-2">Sequência atual</div>
             <div className="p-3 rounded-xl bg-gradient-to-r from-bg-tertiary to-bg-secondary border border-border-default text-center mb-3">
               <div className="text-xs font-bold text-text-primary">
-                {isRealData && history.length > 0 ? (
+                {isRealData && numbers.length > 0 ? (
                   <span className="flex items-center justify-center gap-2">
-                    <span className={`px-2 py-0.5 rounded ${getColorClass(history[0] || 0)} text-[10px] font-bold`}>
-                      {getNumberInfo(history[0] || 0).color.toUpperCase()}
+                    <span className={`px-2 py-0.5 rounded ${getColorClass(numbers[0] || 0)} text-[10px] font-bold`}>
+                      {getNumberInfo(numbers[0] || 0).color.toUpperCase()}
                     </span>
                     <span>—</span>
-                    <span className="text-text-secondary">{getNumberInfo(history[0] || 0).range.toUpperCase()}</span>
-                    {isConnected && (
+                    <span className="text-text-secondary">{getNumberInfo(numbers[0] || 0).range.toUpperCase()}</span>
+                    {connected && (
                       <span className="text-[8px] text-emerald-400">● REAL</span>
                     )}
                   </span>
@@ -361,7 +218,7 @@ export function RouletteDashboard() {
               </div>
             </div>
             <div className="flex items-center justify-center gap-3 text-center">
-              {lastThree.map((num: number | string, idx: number) => (
+              {lastThree.map((num, idx) => (
                 <div key={idx} className="text-center">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${num !== '--' ? getColorClass(Number(num)) : 'bg-bg-tertiary text-text-muted'}`}>
                     {num}
@@ -405,7 +262,7 @@ export function RouletteDashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-4">
-        <SignalGenerator history={isRealData ? history : []} />
+        <SignalGenerator history={isRealData ? numbers : []} />
       </div>
     </div>
   );
