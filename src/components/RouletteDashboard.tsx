@@ -39,10 +39,24 @@ export function RouletteDashboard() {
   const [totalNumbers, setTotalNumbers] = useState(0);
   const [lastSignalId, setLastSignalId] = useState<string | null>(null);
 
-  // ========== BUSCAR NÚMEROS DA API ==========
+  // ========== PEGAR EMAIL ==========
+  const getUserEmail = (): string => {
+    // Tenta pegar do localStorage
+    const userData = localStorage.getItem('user_data');
+    if (userData) {
+      try {
+        const parsed = JSON.parse(userData);
+        if (parsed.email) return parsed.email;
+      } catch {}
+    }
+    // Fallback
+    return 'gcriste268@gmail.com';
+  };
+
+  // ========== BUSCAR NÚMEROS DA API DIRETA ==========
   const fetchNumbers = async (since: string | null = null): Promise<number[]> => {
     try {
-      const email = localStorage.getItem('user_email') || 'gcriste268@gmail.com';
+      const email = getUserEmail();
       
       let url = `${API_URL}?source=immersivevip&userEmail=${encodeURIComponent(email)}`;
       if (since) {
@@ -59,12 +73,13 @@ export function RouletteDashboard() {
       }
       
       const data: ApiResponse = await response.json();
-      console.log('📦 Dados recebidos:', data);
+      console.log('📦 Dados recebidos:', data.data?.length || 0, 'números');
       
       if (data.data && data.data.length > 0) {
         const numbers = data.data.map((item: HistoryItem) => parseInt(item.signal));
         const validNumbers = numbers.filter((n: number) => !isNaN(n) && n >= 0 && n <= 36);
         
+        // Atualiza último signalId
         if (data.data.length > 0) {
           setLastSignalId(data.data[0].signalId);
         }
@@ -91,9 +106,13 @@ export function RouletteDashboard() {
         setIsRealData(true);
         setIsConnected(true);
         setTotalNumbers(numbers.length);
-        console.log(`✅ Carregados ${numbers.length} números da API`);
+        console.log(`✅ Carregados ${numbers.length} números da API direta`);
       } else {
         console.warn('⚠️ Nenhum número retornado da API');
+        // Tenta novamente após 2 segundos
+        setTimeout(() => {
+          loadHistory();
+        }, 2000);
       }
     } catch (error) {
       console.error('❌ Erro ao carregar histórico:', error);
@@ -104,6 +123,15 @@ export function RouletteDashboard() {
 
   useEffect(() => {
     loadHistory();
+    
+    // Tenta recarregar a cada 10 segundos se não tiver dados
+    const retryInterval = setInterval(() => {
+      if (!isRealData) {
+        loadHistory();
+      }
+    }, 10000);
+    
+    return () => clearInterval(retryInterval);
   }, []);
 
   // ========== POLLING PARA ATUALIZAR ==========
@@ -114,6 +142,7 @@ export function RouletteDashboard() {
         
         if (numbers.length > 0) {
           setHistory((prev: number[]) => {
+            // Adiciona números novos
             const novos = numbers.filter((n: number) => !prev.includes(n));
             if (novos.length > 0) {
               console.log(`📊 +${novos.length} novos números`);
@@ -137,7 +166,8 @@ export function RouletteDashboard() {
   const openGame = (slug: string) => {
     setSelectedSlug(slug);
     setShowVideo(true);
-    setTimeout(loadHistory, 2000);
+    // Força recarga do histórico
+    setTimeout(loadHistory, 3000);
   };
 
   const closeGame = () => {
