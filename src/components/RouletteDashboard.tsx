@@ -37,7 +37,6 @@ export function RouletteDashboard() {
     total,
     getLastThree,
     getTopNumbers,
-    getStatistics,
     refresh
   } = useSmartApi(email);
 
@@ -55,7 +54,6 @@ export function RouletteDashboard() {
 
   const topNumbers = getTopNumbers();
   const lastThree = getLastThree();
-  const stats = getStatistics();
   const isRealData = numbers.length > 0;
 
   if (loading) {
