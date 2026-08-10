@@ -1,10 +1,10 @@
-// ========== ROLETAS EVOLUTION ==========
+// ========== ROLETAS EVOLUTION COM SEUS SOURCES ==========
 export const ROLETAS = [
   { 
     id: 'lightning', 
     nome: '⚡ Lightning', 
     slug: 'evolution/lightning-roulette',
-    gameId: 'LightningTable01',
+    source: 'lightning',
     provedor: 'Evolution',
     cor: '#6C3CE1'
   },
@@ -12,7 +12,7 @@ export const ROLETAS = [
     id: 'immersive', 
     nome: '🎥 Imersiva', 
     slug: 'evolution/immersive-roulette',
-    gameId: 'ImmerRoulette0001',
+    source: 'immersive',
     provedor: 'Evolution',
     cor: '#6C3CE1'
   },
@@ -20,10 +20,74 @@ export const ROLETAS = [
     id: 'brasileira', 
     nome: '🇧🇷 Brasileira', 
     slug: 'evolution/brasileira',
-    gameId: 'PorROULigh000001',
+    source: 'brasileira',
     provedor: 'Evolution',
     cor: '#6C3CE1'
-  }
+  },
+  { 
+    id: 'aovivo', 
+    nome: '🎰 Ao Vivo', 
+    slug: 'evolution/ao-vivo',
+    source: 'aovivo',
+    provedor: 'Evolution',
+    cor: '#6C3CE1'
+  },
+  { 
+    id: 'speed', 
+    nome: '🏃 Speed', 
+    slug: 'evolution/speed-roulette',
+    source: 'speed',
+    provedor: 'Evolution',
+    cor: '#6C3CE1'
+  },
+  { 
+    id: 'xxxtreme', 
+    nome: '💥 XXXtreme', 
+    slug: 'evolution/xxxtreme-lightning-roulette',
+    source: 'xxxtreme',
+    provedor: 'Evolution',
+    cor: '#6C3CE1'
+  },
+  { 
+    id: 'vip', 
+    nome: '👑 Vip', 
+    slug: 'evolution/vip-roulette',
+    source: 'vip',
+    provedor: 'Evolution',
+    cor: '#6C3CE1'
+  },
+  { 
+    id: 'vipauto', 
+    nome: '🤖 Vip Auto', 
+    slug: 'evolution/vip-auto-roulette',
+    source: 'vipauto',
+    provedor: 'Evolution',
+    cor: '#6C3CE1'
+  },
+  { 
+    id: 'speedauto', 
+    nome: '🏃 Speed Auto', 
+    slug: 'evolution/speed-auto-roulette',
+    source: 'speedauto',
+    provedor: 'Evolution',
+    cor: '#6C3CE1'
+  },
+  { 
+    id: 'relampago', 
+    nome: '⚡ Relâmpago', 
+    slug: 'evolution/relampago-roulette',
+    source: 'relampago',
+    provedor: 'Evolution',
+    cor: '#6C3CE1'
+  },
+  { 
+    id: 'brasilPlay', 
+    nome: '🇧🇷 Brasil Play', 
+    slug: 'evolution/brasil-play',
+    source: 'brasilPlay',
+    provedor: 'Playtech',
+    cor: '#6C3CE1'
+  },
 ];
 
 class GameLinkService {
@@ -63,8 +127,6 @@ class GameLinkService {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`❌ HTTP ${response.status}: ${errorText}`);
-        
-        // Se for 401, tenta renovar
         if (response.status === 401) {
           const refreshToken = localStorage.getItem('refresh_token');
           if (refreshToken) {
@@ -107,6 +169,11 @@ class GameLinkService {
   clearAllCache(): void {
     this.gameUrls = {};
     console.log('🗑️ Todos os caches limpos');
+  }
+
+  getSourceBySlug(slug: string): string | null {
+    const roleta = ROLETAS.find(r => r.slug === slug);
+    return roleta?.source || null;
   }
 }
 

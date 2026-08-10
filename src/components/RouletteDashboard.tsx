@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { SignalGenerator } from "./SignalGenerator";
 import { LiveGameView } from "./LiveGameView";
-import { ROLETAS } from "../services/gameLinkService";
+import { ROLETAS, gameLinkService } from "../services/gameLinkService";
 import {
   STRATEGIES,
   getNumberInfo,
@@ -22,17 +22,11 @@ export function RouletteDashboard() {
   const [isRealData, setIsRealData] = useState(false);
   const [totalNumbers, setTotalNumbers] = useState(0);
   const [topNumbersList, setTopNumbersList] = useState<{number: number, count: number}[]>([]);
+  const [currentSource, setCurrentSource] = useState<string | null>(null);
 
-  // ========== QUAL MESA TEM NÚMEROS REAIS? ==========
-  // Só a mesa Imersiva (slug: evolution/immersive-roulette) tem números reais
-  const hasRealNumbers = (slug: string) => {
-    return slug === 'evolution/immersive-roulette';
-  };
-
-  // ========== BUSCAR NÚMEROS REAIS DO BACKEND ==========
-  const fetchNumbers = async () => {
-    // Só busca números reais se for a mesa Imersiva
-    if (!hasRealNumbers(selectedSlug || '')) {
+  // ========== BUSCAR NÚMEROS POR SOURCE ==========
+  const fetchNumbers = async (source: string | null) => {
+    if (!source) {
       setLoading(false);
       setHistory([]);
       setIsRealData(false);
@@ -46,34 +40,49 @@ export function RouletteDashboard() {
         return;
       }
 
-      const response = await fetch('/api/roulette/live?limit=50', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const email = localStorage.getItem('user_email') || 'gcriste268@gmail.com';
+      const url = `https://tool-api.smartanalise.com.br/api/history-delta?source=${source}&userEmail=${encodeURIComponent(email)}`;
+      
+      console.log(`📡 Buscando números para source: ${source}`);
+      
+      const response = await fetch(url);
 
       if (response.ok) {
         const data = await response.json();
-        console.log('📊 Dados da API Games:', data);
+        console.log(`📊 Dados do source ${source}:`, data);
         
-        if (data.success && data.history && data.history.length > 0) {
-          const numbers = data.history.map((item: any) => item.number);
-          setHistory(numbers);
+        if (data.data && data.data.length > 0) {
+          const numbers = data.data.map((item: any) => parseInt(item.signal));
+          const validNumbers = numbers.filter((n: number) => !isNaN(n) && n >= 0 && n <= 36);
+          setHistory(validNumbers);
           setIsRealData(true);
-          setIsConnected(data.connected || false);
-          setTotalNumbers(data.total || numbers.length);
-          setTopNumbersList(data.top_numbers || []);
-          console.log(`✅ Carregados ${numbers.length} números REAIS da Imersiva`);
+          setIsConnected(true);
+          setTotalNumbers(validNumbers.length);
+          
+          // Calcula top numbers
+          const counts: Record<number, number> = {};
+          validNumbers.forEach((n: number) => {
+            counts[n] = (counts[n] || 0) + 1;
+          });
+          const top = Object.entries(counts)
+            .map(([n, count]) => ({ number: Number(n), count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 8);
+          setTopNumbersList(top);
+          
+          console.log(`✅ Carregados ${validNumbers.length} números do source ${source}`);
         } else {
-          console.warn('⚠️ Nenhum número real disponível para Imersiva');
+          console.warn(`⚠️ Nenhum número para source ${source}`);
           setHistory([]);
           setIsRealData(false);
         }
       } else {
-        console.error('❌ Erro ao carregar histórico:', response.status);
+        console.error(`❌ Erro ao carregar source ${source}:`, response.status);
         setHistory([]);
         setIsRealData(false);
       }
     } catch (error) {
-      console.error('❌ Erro ao carregar histórico:', error);
+      console.error(`❌ Erro ao carregar source ${source}:`, error);
       setHistory([]);
       setIsRealData(false);
     } finally {
@@ -81,36 +90,48 @@ export function RouletteDashboard() {
     }
   };
 
+  // ========== CARREGA QUANDO MUDA A MESA ==========
   useEffect(() => {
-    fetchNumbers();
-  }, [selectedSlug]); // Recarrega quando muda a mesa
+    if (selectedSlug) {
+      const source = gameLinkService.getSourceBySlug(selectedSlug);
+      setCurrentSource(source);
+      fetchNumbers(source);
+    }
+  }, [selectedSlug]);
 
   // ========== POLLING PARA ATUALIZAR ==========
   useEffect(() => {
-    // Só faz polling se for a mesa Imersiva
-    if (!hasRealNumbers(selectedSlug || '')) {
-      return;
-    }
+    if (!currentSource) return;
 
     const interval = setInterval(async () => {
       try {
         const token = localStorage.getItem('access_token');
         if (!token) return;
 
-        const response = await fetch('/api/roulette/live?limit=10', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-
+        const email = localStorage.getItem('user_email') || 'gcriste268@gmail.com';
+        const url = `https://tool-api.smartanalise.com.br/api/history-delta?source=${currentSource}&userEmail=${encodeURIComponent(email)}`;
+        
+        const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
-          if (data.success && data.history && data.history.length > 0) {
-            const numbers = data.history.map((item: any) => item.number);
-            if (numbers.length > 0) {
-              setHistory(numbers.slice(0, 500));
+          if (data.data && data.data.length > 0) {
+            const numbers = data.data.map((item: any) => parseInt(item.signal));
+            const validNumbers = numbers.filter((n: number) => !isNaN(n) && n >= 0 && n <= 36);
+            if (validNumbers.length > 0) {
+              setHistory(validNumbers);
               setIsRealData(true);
-              setIsConnected(data.connected || false);
-              setTotalNumbers(data.total || numbers.length);
-              setTopNumbersList(data.top_numbers || []);
+              setIsConnected(true);
+              setTotalNumbers(validNumbers.length);
+              
+              const counts: Record<number, number> = {};
+              validNumbers.forEach((n: number) => {
+                counts[n] = (counts[n] || 0) + 1;
+              });
+              const top = Object.entries(counts)
+                .map(([n, count]) => ({ number: Number(n), count }))
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 8);
+              setTopNumbersList(top);
             }
           }
         }
@@ -120,52 +141,31 @@ export function RouletteDashboard() {
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [selectedSlug]);
+  }, [currentSource]);
 
   // ========== FUNÇÕES ==========
   const openGame = (slug: string) => {
     setSelectedSlug(slug);
     setShowVideo(true);
-    // Se for Imersiva, carrega números reais
-    if (hasRealNumbers(slug)) {
-      setTimeout(fetchNumbers, 2000);
-    } else {
-      // Outras mesas - sem números
-      setHistory([]);
-      setIsRealData(false);
-      setLoading(false);
-    }
   };
 
   const closeGame = () => {
     setShowVideo(false);
     setSelectedSlug(null);
+    setCurrentSource(null);
     setHistory([]);
     setIsRealData(false);
   };
 
   const topNumbers = useMemo(() => {
     if (!isRealData || history.length === 0) return [];
-    
-    if (topNumbersList.length > 0) {
-      return topNumbersList;
-    }
-    
-    const validHistory = sanitizeHistory(history);
-    const counts: Record<number, number> = {};
-    validHistory.forEach((n) => {
-      counts[n] = (counts[n] || 0) + 1;
-    });
-    return Object.entries(counts)
-      .map(([n, count]) => ({ number: Number(n), count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8);
+    return topNumbersList;
   }, [history, isRealData, topNumbersList]);
 
   const refreshHistory = () => {
-    if (!hasRealNumbers(selectedSlug || '')) return;
+    if (!currentSource) return;
     setLoading(true);
-    fetchNumbers();
+    fetchNumbers(currentSource);
   };
 
   const getLastThree = () => {
@@ -185,7 +185,7 @@ export function RouletteDashboard() {
   }
 
   const lastThree = getLastThree();
-  const isImersiva = hasRealNumbers(selectedSlug || '');
+  const roletaAtual = ROLETAS.find(r => r.slug === selectedSlug);
 
   return (
     <div className="p-4 space-y-4">
@@ -193,10 +193,13 @@ export function RouletteDashboard() {
       <div className="flex items-center gap-2 text-xs">
         <span className={`w-2 h-2 rounded-full ${isConnected && isRealData ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
         <span className={isConnected && isRealData ? 'text-emerald-400' : 'text-yellow-400'}>
-          {isConnected && isRealData ? '📡 Números REAIS (Imersiva)' : isImersiva ? '⏳ Aguardando números reais...' : '📊 Mesa sem números reais'}
+          {isConnected && isRealData ? `📡 ${roletaAtual?.nome || 'Números'} REAIS` : '⏳ Aguardando dados...'}
         </span>
         {isRealData && (
           <span className="text-emerald-400">✅ {totalNumbers} números</span>
+        )}
+        {currentSource && (
+          <span className="text-text-muted text-[8px]">source: {currentSource}</span>
         )}
       </div>
 
@@ -216,7 +219,7 @@ export function RouletteDashboard() {
           >
             <span className={`w-2 h-2 rounded-full ${activeRoom === r.id ? 'bg-emerald-500 animate-pulse' : 'bg-text-muted'}`} />
             {r.nome}
-            {hasRealNumbers(r.slug) && activeRoom === r.id && isRealData && (
+            {activeRoom === r.id && isRealData && (
               <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">REAL</span>
             )}
           </button>
@@ -237,7 +240,7 @@ export function RouletteDashboard() {
               >
                 {showCatalog ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
-              {isImersiva && (
+              {currentSource && (
                 <button
                   onClick={refreshHistory}
                   disabled={loading}
@@ -288,7 +291,7 @@ export function RouletteDashboard() {
                 })
               ) : (
                 <div className="text-center py-4 text-text-muted text-xs">
-                  {isImersiva ? '⏳ Aguardando números reais...' : '📊 Selecione a Imersiva para números reais'}
+                  ⏳ Aguardando números...
                 </div>
               )}
             </div>
@@ -331,7 +334,7 @@ export function RouletteDashboard() {
                     <span className="text-[8px] text-emerald-400">● REAL</span>
                   </span>
                 ) : (
-                  <span className="text-yellow-400">{isImersiva ? '⏳ Aguardando...' : '📊 Sem dados'}</span>
+                  <span className="text-yellow-400">⏳ Aguardando...</span>
                 )}
               </div>
             </div>
@@ -350,7 +353,7 @@ export function RouletteDashboard() {
             <div className="mt-3 p-2 rounded-lg bg-bg-tertiary border border-border-default text-center">
               <div className="text-[10px] text-text-muted">Tendência</div>
               <div className="text-sm font-bold text-emerald-400">
-                {isRealData ? '⬆ Forte' : isImersiva ? '⏳ Aguardando...' : '📊 Sem dados'}
+                {isRealData ? '⬆ Forte' : '⏳ Aguardando...'}
               </div>
             </div>
           </div>
