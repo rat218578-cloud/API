@@ -209,8 +209,9 @@ export function RouletteDashboard() {
         ))}
       </div>
 
-      {/* VÍDEO - SEMPRE VISÍVEL */}
+      {/* CATÁLOGO + VÍDEO + GRUPOS */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+        {/* ========== CATÁLOGO COMPLETO ========== */}
         {showRealData && (
           <div className={`xl:col-span-2 transition-all duration-300 ${showCatalog ? 'block' : 'hidden xl:block'}`}>
             <div className="bg-bg-card border border-border-default rounded-2xl p-3">
@@ -231,11 +232,12 @@ export function RouletteDashboard() {
                     className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center gap-1"
                   >
                     {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
-                    REAL
+                    {isRealData ? 'REAL' : '⏳'}
                   </button>
                 )}
               </div>
 
+              {/* Estratégias */}
               <div className="grid grid-cols-3 gap-1.5 mb-3">
                 {STRATEGIES.slice(0, 3).map((s) => (
                   <div
@@ -251,6 +253,7 @@ export function RouletteDashboard() {
                 ))}
               </div>
 
+              {/* Tabela de números */}
               <div className="space-y-1 max-h-[200px] overflow-y-auto">
                 <div className="grid grid-cols-6 text-[8px] text-text-muted uppercase py-1 border-b border-border-default text-center">
                   <span>N</span><span>A/B</span><span>I/P</span><span>COL</span><span>DUZ</span><span>SET</span>
@@ -283,7 +286,7 @@ export function RouletteDashboard() {
           </div>
         )}
 
-        {/* VÍDEO */}
+        {/* ========== VÍDEO ========== */}
         <div className={showRealData ? "xl:col-span-7" : "xl:col-span-12"}>
           {selectedSlug ? (
             <LiveGameView
@@ -302,9 +305,10 @@ export function RouletteDashboard() {
           )}
         </div>
 
-        {/* GRUPOS E ASSERTIVIDADE */}
+        {/* ========== GRUPOS E ASSERTIVIDADE ========== */}
         {showRealData && (
           <div className="xl:col-span-3 space-y-4">
+            {/* GRUPOS */}
             <div className="bg-bg-card border border-border-default rounded-2xl p-4">
               <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">📈 Grupos</h3>
               <div className="text-[10px] text-text-muted uppercase mb-2">Sequência atual</div>
@@ -344,6 +348,7 @@ export function RouletteDashboard() {
               </div>
             </div>
 
+            {/* ASSERTIVIDADE */}
             <div className="bg-bg-card border border-border-default rounded-2xl p-4">
               <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">🎯 Assertividade</h3>
               <div className="space-y-3">
@@ -369,7 +374,7 @@ export function RouletteDashboard() {
         )}
       </div>
 
-      {/* SIGNAL GENERATOR */}
+      {/* ========== SIGNAL GENERATOR ========== */}
       {showRealData && (
         <div className="grid grid-cols-1 gap-4">
           <SignalGenerator history={isRealData ? history : []} />
