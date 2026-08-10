@@ -97,7 +97,7 @@ export function RouletteDashboard() {
     }
   }, [selectedSlug]);
 
-  // ========== POLLING PARA ATUALIZAR ==========
+  // ========== POLLING ==========
   useEffect(() => {
     if (!currentSource) return;
 
