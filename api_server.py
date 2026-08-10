@@ -103,9 +103,12 @@ def api_start_game():
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
         
+        # Pega o token da sessão (já injetado pelo middleware)
         auth_header = session.headers.get('Authorization')
         if not auth_header:
             return jsonify({'error': 'Token não encontrado'}), 401
+        
+        logger.info(f"🎮 Gerando link para: {slug}")
         
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
@@ -144,6 +147,13 @@ def get_live_numbers():
         history = smart_api.get_history(limit)
         last_numbers = smart_api.get_last_numbers(10)
         stats = smart_api.get_statistics()
+        
+        # Se não tem números, tenta buscar
+        if not history:
+            smart_api.fetch_numbers()
+            history = smart_api.get_history(limit)
+            last_numbers = smart_api.get_last_numbers(10)
+            stats = smart_api.get_statistics()
         
         return jsonify({
             'success': True,
@@ -196,7 +206,7 @@ def api_me():
         }
     }), 200
 
-@app.route('/api/auth/validate', methods=['GET'])  # <--- CORRIGIDO!
+@app.route('/api/auth/validate', methods=['GET'])
 @require_auth
 def api_validate():
     return jsonify({

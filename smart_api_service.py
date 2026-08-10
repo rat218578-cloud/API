@@ -29,18 +29,12 @@ class SmartApiService:
             return []
         
         try:
-            # HEADERS COMPLETOS
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'application/json, text/plain, */*',
                 'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive',
                 'Referer': 'https://tool.smartanalise.com.br/',
-                'Origin': 'https://tool.smartanalise.com.br',
-                'Sec-Fetch-Dest': 'empty',
-                'Sec-Fetch-Mode': 'cors',
-                'Sec-Fetch-Site': 'cross-site'
+                'Origin': 'https://tool.smartanalise.com.br'
             }
             
             params = {
@@ -53,7 +47,6 @@ class SmartApiService:
             
             url = f"{self.base_url}/history-delta"
             logger.info(f"📡 GET: {url}")
-            logger.info(f"📧 Email: {self.email}")
             
             response = requests.get(
                 url,
@@ -66,7 +59,7 @@ class SmartApiService:
             
             if response.status_code == 200:
                 data = response.json()
-                logger.info(f"📦 Dados: {len(data.get('data', []))} números")
+                logger.info(f"📦 {len(data.get('data', []))} números recebidos")
                 
                 numeros = []
                 for item in data.get("data", []):
@@ -90,7 +83,7 @@ class SmartApiService:
                 
                 return numeros
             else:
-                logger.warning(f"⚠️ Status {response.status_code}: {response.text[:200]}")
+                logger.warning(f"⚠️ Status {response.status_code}")
                 return []
                 
         except Exception as e:
@@ -170,5 +163,4 @@ class SmartApiService:
             'last_numbers': [n['number'] for n in self.get_last_numbers(10)]
         }
 
-# Instância global
 smart_api = SmartApiService()
