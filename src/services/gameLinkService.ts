@@ -1,85 +1,29 @@
-// ========== ROLETAS EVOLUTION COM SEUS SOURCES ==========
+// ========== ROLETAS EVOLUTION ==========
 export const ROLETAS = [
   { 
     id: 'lightning', 
-    nome: '⚡ Lightning Roulette - Evolution', 
+    nome: '⚡ Lightning', 
     slug: 'evolution/lightning-roulette',
-    source: 'lightning',
+    gameId: 'LightningTable01',
     provedor: 'Evolution',
     cor: '#6C3CE1'
   },
   { 
     id: 'immersive', 
-    nome: '🎥 Immersive Vip - Evolution', 
+    nome: '🎥 Imersiva', 
     slug: 'evolution/immersive-roulette',
-    source: 'immersive',
+    gameId: 'ImmerRoulette0001',
     provedor: 'Evolution',
     cor: '#6C3CE1'
   },
   { 
     id: 'brasileira', 
-    nome: '🇧🇷 BR Roleta Brasileira - Pragmatic', 
+    nome: '🇧🇷 Brasileira', 
     slug: 'evolution/brasileira',
-    source: 'brasileira',
-    provedor: 'Pragmatic',
-    cor: '#6C3CE1'
-  },
-  { 
-    id: 'aovivo', 
-    nome: '🎰 Roleta ao Vivo - Evolution', 
-    slug: 'evolution/ao-vivo',
-    source: 'aovivo',
+    gameId: 'PorROULigh000001',
     provedor: 'Evolution',
     cor: '#6C3CE1'
-  },
-  { 
-    id: 'speed', 
-    nome: '🏃 Speed Roulette - Evolution', 
-    slug: 'evolution/speed-roulette',
-    source: 'speed',
-    provedor: 'Evolution',
-    cor: '#6C3CE1'
-  },
-  { 
-    id: 'xxxtreme', 
-    nome: '💥 XXXtreme Lightning - Evolution', 
-    slug: 'evolution/xxxtreme-lightning-roulette',
-    source: 'xxxtreme',
-    provedor: 'Evolution',
-    cor: '#6C3CE1'
-  },
-  { 
-    id: 'vip', 
-    nome: '👑 Roleta Vip - Evolution', 
-    slug: 'evolution/vip-roulette',
-    source: 'vip',
-    provedor: 'Evolution',
-    cor: '#6C3CE1'
-  },
-  { 
-    id: 'vipauto', 
-    nome: '🤖 Auto Roulette Vip - Evolution', 
-    slug: 'evolution/vip-auto-roulette',
-    source: 'vipauto',
-    provedor: 'Evolution',
-    cor: '#6C3CE1'
-  },
-  { 
-    id: 'speedauto', 
-    nome: '🏃 Speed Auto Roulette - Evolution', 
-    slug: 'evolution/speed-auto-roulette',
-    source: 'speedauto',
-    provedor: 'Evolution',
-    cor: '#6C3CE1'
-  },
-  { 
-    id: 'brasilPlay', 
-    nome: '🇧🇷 Roleta Brasileira - Playtech', 
-    slug: 'evolution/brasil-play',
-    source: 'brasilPlay',
-    provedor: 'Playtech',
-    cor: '#6C3CE1'
-  },
+  }
 ];
 
 class GameLinkService {
@@ -164,8 +108,11 @@ class GameLinkService {
   }
 
   getSourceBySlug(slug: string): string | null {
-    const roleta = ROLETAS.find(r => r.slug === slug);
-    return roleta?.source || null;
+    // Só a Imersiva tem números reais
+    if (slug === 'evolution/immersive-roulette') {
+      return 'immersivevip';
+    }
+    return null;
   }
 }
 
