@@ -36,7 +36,6 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
         return;
       }
 
-      // Usa o gameLinkService com o token
       const url = await gameLinkService.getGameUrl(slug);
       if (url) {
         setGameUrl(url);
@@ -124,12 +123,12 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
         </div>
       </div>
 
-      <div className="relative bg-black" style={{ minHeight: '500px', height: '65vh' }}>
+      <div className="relative bg-black" style={{ minHeight: '400px', height: '60vh' }}>
         {loading ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
               <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4" style={{ color: cor }} />
-              <p className="text-text-muted text-sm">Carregando...</p>
+              <p className="text-text-muted text-sm">Carregando jogo...</p>
             </div>
           </div>
         ) : error ? (
@@ -151,7 +150,7 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
             src={gameUrl}
             className="w-full h-full border-0"
             allow="autoplay; fullscreen; camera; microphone; accelerometer; gyroscope"
-            loading="lazy"
+            loading="eager"
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-orientation-lock"
           />
         ) : (
