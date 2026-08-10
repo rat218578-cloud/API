@@ -15,7 +15,6 @@ export function RouletteDashboard() {
   const [history, setHistory] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
-  const [showVideo, setShowVideo] = useState(false);
   const [showCatalog, setShowCatalog] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [isRealData, setIsRealData] = useState(false);
@@ -23,14 +22,14 @@ export function RouletteDashboard() {
   const [topNumbersList, setTopNumbersList] = useState<{number: number, count: number}[]>([]);
   const [currentSource, setCurrentSource] = useState<string | null>(null);
 
-  // ========== SOURCE QUE TEM NÚMEROS REAIS ==========
+  // ========== TODAS AS ROLETAS TÊM NÚMEROS REAIS ==========
   const hasRealNumbers = (source: string | null) => {
-    return source === 'immersive';
+    return source !== null; // Todas as roletas com source têm números
   };
 
   // ========== BUSCAR NÚMEROS POR SOURCE ==========
   const fetchNumbers = async (source: string | null) => {
-    if (!source || !hasRealNumbers(source)) {
+    if (!source) {
       setLoading(false);
       setHistory([]);
       setIsRealData(false);
@@ -72,12 +71,16 @@ export function RouletteDashboard() {
             .sort((a, b) => b.count - a.count)
             .slice(0, 8);
           setTopNumbersList(top);
+          
+          console.log(`✅ Carregados ${validNumbers.length} números do source ${source}`);
         } else {
+          console.warn(`⚠️ Nenhum número para source ${source}`);
           setHistory([]);
           setIsRealData(false);
           setIsConnected(false);
         }
       } else {
+        console.error(`❌ Erro ao carregar source ${source}:`, response.status);
         setHistory([]);
         setIsRealData(false);
         setIsConnected(false);
@@ -102,9 +105,9 @@ export function RouletteDashboard() {
     }
   }, [selectedSlug]);
 
-  // ========== POLLING ==========
+  // ========== POLLING PARA ATUALIZAR ==========
   useEffect(() => {
-    if (!currentSource || !hasRealNumbers(currentSource)) return;
+    if (!currentSource) return;
 
     const interval = setInterval(async () => {
       try {
@@ -149,11 +152,9 @@ export function RouletteDashboard() {
   // ========== FUNÇÕES ==========
   const openGame = (slug: string) => {
     setSelectedSlug(slug);
-    setShowVideo(true);
   };
 
   const closeGame = () => {
-    setShowVideo(false);
     setSelectedSlug(null);
     setCurrentSource(null);
     setHistory([]);
@@ -168,7 +169,7 @@ export function RouletteDashboard() {
   }, [history, isRealData, topNumbersList]);
 
   const refreshHistory = () => {
-    if (!currentSource || !hasRealNumbers(currentSource)) return;
+    if (!currentSource) return;
     setLoading(true);
     fetchNumbers(currentSource);
   };
@@ -183,7 +184,6 @@ export function RouletteDashboard() {
 
   const lastThree = getLastThree();
 
-  // ========== SEMPRE MOSTRA O VÍDEO QUANDO UMA ROLETA É SELECIONADA ==========
   return (
     <div className="p-4 space-y-4">
       {/* Status */}
@@ -221,15 +221,15 @@ export function RouletteDashboard() {
         ))}
       </div>
 
-      {/* VÍDEO - SEMPRE VISÍVEL QUANDO UMA ROLETA É SELECIONADA */}
+      {/* VÍDEO + CATÁLOGO + GRUPOS */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        {/* CATÁLOGO - Só aparece se tiver números reais */}
+        {/* CATÁLOGO - aparece se tiver números reais */}
         {showRealData && (
           <div className={`xl:col-span-2 transition-all duration-300 ${showCatalog ? 'block' : 'hidden xl:block'}`}>
             <div className="bg-bg-card border border-border-default rounded-2xl p-3">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider">
-                  📊 Catalogo 🔴
+                  📊 Catalogo {isRealData ? '🔴' : '⏳'}
                 </h3>
                 <button 
                   onClick={() => setShowCatalog(!showCatalog)}
@@ -237,14 +237,16 @@ export function RouletteDashboard() {
                 >
                   {showCatalog ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </button>
-                <button
-                  onClick={refreshHistory}
-                  disabled={loading}
-                  className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center gap-1"
-                >
-                  {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
-                  REAL
-                </button>
+                {currentSource && (
+                  <button
+                    onClick={refreshHistory}
+                    disabled={loading}
+                    className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center gap-1"
+                  >
+                    {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
+                    REAL
+                  </button>
+                )}
               </div>
 
               <div className="grid grid-cols-3 gap-1.5 mb-3">
@@ -294,7 +296,7 @@ export function RouletteDashboard() {
           </div>
         )}
 
-        {/* VÍDEO - SEMPRE VISÍVEL */}
+        {/* VÍDEO - SEMPRE VISÍVEL QUANDO UMA ROLETA É SELECIONADA */}
         <div className={showRealData ? "xl:col-span-7" : "xl:col-span-12"}>
           {selectedSlug ? (
             <LiveGameView
@@ -313,7 +315,7 @@ export function RouletteDashboard() {
           )}
         </div>
 
-        {/* GRUPOS E ASSERTIVIDADE - Só aparece se tiver números reais */}
+        {/* GRUPOS E ASSERTIVIDADE - aparece se tiver números reais */}
         {showRealData && (
           <div className="xl:col-span-3 space-y-4">
             <div className="bg-bg-card border border-border-default rounded-2xl p-4">
@@ -380,7 +382,7 @@ export function RouletteDashboard() {
         )}
       </div>
 
-      {/* SIGNAL GENERATOR - Só aparece se tiver números reais */}
+      {/* SIGNAL GENERATOR - aparece se tiver números reais */}
       {showRealData && (
         <div className="grid grid-cols-1 gap-4">
           <SignalGenerator history={isRealData ? history : []} />
