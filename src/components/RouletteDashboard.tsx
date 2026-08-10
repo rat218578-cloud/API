@@ -13,7 +13,7 @@ import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 export function RouletteDashboard() {
   const [activeRoom, setActiveRoom] = useState(ROLETAS[0].id);
   const [history, setHistory] = useState<number[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [showVideo, setShowVideo] = useState(false);
   const [showCatalog, setShowCatalog] = useState(true);
@@ -23,12 +23,18 @@ export function RouletteDashboard() {
   const [topNumbersList, setTopNumbersList] = useState<{number: number, count: number}[]>([]);
   const [currentSource, setCurrentSource] = useState<string | null>(null);
 
+  // ========== SOURCE QUE TEM NÚMEROS REAIS ==========
+  const hasRealNumbers = (source: string | null) => {
+    return source === 'immersive'; // Só a Imersiva tem números reais
+  };
+
   // ========== BUSCAR NÚMEROS POR SOURCE ==========
   const fetchNumbers = async (source: string | null) => {
-    if (!source) {
+    if (!source || !hasRealNumbers(source)) {
       setLoading(false);
       setHistory([]);
       setIsRealData(false);
+      setIsConnected(false);
       return;
     }
 
@@ -58,7 +64,6 @@ export function RouletteDashboard() {
           setIsConnected(true);
           setTotalNumbers(validNumbers.length);
           
-          // Calcula top numbers
           const counts: Record<number, number> = {};
           validNumbers.forEach((n: number) => {
             counts[n] = (counts[n] || 0) + 1;
@@ -74,16 +79,19 @@ export function RouletteDashboard() {
           console.warn(`⚠️ Nenhum número para source ${source}`);
           setHistory([]);
           setIsRealData(false);
+          setIsConnected(false);
         }
       } else {
         console.error(`❌ Erro ao carregar source ${source}:`, response.status);
         setHistory([]);
         setIsRealData(false);
+        setIsConnected(false);
       }
     } catch (error) {
       console.error(`❌ Erro ao carregar source ${source}:`, error);
       setHistory([]);
       setIsRealData(false);
+      setIsConnected(false);
     } finally {
       setLoading(false);
     }
@@ -94,13 +102,14 @@ export function RouletteDashboard() {
     if (selectedSlug) {
       const source = gameLinkService.getSourceBySlug(selectedSlug);
       setCurrentSource(source);
+      setLoading(true);
       fetchNumbers(source);
     }
   }, [selectedSlug]);
 
   // ========== POLLING PARA ATUALIZAR ==========
   useEffect(() => {
-    if (!currentSource) return;
+    if (!currentSource || !hasRealNumbers(currentSource)) return;
 
     const interval = setInterval(async () => {
       try {
@@ -154,6 +163,8 @@ export function RouletteDashboard() {
     setCurrentSource(null);
     setHistory([]);
     setIsRealData(false);
+    setIsConnected(false);
+    setLoading(false);
   };
 
   const topNumbers = useMemo(() => {
@@ -162,7 +173,7 @@ export function RouletteDashboard() {
   }, [history, isRealData, topNumbersList]);
 
   const refreshHistory = () => {
-    if (!currentSource) return;
+    if (!currentSource || !hasRealNumbers(currentSource)) return;
     setLoading(true);
     fetchNumbers(currentSource);
   };
@@ -172,19 +183,45 @@ export function RouletteDashboard() {
     return history.slice(0, 3);
   };
 
-  if (loading) {
+  const roletaAtual = ROLETAS.find(r => r.slug === selectedSlug);
+  const showRealData = isRealData && hasRealNumbers(currentSource);
+
+  // ========== SE NÃO TEM NÚMEROS REAIS, MOSTRA MENSAGEM ==========
+  if (!showRealData && selectedSlug) {
     return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-accent-pink mx-auto mb-4" />
-          <p className="text-text-muted">Carregando dados da roleta...</p>
+      <div className="p-4 space-y-4">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 flex-wrap">
+          {ROLETAS.map((r) => (
+            <button
+              key={r.id}
+              onClick={() => {
+                setActiveRoom(r.id);
+                openGame(r.slug);
+              }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${
+                activeRoom === r.id
+                  ? "bg-bg-tertiary border-accent-pink text-text-primary shadow-lg shadow-accent-pink/20"
+                  : "bg-bg-card border-border-default text-text-secondary hover:border-border-hover"
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${activeRoom === r.id ? 'bg-emerald-500 animate-pulse' : 'bg-text-muted'}`} />
+              {r.nome}
+            </button>
+          ))}
+        </div>
+
+        <div className="bg-bg-card border border-border-default rounded-2xl p-8 flex flex-col items-center justify-center min-h-[500px]">
+          <div className="text-6xl mb-4">🎰</div>
+          <h3 className="text-lg font-bold text-text-primary mb-2">Escolha uma roleta</h3>
+          <p className="text-text-muted text-sm text-center max-w-md">
+            Selecione uma roleta no topo para ver o jogo ao vivo
+          </p>
         </div>
       </div>
     );
   }
 
   const lastThree = getLastThree();
-  const roletaAtual = ROLETAS.find(r => r.slug === selectedSlug);
 
   return (
     <div className="p-4 space-y-4">
@@ -239,7 +276,7 @@ export function RouletteDashboard() {
               >
                 {showCatalog ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
-              {currentSource && (
+              {currentSource && hasRealNumbers(currentSource) && (
                 <button
                   onClick={refreshHistory}
                   disabled={loading}
