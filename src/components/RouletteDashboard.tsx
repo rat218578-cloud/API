@@ -47,34 +47,25 @@ export function RouletteDashboard() {
           setIsConnected(data.connected || false);
           setTotalNumbers(data.total || numbers.length);
           setTopNumbersList(data.top_numbers || []);
-          console.log(`✅ Carregados ${numbers.length} números REAIS da API Games`);
+          console.log(`✅ Carregados ${numbers.length} números REAIS`);
         } else {
-          console.warn('⚠️ Nenhum número retornado da API Games');
-          // Fallback para números simulados
-          loadSimulatedHistory();
+          console.warn('⚠️ Nenhum número real disponível');
+          // NÃO GERA NÚMEROS FALSOS!
+          setHistory([]);
+          setIsRealData(false);
         }
       } else {
         console.error('❌ Erro ao carregar histórico:', response.status);
-        loadSimulatedHistory();
+        setHistory([]);
+        setIsRealData(false);
       }
     } catch (error) {
       console.error('❌ Erro ao carregar histórico:', error);
-      loadSimulatedHistory();
+      setHistory([]);
+      setIsRealData(false);
     } finally {
       setLoading(false);
     }
-  };
-
-  const loadSimulatedHistory = () => {
-    const numbers = [];
-    for (let i = 0; i < 20; i++) {
-      numbers.push(Math.floor(Math.random() * 37));
-    }
-    const sanitized = sanitizeHistory(numbers);
-    setHistory(sanitized);
-    setIsRealData(false);
-    setIsConnected(false);
-    console.warn('⚠️ Usando números simulados (fallback)');
   };
 
   useEffect(() => {
@@ -128,12 +119,10 @@ export function RouletteDashboard() {
   const topNumbers = useMemo(() => {
     if (!isRealData || history.length === 0) return [];
     
-    // Usa os topNumbersList da API se disponível
     if (topNumbersList.length > 0) {
       return topNumbersList;
     }
     
-    // Fallback: calcular localmente
     const validHistory = sanitizeHistory(history);
     const counts: Record<number, number> = {};
     validHistory.forEach((n) => {
@@ -172,15 +161,15 @@ export function RouletteDashboard() {
     <div className="p-4 space-y-4">
       {/* Status */}
       <div className="flex items-center gap-2 text-xs">
-        <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
-        <span className={isConnected ? 'text-emerald-400' : 'text-yellow-400'}>
-          {isConnected ? '📡 API Conectada' : '⏳ Aguardando dados...'}
+        <span className={`w-2 h-2 rounded-full ${isConnected && isRealData ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
+        <span className={isConnected && isRealData ? 'text-emerald-400' : 'text-yellow-400'}>
+          {isConnected && isRealData ? '📡 Números REAIS' : '⏳ Aguardando números reais...'}
         </span>
         {isRealData && (
-          <span className="text-emerald-400">✅ {totalNumbers} números REAIS</span>
+          <span className="text-emerald-400">✅ {totalNumbers} números</span>
         )}
         {!isRealData && (
-          <span className="text-yellow-400">⚠️ Números simulados (fallback)</span>
+          <span className="text-yellow-400">⚠️ Nenhum número disponível</span>
         )}
       </div>
 
@@ -267,7 +256,7 @@ export function RouletteDashboard() {
                 })
               ) : (
                 <div className="text-center py-4 text-text-muted text-xs">
-                  ⏳ Aguardando números...
+                  ⏳ Aguardando números reais...
                 </div>
               )}
             </div>
