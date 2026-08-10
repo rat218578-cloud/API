@@ -44,9 +44,11 @@ class GameLinkService {
       const token = localStorage.getItem('access_token');
       
       if (!token) {
-        console.error('❌ Token não encontrado');
+        console.error('❌ Token não encontrado no localStorage');
         return null;
       }
+
+      console.log(`🔑 Token encontrado: ${token.substring(0, 30)}...`);
 
       const response = await fetch(`/api/start-game-v2?slug=${slug}&_=${Date.now()}`, {
         method: 'GET',
@@ -63,9 +65,12 @@ class GameLinkService {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`❌ HTTP ${response.status}: ${errorText}`);
+        
+        // Se for 401, tenta renovar
         if (response.status === 401) {
           const refreshToken = localStorage.getItem('refresh_token');
           if (refreshToken) {
+            console.log('🔄 Tentando renovar token...');
             const refreshResponse = await fetch('/api/auth/refresh', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -74,6 +79,7 @@ class GameLinkService {
             if (refreshResponse.ok) {
               const data = await refreshResponse.json();
               localStorage.setItem('access_token', data.access_token);
+              console.log('✅ Token renovado!');
               return this.getGameUrl(slug);
             }
           }
@@ -108,7 +114,6 @@ class GameLinkService {
   }
 
   getSourceBySlug(slug: string): string | null {
-    // Só a Imersiva tem números reais
     if (slug === 'evolution/immersive-roulette') {
       return 'immersivevip';
     }
