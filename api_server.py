@@ -6,27 +6,23 @@ import os
 import random
 from datetime import datetime
 
-# ========== CRIA APP ==========
 app = Flask(__name__, static_folder='dist', static_url_path='')
 CORS(app)
 
-# ========== IMPORTAÇÕES ==========
 try:
     from db import db
-except Exception as e:
-    print(f"⚠️ Erro ao importar db: {e}")
+except:
     db = None
 
 from jwt_helper import jwt_manager
 from session_service import session_service
-from middleware import require_auth, optional_auth
+from apigames_service import apigames
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 API_BASE = "https://sortenabet.bet.br"
 
-# ========== SESSÃO HTTP ==========
 session = requests.Session()
 session.headers.update({
     'Content-Type': 'application/json',
@@ -35,28 +31,6 @@ session.headers.update({
     'Referer': 'https://sortenabet.bet.br/',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 })
-
-# ========== HISTÓRICO DE NÚMEROS ==========
-historico_numeros = []
-
-def gerar_numero_aleatorio():
-    return random.randint(0, 36)
-
-def get_cor(numero):
-    red = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]
-    if numero == 0:
-        return "green"
-    return "red" if numero in red else "black"
-
-def adicionar_numero_ao_historico(numero):
-    global historico_numeros
-    historico_numeros.append({
-        'number': numero,
-        'color': get_cor(numero),
-        'timestamp': datetime.now().isoformat()
-    })
-    if len(historico_numeros) > 500:
-        historico_numeros = historico_numeros[-500:]
 
 # ========== ROTA DE LOGIN ==========
 @app.route('/api/auth/login', methods=['POST'])
@@ -69,7 +43,7 @@ def api_login():
         if not email or not password:
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
         
-        print(f"🔐 Tentando login para: {email}")
+        logger.info(f"🔐 Tentando login para: {email}")
         
         login_data = {
             "login": email,
@@ -89,22 +63,25 @@ def api_login():
         if not access_token_externo:
             return jsonify({'error': 'Token não retornado'}), 500
         
-        # GUARDA TOKEN NA SESSÃO
         session.headers.update({'Authorization': f'Bearer {access_token_externo}'})
         
         user_id = str(result.get('user', {}).get('id', email))
-        
         jwt_token = jwt_manager.generate_token(user_id, email)
         refresh_token = jwt_manager.generate_refresh_token(user_id, email)
         
         if db:
             session_service.create_session(user_id, email, password, jwt_token, refresh_token)
         
+        # 🔥 INICIA API GAMES (NÚMEROS REAIS)
+        logger.info(f"📧 Configurando API Games para: {email}")
+        apigames.set_email(email)
+        apigames.start_polling(interval=3)
+        
         return jsonify({
             'access_token': jwt_token,
             'refresh_token': refresh_token,
             'token_type': 'Bearer',
-            'expires_in': 7 * 24 * 60 * 60,
+            'expires_in': 30 * 24 * 60 * 60,
             'user': {
                 'id': user_id,
                 'name': result.get('user', {}).get('name', email.split('@')[0]),
@@ -120,18 +97,14 @@ def api_login():
 # ========== ROTA START-GAME ==========
 @app.route('/api/start-game-v2', methods=['GET'])
 def api_start_game():
-    """Rota sem middleware para testar"""
     try:
         slug = request.args.get('slug')
-        print(f"🎮 Gerando link para: {slug}")
+        logger.info(f"🎮 Gerando link para: {slug}")
         
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
         
-        # PEGA TOKEN DA SESSÃO
         auth_header = session.headers.get('Authorization')
-        print(f"🔑 Auth header: {auth_header[:50] if auth_header else 'NENHUM'}...")
-        
         if not auth_header:
             return jsonify({'error': 'Token não encontrado'}), 401
         
@@ -146,12 +119,9 @@ def api_start_game():
             timeout=15
         )
         
-        print(f"📥 Status: {response.status_code}")
-        
         if response.status_code == 200:
             data = response.json()
             game_url = data.get('iframe_url') or data.get('gameURL')
-            
             if game_url:
                 return jsonify({
                     'success': True,
@@ -166,32 +136,40 @@ def api_start_game():
         logger.error(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
-# ========== ROTA PARA NÚMEROS ==========
+# ========== ROTA PARA NÚMEROS REAIS ==========
 @app.route('/api/roulette/live', methods=['GET'])
 def get_live_numbers():
+    """Retorna números REAIS da API Games"""
     try:
         limit = int(request.args.get('limit', 50))
-        
-        if len(historico_numeros) == 0:
-            for _ in range(20):
-                num = gerar_numero_aleatorio()
-                adicionar_numero_ao_historico(num)
-        
-        history = historico_numeros[-limit:] if historico_numeros else []
-        last_numbers = [h['number'] for h in history[-10:]] if history else []
+        history = apigames.get_history(limit)
+        last_numbers = apigames.get_last_numbers(10)
+        stats = apigames.get_statistics()
+        top = apigames.get_top_numbers(8)
         
         return jsonify({
             'success': True,
-            'connected': True,
-            'total': len(historico_numeros),
-            'last_numbers': last_numbers,
+            'connected': apigames.running,
+            'total': apigames.total_numeros,
+            'last_numbers': [n['number'] for n in last_numbers],
             'history': history,
+            'top_numbers': top,
+            'statistics': stats,
             'timestamp': datetime.now().isoformat()
         }), 200
         
     except Exception as e:
         logger.error(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
+
+# ========== ROTA DE STATUS ==========
+@app.route('/api/roulette/status', methods=['GET'])
+def get_status():
+    return jsonify({
+        'polling': apigames.running,
+        'total_numbers': apigames.total_numeros,
+        'last_numbers': [n['number'] for n in apigames.get_last_numbers(5)]
+    }), 200
 
 # ========== ROTA DE REFRESH ==========
 @app.route('/api/auth/refresh', methods=['POST'])
@@ -233,6 +211,7 @@ def api_validate():
 
 @app.route('/api/auth/logout', methods=['POST'])
 def api_logout():
+    apigames.stop_polling()
     if db:
         try:
             auth_header = request.headers.get('Authorization')
@@ -256,19 +235,19 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - QA.AI (FIXED)")
+    print("🎯 API PROXY - QA.AI (API GAMES)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("🗄️  Banco: NeonDB (PostgreSQL)")
     print("🛡️  Auth: JWT + Refresh Token")
-    print("📊  Números: Simulados (REST API)")
+    print("📊  Números: REAIS (API Games)")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     
     if db:
         try:
             session_service.cleanup_expired()
-        except Exception as e:
-            print(f"⚠️ Erro ao limpar sessões: {e}")
+        except:
+            pass
     
     app.run(host='0.0.0.0', port=5000, debug=False)
