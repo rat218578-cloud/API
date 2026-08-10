@@ -72,7 +72,7 @@ def api_login():
         if db:
             session_service.create_session(user_id, email, password, jwt_token, refresh_token)
         
-        # 🔥 INICIA SMART API
+        # Inicia Smart API
         logger.info(f"📧 Configurando Smart API para: {email}")
         smart_api.set_email(email)
         smart_api.start_polling(interval=3)
@@ -196,7 +196,7 @@ def api_me():
         }
     }), 200
 
-@app.route('/api/auth/validate', methods(['GET'])
+@app.route('/api/auth/validate', methods=['GET'])  # <--- CORRIGIDO!
 @require_auth
 def api_validate():
     return jsonify({
