@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🎯 API GAMES - NÚMEROS REAIS DA SMART API
+🎯 API GAMES - IGUAL AO SCRIPT PYTHON
 """
 
 import requests
@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 class ApiGamesService:
     def __init__(self):
         self.base_url = "https://tool-api.smartanalise.com.br/api"
-        self.numeros = []
-        self.ultimos_numeros = []
+        self.numeros = []  # Lista completa de números
+        self.ultimos_numeros = []  # Últimos 10 números
         self.total_numeros = 0
         self.last_signal_id = None
         self.running = False
@@ -35,97 +35,117 @@ class ApiGamesService:
         self.email = email
         logger.info(f"📧 Email definido: {email}")
         
-    def fetch_numbers(self, since: str = None):
+    def carregar_historico(self):
+        """Carrega o histórico completo (IGUAL AO SCRIPT)"""
+        if not self.email:
+            logger.warning("⚠️ Email não definido!")
+            return False
+        
+        try:
+            url = f"{self.base_url}/full-history?source={self.source}&userEmail={self.email}"
+            logger.info(f"📥 Carregando histórico: {url}")
+            
+            response = requests.get(url, headers=self.headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                items = data.get('data') or data.get('results', [])
+                
+                # Inverte para ordem cronológica (mais antigo primeiro) - IGUAL AO SCRIPT
+                items = items[::-1]
+                
+                for item in items:
+                    signal_id = item.get('signalId') or item.get('id')
+                    signal = item.get('signal') or item.get('number')
+                    
+                    if signal_id and signal:
+                        self.numeros.append({
+                            'number': int(signal),
+                            'signalId': signal_id,
+                            'timestamp': item.get('timestamp')
+                        })
+                        self.total_numeros += 1
+                        self.last_signal_id = signal_id
+                
+                # Atualiza últimos 10 números
+                self.ultimos_numeros = self.numeros[-10:] if self.numeros else []
+                
+                logger.info(f"✅ {self.total_numeros} números carregados do histórico")
+                return True
+            else:
+                logger.warning(f"⚠️ Status: {response.status_code}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Erro ao carregar histórico: {e}")
+            return False
+    
+    def buscar_novos(self):
+        """Busca novos números desde o último signal_id (IGUAL AO SCRIPT)"""
         if not self.email:
             logger.warning("⚠️ Email não definido!")
             return []
         
         try:
-            params = {
-                "source": self.source,
-                "userEmail": self.email
-            }
+            url = f"{self.base_url}/history-delta?source={self.source}&userEmail={self.email}"
+            if self.last_signal_id:
+                url += f"&since={self.last_signal_id}"
             
-            if since:
-                params["since"] = since
-            
-            url = f"{self.base_url}/history-delta"
-            logger.info(f"📡 Buscando números...")
-            
-            response = requests.get(
-                url,
-                params=params,
-                headers=self.headers,
-                timeout=10
-            )
+            response = requests.get(url, headers=self.headers, timeout=5)
             
             if response.status_code == 200:
                 data = response.json()
-                numeros = []
                 
-                for item in data.get("data", []):
-                    signal = item.get("signal")
-                    if signal and signal.isdigit():
-                        numero = int(signal)
-                        if 0 <= numero <= 36:
-                            numeros.append({
-                                'number': numero,
-                                'gameId': item.get('gameId'),
-                                'signalId': item.get('signalId'),
+                if data.get('data'):
+                    # Inverte para ordem cronológica (mais antigo primeiro) - IGUAL AO SCRIPT
+                    novos = data['data'][::-1]
+                    numeros_novos = []
+                    
+                    for item in novos:
+                        signal_id = item.get('signalId')
+                        signal = item.get('signal')
+                        
+                        # Verifica se já existe
+                        if signal_id and not any(n.get('signalId') == signal_id for n in self.numeros):
+                            self.numeros.append({
+                                'number': int(signal),
+                                'signalId': signal_id,
                                 'timestamp': item.get('timestamp')
                             })
-                
-                if numeros:
-                    # 🔥 INVERTE A ORDEM - mais antigo primeiro
-                    numeros = numeros[::-1]
+                            numeros_novos.append(signal)
+                            self.total_numeros += 1
+                            self.last_signal_id = signal_id
                     
-                    self.last_signal_id = numeros[-1].get('signalId') if numeros else None
-                    self.processar_numeros(numeros)
-                    logger.info(f"✅ +{len(numeros)} números reais")
-                
-                return numeros
-            else:
-                logger.warning(f"⚠️ Status: {response.status_code}")
-                return []
-                
+                    # Atualiza últimos 10 números
+                    self.ultimos_numeros = self.numeros[-10:] if self.numeros else []
+                    
+                    if numeros_novos:
+                        logger.info(f"✅ +{len(numeros_novos)} novos números")
+                    
+                    return numeros_novos
+            return []
+            
         except Exception as e:
             logger.error(f"❌ Erro: {e}")
             return []
     
-    def processar_numeros(self, novos_numeros):
-        """Processa e atualiza a lista de números"""
-        for item in novos_numeros:
-            numero = item['number']
-            # Verifica se já existe
-            if not any(n['number'] == numero and n.get('signalId') == item.get('signalId') for n in self.ultimos_numeros):
-                self.ultimos_numeros.append(item)
-                self.numeros.append(item)
-                self.total_numeros += 1
-        
-        # Mantém últimos 500
-        if len(self.numeros) > 500:
-            self.numeros = self.numeros[-500:]
-        if len(self.ultimos_numeros) > 10:
-            self.ultimos_numeros = self.ultimos_numeros[-10:]
-    
     def start_polling(self, interval=3):
+        """Inicia polling contínuo (IGUAL AO SCRIPT)"""
         self.running = True
         logger.info(f"🚀 Iniciando polling (intervalo: {interval}s)")
         
-        # Primeira carga
-        self.fetch_numbers()
+        # Carrega histórico completo primeiro
+        self.carregar_historico()
         
         def poll_loop():
             while self.running:
                 try:
-                    since = self.last_signal_id
-                    if since:
-                        self.fetch_numbers(since=since)
-                    else:
-                        self.fetch_numbers()
+                    novos = self.buscar_novos()
+                    if novos:
+                        logger.info(f"🎯 NOVO(S) NÚMERO(S): {' '.join(novos)}")
                     time.sleep(interval)
                 except Exception as e:
-                    logger.error(f"❌ Erro: {e}")
+                    logger.error(f"❌ Erro no polling: {e}")
                     time.sleep(interval)
         
         thread = threading.Thread(target=poll_loop, daemon=True)
@@ -138,13 +158,16 @@ class ApiGamesService:
     
     def get_history(self, limit=500):
         """Retorna histórico de números (mais recentes primeiro)"""
-        # 🔥 Mantém a ordem correta (mais recente primeiro)
-        return self.numeros[-limit:] if self.numeros else []
+        if not self.numeros:
+            return []
+        # Mantém a ordem correta para o frontend (mais recente primeiro)
+        return self.numeros[-limit:][::-1] if self.numeros else []
     
     def get_last_numbers(self, count=10):
         """Retorna os últimos números (mais recentes primeiro)"""
-        # 🔥 Últimos números = os mais recentes
-        return self.ultimos_numeros[-count:] if self.ultimos_numeros else []
+        if not self.ultimos_numeros:
+            return []
+        return self.ultimos_numeros[::-1]
     
     def get_top_numbers(self, count=8):
         if not self.numeros:
@@ -171,7 +194,7 @@ class ApiGamesService:
                 cores['black'] += 1
         
         return {
-            'total': len(self.numeros),
+            'total': self.total_numeros,
             'colors': cores,
             'most_frequent': self.get_top_numbers(5),
             'last_numbers': [n['number'] for n in self.get_last_numbers(10)]
