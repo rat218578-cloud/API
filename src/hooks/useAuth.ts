@@ -8,14 +8,6 @@ interface AuthState {
   isAuthenticated: boolean;
 }
 
-interface LoginResponse {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-  expires_in: number;
-  user: User;
-}
-
 export function useAuth() {
   const [state, setState] = useState<AuthState>({
     user: null,
@@ -24,7 +16,7 @@ export function useAuth() {
     isAuthenticated: false
   });
 
-  // 🔥 FUNÇÃO PARA RESTAURAR USUÁRIO DO LOCALSTORAGE
+  // 🔥 RESTAURA USUÁRIO DO LOCALSTORAGE
   const restoreUserFromStorage = (): User | null => {
     try {
       const name = localStorage.getItem('user_name');
@@ -74,9 +66,9 @@ export function useAuth() {
 
   const validateToken = async (): Promise<boolean> => {
     const accessToken = localStorage.getItem('access_token');
-    const refreshToken = localStorage.getItem('refresh_token');
+    const refreshTokenStored = localStorage.getItem('refresh_token');
     
-    // 🔥 TENTA RESTAURAR USUÁRIO DO STORAGE PRIMEIRO
+    // 🔥 RESTAURA DO STORAGE PRIMEIRO
     const storedUser = restoreUserFromStorage();
     if (storedUser && accessToken) {
       setState(prev => ({ 
@@ -99,7 +91,6 @@ export function useAuth() {
 
       if (response.ok) {
         const data = await response.json();
-        // 🔥 USA O NOME DO STORAGE SE NÃO VEIO DA API
         const userName = data.name || storedUser?.name || localStorage.getItem('user_name') || 'Usuário';
         const userPlan = data.plan || storedUser?.plan || localStorage.getItem('user_plan') || 'pro';
         
@@ -120,8 +111,8 @@ export function useAuth() {
         return true;
       }
 
-      if (refreshToken) {
-        const newAccessToken = await refreshToken(refreshToken);
+      if (refreshTokenStored) {
+        const newAccessToken = await refreshToken(refreshTokenStored);
         if (newAccessToken) {
           return await validateToken();
         }
@@ -158,7 +149,6 @@ export function useAuth() {
       localStorage.setItem('access_token', data.access_token);
       localStorage.setItem('refresh_token', data.refresh_token);
       
-      // 🔥 SALVA USUÁRIO COMPLETO
       saveUserToStorage(data.user);
       
       setState(prev => ({
@@ -212,7 +202,6 @@ export function useAuth() {
     logout,
     validateToken,
     refreshToken,
-    // 🔥 EXPÕE FUNÇÃO PARA SALVAR USUÁRIO
     saveUserToStorage,
     restoreUserFromStorage
   };
