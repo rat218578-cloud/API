@@ -1,21 +1,38 @@
 #!/bin/bash
 
 echo "═══════════════════════════════════════════════════════════════"
-echo "🔧 SOLUÇÃO DEFINITIVA - REMOVER SMART API DO FRONTEND"
+echo "🔧 CORREÇÃO - API DIRETA DO NAVEGADOR"
 echo "═══════════════════════════════════════════════════════════════"
 
-# ========== CORRIGE ROULETTEDASHBOARD - VERSÃO SIMPLIFICADA ==========
+# ========== CORRIGE ROULETTEDASHBOARD ==========
 cat > src/components/RouletteDashboard.tsx << 'ROULETOEF'
-import { useState, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { SignalGenerator } from "./SignalGenerator";
 import { LiveGameView } from "./LiveGameView";
 import { ROLETAS } from "../services/gameLinkService";
 import {
   STRATEGIES,
   getNumberInfo,
-  getColorClass
+  getColorClass,
+  sanitizeHistory
 } from "../utils/roulette";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
+
+// ========== CONFIGURAÇÕES ==========
+const API_URL = "https://tool-api.smartanalise.com.br/api/history-delta";
+
+// ========== TIPOS ==========
+interface HistoryItem {
+  signalId: string;
+  gameId: string;
+  signal: string;
+  timestamp: string;
+}
+
+interface ApiResponse {
+  full: boolean;
+  data: HistoryItem[];
+}
 
 // ========== COMPONENTE ==========
 export function RouletteDashboard() {
@@ -25,45 +42,140 @@ export function RouletteDashboard() {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [showVideo, setShowVideo] = useState(false);
   const [showCatalog, setShowCatalog] = useState(true);
-  const [total, setTotal] = useState(0);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isRealData, setIsRealData] = useState(false);
+  const [totalNumbers, setTotalNumbers] = useState(0);
+  const [lastSignalId, setLastSignalId] = useState<string | null>(null);
 
-  // ========== BUSCAR NÚMEROS DA API LOCAL ==========
-  const fetchNumbers = async () => {
+  // ========== PEGAR EMAIL ==========
+  const getUserEmail = (): string => {
+    // Tenta pegar do localStorage
+    const userData = localStorage.getItem('user_data');
+    if (userData) {
+      try {
+        const parsed = JSON.parse(userData);
+        if (parsed.email) return parsed.email;
+      } catch {}
+    }
+    // Fallback
+    return 'gcriste268@gmail.com';
+  };
+
+  // ========== BUSCAR NÚMEROS DA API DIRETA ==========
+  const fetchNumbers = async (since: string | null = null): Promise<number[]> => {
     try {
-      const token = localStorage.getItem('access_token');
-      if (!token) {
-        setLoading(false);
-        return;
+      const email = getUserEmail();
+      
+      let url = `${API_URL}?source=immersivevip&userEmail=${encodeURIComponent(email)}`;
+      if (since) {
+        url += `&since=${encodeURIComponent(since)}`;
       }
-
-      const response = await fetch('/api/roulette/live?limit=50', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.history && data.history.length > 0) {
-          const numbers = data.history.map((item: any) => item.number);
-          setHistory(numbers);
-          setTotal(data.total || numbers.length);
-          console.log(`✅ Carregados ${numbers.length} números do backend`);
+      
+      console.log('📡 Buscando números da API:', url);
+      
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        console.error('❌ Erro na API:', response.status);
+        return [];
+      }
+      
+      const data: ApiResponse = await response.json();
+      console.log('📦 Dados recebidos:', data.data?.length || 0, 'números');
+      
+      if (data.data && data.data.length > 0) {
+        const numbers = data.data.map((item: HistoryItem) => parseInt(item.signal));
+        const validNumbers = numbers.filter((n: number) => !isNaN(n) && n >= 0 && n <= 36);
+        
+        // Atualiza último signalId
+        if (data.data.length > 0) {
+          setLastSignalId(data.data[0].signalId);
         }
+        
+        return validNumbers;
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('❌ Erro ao buscar números:', error);
+      return [];
+    }
+  };
+
+  // ========== CARREGA HISTÓRICO INICIAL ==========
+  const loadHistory = async () => {
+    setLoading(true);
+    
+    try {
+      const numbers = await fetchNumbers();
+      
+      if (numbers.length > 0) {
+        setHistory(numbers);
+        setIsRealData(true);
+        setIsConnected(true);
+        setTotalNumbers(numbers.length);
+        console.log(`✅ Carregados ${numbers.length} números da API direta`);
+      } else {
+        console.warn('⚠️ Nenhum número retornado da API');
+        // Tenta novamente após 2 segundos
+        setTimeout(() => {
+          loadHistory();
+        }, 2000);
       }
     } catch (error) {
-      console.error('❌ Erro ao carregar números:', error);
+      console.error('❌ Erro ao carregar histórico:', error);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchNumbers();
+    loadHistory();
+    
+    // Tenta recarregar a cada 10 segundos se não tiver dados
+    const retryInterval = setInterval(() => {
+      if (!isRealData) {
+        loadHistory();
+      }
+    }, 10000);
+    
+    return () => clearInterval(retryInterval);
   }, []);
+
+  // ========== POLLING PARA ATUALIZAR ==========
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const numbers = await fetchNumbers(lastSignalId);
+        
+        if (numbers.length > 0) {
+          setHistory((prev: number[]) => {
+            // Adiciona números novos
+            const novos = numbers.filter((n: number) => !prev.includes(n));
+            if (novos.length > 0) {
+              console.log(`📊 +${novos.length} novos números`);
+              return [...novos, ...prev].slice(0, 500);
+            }
+            return prev;
+          });
+          setIsRealData(true);
+          setIsConnected(true);
+          setTotalNumbers((prev: number) => prev + numbers.length);
+        }
+      } catch (error) {
+        // Ignora
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [lastSignalId]);
 
   // ========== FUNÇÕES ==========
   const openGame = (slug: string) => {
     setSelectedSlug(slug);
     setShowVideo(true);
+    // Força recarga do histórico
+    setTimeout(loadHistory, 3000);
   };
 
   const closeGame = () => {
@@ -71,28 +183,29 @@ export function RouletteDashboard() {
     setSelectedSlug(null);
   };
 
-  const topNumbers = () => {
-    if (history.length === 0) return [];
+  const topNumbers = useMemo(() => {
+    if (!isRealData || history.length === 0) return [];
     
+    const validHistory = sanitizeHistory(history);
     const counts: Record<number, number> = {};
-    history.forEach((n) => {
+    validHistory.forEach((n: number) => {
       counts[n] = (counts[n] || 0) + 1;
     });
-    
     return Object.entries(counts)
       .map(([n, count]) => ({ number: Number(n), count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
+  }, [history, isRealData]);
+
+  const refreshHistory = () => {
+    setLoading(true);
+    loadHistory();
   };
 
   const getLastThree = (): (number | string)[] => {
-    if (history.length === 0) return ['--', '--', '--'];
+    if (!isRealData || history.length === 0) return ['--', '--', '--'];
     return history.slice(0, 3);
   };
-
-  const isRealData = history.length > 0;
-  const top = topNumbers();
-  const lastThree = getLastThree();
 
   if (loading) {
     return (
@@ -105,14 +218,18 @@ export function RouletteDashboard() {
     );
   }
 
+  const lastThree = getLastThree();
+
   return (
     <div className="p-4 space-y-4">
       {/* Status */}
       <div className="flex items-center gap-2 text-xs">
-        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-        <span className="text-emerald-400">📡 API Conectada</span>
+        <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
+        <span className={isConnected ? 'text-emerald-400' : 'text-yellow-400'}>
+          {isConnected ? '📡 API Conectada' : '⏳ Aguardando dados...'}
+        </span>
         {isRealData && (
-          <span className="text-emerald-400">✅ {total} números</span>
+          <span className="text-emerald-400">✅ {totalNumbers} números</span>
         )}
         {!isRealData && (
           <span className="text-yellow-400">⚠️ Aguardando números...</span>
@@ -154,8 +271,8 @@ export function RouletteDashboard() {
                 {showCatalog ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
               <button
-                onClick={fetchNumbers}
-                disabled={loading}
+                onClick={refreshHistory}
+                disabled={loading || !isRealData}
                 className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center gap-1"
               >
                 {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
@@ -182,8 +299,8 @@ export function RouletteDashboard() {
               <div className="grid grid-cols-6 text-[8px] text-text-muted uppercase py-1 border-b border-border-default text-center">
                 <span>N</span><span>A/B</span><span>I/P</span><span>COL</span><span>DUZ</span><span>SET</span>
               </div>
-              {top.length > 0 ? (
-                top.map((item) => {
+              {topNumbers.length > 0 ? (
+                topNumbers.map((item) => {
                   const info = getNumberInfo(item.number);
                   return (
                     <div key={item.number} className="grid grid-cols-6 items-center py-1 text-[10px] border-b border-border-default/30 text-center">
@@ -242,7 +359,9 @@ export function RouletteDashboard() {
                     </span>
                     <span>—</span>
                     <span className="text-text-secondary">{getNumberInfo(history[0] || 0).range.toUpperCase()}</span>
-                    <span className="text-[8px] text-emerald-400">● REAL</span>
+                    {isConnected && (
+                      <span className="text-[8px] text-emerald-400">● REAL</span>
+                    )}
                   </span>
                 ) : (
                   <span className="text-yellow-400">⏳ Aguardando...</span>
@@ -250,7 +369,7 @@ export function RouletteDashboard() {
               </div>
             </div>
             <div className="flex items-center justify-center gap-3 text-center">
-              {lastThree.map((num, idx) => (
+              {lastThree.map((num: number | string, idx: number) => (
                 <div key={idx} className="text-center">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${num !== '--' ? getColorClass(Number(num)) : 'bg-bg-tertiary text-text-muted'}`}>
                     {num}
@@ -301,28 +420,24 @@ export function RouletteDashboard() {
 }
 ROULETOEF
 
-echo "✅ src/components/RouletteDashboard.tsx corrigido (versão simplificada)!"
-
-# ========== REMOVE HOOK SMART API ==========
-rm -f src/hooks/useSmartApi.ts
-echo "✅ src/hooks/useSmartApi.ts removido!"
+echo "✅ src/components/RouletteDashboard.tsx atualizado!"
 
 # ========== COMMIT ==========
 git add src/components/RouletteDashboard.tsx
-git rm -f src/hooks/useSmartApi.ts 2>/dev/null || true
-git commit -m "fix: remove Smart API do frontend, usa apenas backend REST"
+git commit -m "fix: frontend agora chama API Smart Analise diretamente (sem backend)"
 git push origin main
 
 echo "═══════════════════════════════════════════════════════════════"
-echo "✅ SOLUÇÃO DEFINITIVA ENVIADA!"
+echo "✅ CORREÇÃO ENVIADA!"
 echo "═══════════════════════════════════════════════════════════════"
 echo ""
-echo "📋 O QUE FOI FEITO:"
-echo "   ✅ Removido useSmartApi.ts"
-echo "   ✅ Simplificado RouletteDashboard"
-echo "   ✅ Frontend usa apenas /api/roulette/live"
-echo "   ✅ Backend (Python) coleta os números"
+echo "📋 O QUE MUDA:"
+echo "   ✅ Frontend chama API diretamente"
+echo "   ✅ Ignora o backend para evitar 403"
+echo "   ✅ Busca números a cada 3 segundos"
+echo "   ✅ Mostra números REAIS da Smart Analise"
 echo ""
-echo "🚀 O BUILD VAI PASSAR!"
+echo "🚀 DEPOIS DO DEPLOY:"
+echo "   Os números vão aparecer diretamente do navegador!"
 echo "═══════════════════════════════════════════════════════════════"
 

@@ -1,19 +1,20 @@
 #!/bin/bash
 
 echo "═══════════════════════════════════════════════════════════════"
-echo "🔧 SOLUÇÃO DEFINITIVA - REMOVER SMART API DO FRONTEND"
+echo "🗑️ REMOVENDO NÚMEROS ALEATÓRIOS - SÓ NÚMEROS REAIS"
 echo "═══════════════════════════════════════════════════════════════"
 
-# ========== CORRIGE ROULETTEDASHBOARD - VERSÃO SIMPLIFICADA ==========
+# ========== CORRIGE ROULETTEDASHBOARD ==========
 cat > src/components/RouletteDashboard.tsx << 'ROULETOEF'
-import { useState, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { SignalGenerator } from "./SignalGenerator";
 import { LiveGameView } from "./LiveGameView";
 import { ROLETAS } from "../services/gameLinkService";
 import {
   STRATEGIES,
   getNumberInfo,
-  getColorClass
+  getColorClass,
+  sanitizeHistory
 } from "../utils/roulette";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
@@ -25,9 +26,12 @@ export function RouletteDashboard() {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [showVideo, setShowVideo] = useState(false);
   const [showCatalog, setShowCatalog] = useState(true);
-  const [total, setTotal] = useState(0);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isRealData, setIsRealData] = useState(false);
+  const [totalNumbers, setTotalNumbers] = useState(0);
+  const [topNumbersList, setTopNumbersList] = useState<{number: number, count: number}[]>([]);
 
-  // ========== BUSCAR NÚMEROS DA API LOCAL ==========
+  // ========== BUSCAR NÚMEROS REAIS DO BACKEND ==========
   const fetchNumbers = async () => {
     try {
       const token = localStorage.getItem('access_token');
@@ -42,15 +46,31 @@ export function RouletteDashboard() {
 
       if (response.ok) {
         const data = await response.json();
+        console.log('📊 Dados da API Games:', data);
+        
         if (data.success && data.history && data.history.length > 0) {
           const numbers = data.history.map((item: any) => item.number);
           setHistory(numbers);
-          setTotal(data.total || numbers.length);
-          console.log(`✅ Carregados ${numbers.length} números do backend`);
+          setIsRealData(true);
+          setIsConnected(data.connected || false);
+          setTotalNumbers(data.total || numbers.length);
+          setTopNumbersList(data.top_numbers || []);
+          console.log(`✅ Carregados ${numbers.length} números REAIS`);
+        } else {
+          console.warn('⚠️ Nenhum número real disponível');
+          // NÃO GERA NÚMEROS FALSOS!
+          setHistory([]);
+          setIsRealData(false);
         }
+      } else {
+        console.error('❌ Erro ao carregar histórico:', response.status);
+        setHistory([]);
+        setIsRealData(false);
       }
     } catch (error) {
-      console.error('❌ Erro ao carregar números:', error);
+      console.error('❌ Erro ao carregar histórico:', error);
+      setHistory([]);
+      setIsRealData(false);
     } finally {
       setLoading(false);
     }
@@ -60,10 +80,43 @@ export function RouletteDashboard() {
     fetchNumbers();
   }, []);
 
+  // ========== POLLING PARA ATUALIZAR ==========
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const token = localStorage.getItem('access_token');
+        if (!token) return;
+
+        const response = await fetch('/api/roulette/live?limit=10', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.history && data.history.length > 0) {
+            const numbers = data.history.map((item: any) => item.number);
+            if (numbers.length > 0) {
+              setHistory(numbers.slice(0, 500));
+              setIsRealData(true);
+              setIsConnected(data.connected || false);
+              setTotalNumbers(data.total || numbers.length);
+              setTopNumbersList(data.top_numbers || []);
+            }
+          }
+        }
+      } catch (error) {
+        // Ignora
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   // ========== FUNÇÕES ==========
   const openGame = (slug: string) => {
     setSelectedSlug(slug);
     setShowVideo(true);
+    setTimeout(fetchNumbers, 2000);
   };
 
   const closeGame = () => {
@@ -71,28 +124,33 @@ export function RouletteDashboard() {
     setSelectedSlug(null);
   };
 
-  const topNumbers = () => {
-    if (history.length === 0) return [];
+  const topNumbers = useMemo(() => {
+    if (!isRealData || history.length === 0) return [];
     
+    if (topNumbersList.length > 0) {
+      return topNumbersList;
+    }
+    
+    const validHistory = sanitizeHistory(history);
     const counts: Record<number, number> = {};
-    history.forEach((n) => {
+    validHistory.forEach((n) => {
       counts[n] = (counts[n] || 0) + 1;
     });
-    
     return Object.entries(counts)
       .map(([n, count]) => ({ number: Number(n), count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
+  }, [history, isRealData, topNumbersList]);
+
+  const refreshHistory = () => {
+    setLoading(true);
+    fetchNumbers();
   };
 
-  const getLastThree = (): (number | string)[] => {
-    if (history.length === 0) return ['--', '--', '--'];
+  const getLastThree = () => {
+    if (!isRealData || history.length === 0) return ['--', '--', '--'];
     return history.slice(0, 3);
   };
-
-  const isRealData = history.length > 0;
-  const top = topNumbers();
-  const lastThree = getLastThree();
 
   if (loading) {
     return (
@@ -105,17 +163,21 @@ export function RouletteDashboard() {
     );
   }
 
+  const lastThree = getLastThree();
+
   return (
     <div className="p-4 space-y-4">
       {/* Status */}
       <div className="flex items-center gap-2 text-xs">
-        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-        <span className="text-emerald-400">📡 API Conectada</span>
+        <span className={`w-2 h-2 rounded-full ${isConnected && isRealData ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
+        <span className={isConnected && isRealData ? 'text-emerald-400' : 'text-yellow-400'}>
+          {isConnected && isRealData ? '📡 Números REAIS' : '⏳ Aguardando números reais...'}
+        </span>
         {isRealData && (
-          <span className="text-emerald-400">✅ {total} números</span>
+          <span className="text-emerald-400">✅ {totalNumbers} números</span>
         )}
         {!isRealData && (
-          <span className="text-yellow-400">⚠️ Aguardando números...</span>
+          <span className="text-yellow-400">⚠️ Nenhum número disponível</span>
         )}
       </div>
 
@@ -154,7 +216,7 @@ export function RouletteDashboard() {
                 {showCatalog ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
               <button
-                onClick={fetchNumbers}
+                onClick={refreshHistory}
                 disabled={loading}
                 className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center gap-1"
               >
@@ -182,8 +244,8 @@ export function RouletteDashboard() {
               <div className="grid grid-cols-6 text-[8px] text-text-muted uppercase py-1 border-b border-border-default text-center">
                 <span>N</span><span>A/B</span><span>I/P</span><span>COL</span><span>DUZ</span><span>SET</span>
               </div>
-              {top.length > 0 ? (
-                top.map((item) => {
+              {topNumbers.length > 0 ? (
+                topNumbers.map((item) => {
                   const info = getNumberInfo(item.number);
                   return (
                     <div key={item.number} className="grid grid-cols-6 items-center py-1 text-[10px] border-b border-border-default/30 text-center">
@@ -202,7 +264,7 @@ export function RouletteDashboard() {
                 })
               ) : (
                 <div className="text-center py-4 text-text-muted text-xs">
-                  ⏳ Aguardando números...
+                  ⏳ Aguardando números reais...
                 </div>
               )}
             </div>
@@ -242,7 +304,9 @@ export function RouletteDashboard() {
                     </span>
                     <span>—</span>
                     <span className="text-text-secondary">{getNumberInfo(history[0] || 0).range.toUpperCase()}</span>
-                    <span className="text-[8px] text-emerald-400">● REAL</span>
+                    {isConnected && (
+                      <span className="text-[8px] text-emerald-400">● REAL</span>
+                    )}
                   </span>
                 ) : (
                   <span className="text-yellow-400">⏳ Aguardando...</span>
@@ -301,28 +365,22 @@ export function RouletteDashboard() {
 }
 ROULETOEF
 
-echo "✅ src/components/RouletteDashboard.tsx corrigido (versão simplificada)!"
-
-# ========== REMOVE HOOK SMART API ==========
-rm -f src/hooks/useSmartApi.ts
-echo "✅ src/hooks/useSmartApi.ts removido!"
+echo "✅ src/components/RouletteDashboard.tsx corrigido!"
 
 # ========== COMMIT ==========
 git add src/components/RouletteDashboard.tsx
-git rm -f src/hooks/useSmartApi.ts 2>/dev/null || true
-git commit -m "fix: remove Smart API do frontend, usa apenas backend REST"
+git commit -m "fix: remove números aleatórios, só mostra números REAIS"
 git push origin main
 
 echo "═══════════════════════════════════════════════════════════════"
-echo "✅ SOLUÇÃO DEFINITIVA ENVIADA!"
+echo "✅ NÚMEROS ALEATÓRIOS REMOVIDOS!"
 echo "═══════════════════════════════════════════════════════════════"
 echo ""
-echo "📋 O QUE FOI FEITO:"
-echo "   ✅ Removido useSmartApi.ts"
-echo "   ✅ Simplificado RouletteDashboard"
-echo "   ✅ Frontend usa apenas /api/roulette/live"
-echo "   ✅ Backend (Python) coleta os números"
+echo "📋 O QUE MUDA:"
+echo "   ✅ SEM números falsos"
+echo "   ✅ Só mostra números REAIS da API"
+echo "   ✅ Se não tiver números, mostra 'Aguardando...'"
 echo ""
-echo "🚀 O BUILD VAI PASSAR!"
+echo "🚀 DEPOIS DO DEPLOY, SÓ NÚMEROS REAIS!"
 echo "═══════════════════════════════════════════════════════════════"
 

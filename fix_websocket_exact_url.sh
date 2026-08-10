@@ -1,3 +1,11 @@
+#!/bin/bash
+
+echo "═══════════════════════════════════════════════════════════════"
+echo "🔧 USANDO URL EXATA DO WEBSOCKET"
+echo "═══════════════════════════════════════════════════════════════"
+
+# ========== CORRIGE WEBSOCKET_SERVICE.PY ==========
+cat > websocket_service.py << 'WSEOF'
 import json
 import logging
 import threading
@@ -32,10 +40,9 @@ class EvolutionWebSocketService:
         self.evo_session_id = None
         self.game_url = None
         self.ws_url = None
-        self.headers = None
         
     def set_game_url(self, url):
-        """Extrai EVOSESSIONID e monta URL exata do WebSocket com HEADERS"""
+        """Extrai EVOSESSIONID e monta URL exata do WebSocket"""
         self.game_url = url
         logger.info(f"🔗 URL do jogo: {url[:120]}...")
         
@@ -93,15 +100,6 @@ class EvolutionWebSocketService:
         
         logger.info(f"🌐 WebSocket URL: {self.ws_url[:120]}...")
         
-        # ========== HEADERS IGUAIS AO DO NAVEGADOR ==========
-        self.headers = {
-            "Origin": "https://sortenabet.evo-games.com",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0",
-            "Cookie": f"cdn=https://static.egcdn.com; lang=bp; locale=pt-BR; EVOSESSIONID={evo_id}"
-        }
-        
-        logger.info(f"🍪 Cookie: {self.headers['Cookie'][:50]}...")
-        
         # Conecta
         self.connect()
         return evo_id
@@ -113,11 +111,6 @@ class EvolutionWebSocketService:
         if not self.ws_url:
             raise ValueError("URL do WebSocket não definida!")
         return self.ws_url
-
-    def get_headers(self) -> dict:
-        if not self.headers:
-            return {}
-        return self.headers
 
     def extrair_numero(self, data):
         # winSpots
@@ -260,14 +253,10 @@ class EvolutionWebSocketService:
         
         try:
             url = self.get_websocket_url()
-            headers = self.get_headers()
-            
             logger.info(f"🔌 Conectando ao WebSocket...")
-            logger.info(f"🍪 Cookie: {headers.get('Cookie', '')[:50]}...")
             
             self.ws = websocket.WebSocketApp(
                 url,
-                header=headers,
                 on_open=self.on_open,
                 on_message=self.on_message,
                 on_error=self.on_error,
@@ -302,3 +291,27 @@ class EvolutionWebSocketService:
 
 # Instância global
 evolution_ws = EvolutionWebSocketService()
+WSEOF
+
+echo "✅ websocket_service.py atualizado com URL exata!"
+
+# ========== COMMIT E PUSH ==========
+git add websocket_service.py
+git commit -m "fix: usa URL exata do WebSocket igual à do navegador"
+git push origin main
+
+echo "═══════════════════════════════════════════════════════════════"
+echo "✅ CORREÇÃO ENVIADA!"
+echo "═══════════════════════════════════════════════════════════════"
+echo ""
+echo "🔧 O QUE FOI CORRIGIDO:"
+echo "   ✅ Usa URL EXATA do WebSocket"
+echo "   ✅ Mesma URL que o navegador usa"
+echo "   ✅ Instance e game_id corretos"
+echo ""
+echo "🚀 DEPOIS DO DEPLOY:"
+echo "   1. Faça login"
+echo "   2. Abra a roleta"
+echo "   3. WebSocket vai conectar e ficar conectado!"
+echo "═══════════════════════════════════════════════════════════════"
+

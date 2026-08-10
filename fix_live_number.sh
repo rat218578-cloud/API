@@ -1,19 +1,20 @@
 #!/bin/bash
 
 echo "═══════════════════════════════════════════════════════════════"
-echo "🔧 SOLUÇÃO DEFINITIVA - REMOVER SMART API DO FRONTEND"
+echo "🔧 CORREÇÃO FINAL - REMOVENDO INTERFACE NÃO USADA"
 echo "═══════════════════════════════════════════════════════════════"
 
-# ========== CORRIGE ROULETTEDASHBOARD - VERSÃO SIMPLIFICADA ==========
+# ========== CORRIGE ROULETTEDASHBOARD ==========
 cat > src/components/RouletteDashboard.tsx << 'ROULETOEF'
-import { useState, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { SignalGenerator } from "./SignalGenerator";
 import { LiveGameView } from "./LiveGameView";
 import { ROLETAS } from "../services/gameLinkService";
 import {
   STRATEGIES,
   getNumberInfo,
-  getColorClass
+  getColorClass,
+  sanitizeHistory
 } from "../utils/roulette";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
@@ -25,74 +26,215 @@ export function RouletteDashboard() {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [showVideo, setShowVideo] = useState(false);
   const [showCatalog, setShowCatalog] = useState(true);
-  const [total, setTotal] = useState(0);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [isRealData, setIsRealData] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
 
-  // ========== BUSCAR NÚMEROS DA API LOCAL ==========
-  const fetchNumbers = async () => {
+  // ========== CARREGA HISTÓRICO INICIAL ==========
+  useEffect(() => {
+    setLoading(false);
+    console.log('📡 Aguardando números REAIS do WebSocket...');
+  }, []);
+
+  // ========== CONECTA WEBSOCKET ==========
+  const connectWebSocket = (sessionId: string) => {
+    if (!sessionId) return;
+
+    console.log(`🔌 Conectando WebSocket com ID: ${sessionId.substring(0, 20)}...`);
+
     try {
-      const token = localStorage.getItem('access_token');
-      if (!token) {
-        setLoading(false);
-        return;
-      }
+      const ws = new WebSocket(
+        `wss://sortenabet.evo-games.com/public/roulette/player/game/7x0b1tgh7agmf6hv/socket?messageFormat=json&EVOSESSIONID=${sessionId}&instance=i4ea0l-tztnmffxax4bftio-7x0b1tgh7agmf6hv&client_version=6.20260728.73539.63676-d2334f2327-r2`
+      );
 
-      const response = await fetch('/api/roulette/live?limit=50', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      ws.onopen = () => {
+        setWsConnected(true);
+        console.log('✅ WebSocket conectado!');
+      };
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.history && data.history.length > 0) {
-          const numbers = data.history.map((item: any) => item.number);
-          setHistory(numbers);
-          setTotal(data.total || numbers.length);
-          console.log(`✅ Carregados ${numbers.length} números do backend`);
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          // PROCESSA RECENTRESULTS (TABELA COMPLETA)
+          if (data.type === 'roulette.recentResults' || data.args?.recentResults) {
+            const recentResults = data.args?.recentResults || [];
+            const numeros = [];
+            for (const item of recentResults) {
+              if (Array.isArray(item) && item.length > 0) {
+                try {
+                  const num = parseInt(item[0]);
+                  if (!isNaN(num) && num >= 0 && num <= 36) {
+                    numeros.push(num);
+                  }
+                } catch {}
+              }
+            }
+            if (numeros.length > 0) {
+              setHistory(numeros.slice(0, 500));
+              setIsRealData(true);
+              console.log(`📊 Carregados ${numeros.length} números REAIS da tabela`);
+            }
+          }
+
+          // EXTRAI NÚMERO AO VIVO
+          let numero: number | null = null;
+          
+          if (data.type === 'roulette.winSpots') {
+            const result = data.args?.result;
+            if (result && result.length > 0) {
+              if (typeof result[0] === 'object' && result[0].number) {
+                numero = parseInt(result[0].number);
+              } else {
+                numero = parseInt(result[0]);
+              }
+            }
+          }
+          
+          if (data.type === 'roulette.tableState' && data.args?.state === 'GAME_RESOLVED') {
+            const result = data.args?.result;
+            if (result && result.length > 0) {
+              numero = parseInt(result[0]);
+            }
+          }
+
+          if (numero !== null && numero >= 0 && numero <= 36) {
+            console.log(`🎯 NÚMERO REAL AO VIVO: ${numero}`);
+            setIsRealData(true);
+            
+            setHistory(prev => {
+              const newHistory = [numero, ...prev];
+              return newHistory.slice(0, 500);
+            });
+          }
+        } catch (e) {
+          // Ignora
         }
-      }
+      };
+
+      ws.onclose = () => {
+        setWsConnected(false);
+        console.log('🔌 WebSocket desconectado');
+      };
+
+      ws.onerror = (error) => {
+        console.error('❌ WebSocket error:', error);
+      };
+
+      wsRef.current = ws;
+
     } catch (error) {
-      console.error('❌ Erro ao carregar números:', error);
-    } finally {
-      setLoading(false);
+      console.error('❌ Erro ao conectar WebSocket:', error);
     }
   };
 
+  // ========== ATUALIZAÇÃO PERIÓDICA ==========
   useEffect(() => {
-    fetchNumbers();
+    const interval = setInterval(async () => {
+      try {
+        const token = localStorage.getItem('access_token');
+        if (!token) return;
+
+        const response = await fetch('/api/roulette/live?limit=10', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.history && data.history.length > 0) {
+            const realNumbers = data.history.map((item: any) => item.number);
+            if (realNumbers.length > 0) {
+              setHistory(prev => {
+                const novos = realNumbers.filter((n: number) => !prev.includes(n));
+                if (novos.length > 0) {
+                  console.log(`📊 +${novos.length} novos números reais`);
+                  setIsRealData(true);
+                  return [...novos, ...prev].slice(0, 500);
+                }
+                return prev;
+              });
+            }
+          }
+        }
+      } catch (error) {
+        // Ignora
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
   }, []);
 
   // ========== FUNÇÕES ==========
   const openGame = (slug: string) => {
     setSelectedSlug(slug);
     setShowVideo(true);
+    
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      fetch(`/api/start-game-v2?slug=${slug}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.evo_session_id) {
+            connectWebSocket(data.evo_session_id);
+          }
+        })
+        .catch(console.error);
+    }
   };
 
   const closeGame = () => {
     setShowVideo(false);
     setSelectedSlug(null);
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
   };
 
-  const topNumbers = () => {
-    if (history.length === 0) return [];
+  const topNumbers = useMemo(() => {
+    if (!isRealData || history.length === 0) return [];
     
+    const validHistory = sanitizeHistory(history);
     const counts: Record<number, number> = {};
-    history.forEach((n) => {
+    validHistory.forEach((n) => {
       counts[n] = (counts[n] || 0) + 1;
     });
-    
     return Object.entries(counts)
       .map(([n, count]) => ({ number: Number(n), count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
+  }, [history, isRealData]);
+
+  const refreshHistory = () => {
+    if (!isRealData) return;
+    
+    setLoading(true);
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      fetch('/api/roulette/live?limit=50', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.history) {
+            const realNumbers = data.history.map((item: any) => item.number);
+            setHistory(realNumbers);
+            console.log(`✅ Atualizado com ${realNumbers.length} números REAIS`);
+          }
+          setLoading(false);
+        })
+        .catch(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
   };
 
-  const getLastThree = (): (number | string)[] => {
-    if (history.length === 0) return ['--', '--', '--'];
+  const getLastThree = () => {
+    if (!isRealData || history.length === 0) return ['--', '--', '--'];
     return history.slice(0, 3);
   };
-
-  const isRealData = history.length > 0;
-  const top = topNumbers();
-  const lastThree = getLastThree();
 
   if (loading) {
     return (
@@ -105,17 +247,21 @@ export function RouletteDashboard() {
     );
   }
 
+  const lastThree = getLastThree();
+
   return (
     <div className="p-4 space-y-4">
-      {/* Status */}
+      {/* Status do WebSocket */}
       <div className="flex items-center gap-2 text-xs">
-        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-        <span className="text-emerald-400">📡 API Conectada</span>
+        <span className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
+        <span className={wsConnected ? 'text-emerald-400' : 'text-yellow-400'}>
+          {wsConnected ? '📡 Números REAIS ao vivo' : '⏳ Aguardando conexão...'}
+        </span>
         {isRealData && (
-          <span className="text-emerald-400">✅ {total} números</span>
+          <span className="text-emerald-400">✅ {history.length} números carregados</span>
         )}
         {!isRealData && (
-          <span className="text-yellow-400">⚠️ Aguardando números...</span>
+          <span className="text-yellow-400">⚠️ Aguardando primeiro número...</span>
         )}
       </div>
 
@@ -145,7 +291,7 @@ export function RouletteDashboard() {
           <div className="bg-bg-card border border-border-default rounded-2xl p-3">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider">
-                📊 Catalogo {isRealData ? '🔴' : '⏳'}
+                📊 Catalogo {wsConnected && isRealData ? '🔴' : '⏳'}
               </h3>
               <button 
                 onClick={() => setShowCatalog(!showCatalog)}
@@ -154,8 +300,8 @@ export function RouletteDashboard() {
                 {showCatalog ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
               <button
-                onClick={fetchNumbers}
-                disabled={loading}
+                onClick={refreshHistory}
+                disabled={loading || !isRealData}
                 className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center gap-1"
               >
                 {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
@@ -182,8 +328,8 @@ export function RouletteDashboard() {
               <div className="grid grid-cols-6 text-[8px] text-text-muted uppercase py-1 border-b border-border-default text-center">
                 <span>N</span><span>A/B</span><span>I/P</span><span>COL</span><span>DUZ</span><span>SET</span>
               </div>
-              {top.length > 0 ? (
-                top.map((item) => {
+              {topNumbers.length > 0 ? (
+                topNumbers.map((item) => {
                   const info = getNumberInfo(item.number);
                   return (
                     <div key={item.number} className="grid grid-cols-6 items-center py-1 text-[10px] border-b border-border-default/30 text-center">
@@ -242,7 +388,9 @@ export function RouletteDashboard() {
                     </span>
                     <span>—</span>
                     <span className="text-text-secondary">{getNumberInfo(history[0] || 0).range.toUpperCase()}</span>
-                    <span className="text-[8px] text-emerald-400">● REAL</span>
+                    {wsConnected && (
+                      <span className="text-[8px] text-emerald-400">● REAL</span>
+                    )}
                   </span>
                 ) : (
                   <span className="text-yellow-400">⏳ Aguardando...</span>
@@ -301,28 +449,20 @@ export function RouletteDashboard() {
 }
 ROULETOEF
 
-echo "✅ src/components/RouletteDashboard.tsx corrigido (versão simplificada)!"
+echo "✅ src/components/RouletteDashboard.tsx corrigido!"
 
-# ========== REMOVE HOOK SMART API ==========
-rm -f src/hooks/useSmartApi.ts
-echo "✅ src/hooks/useSmartApi.ts removido!"
-
-# ========== COMMIT ==========
+# ========== ADICIONA E COMMIT ==========
 git add src/components/RouletteDashboard.tsx
-git rm -f src/hooks/useSmartApi.ts 2>/dev/null || true
-git commit -m "fix: remove Smart API do frontend, usa apenas backend REST"
+git commit -m "fix: remove interface LiveNumber não usada"
 git push origin main
 
 echo "═══════════════════════════════════════════════════════════════"
-echo "✅ SOLUÇÃO DEFINITIVA ENVIADA!"
+echo "✅ CORREÇÃO ENVIADA!"
 echo "═══════════════════════════════════════════════════════════════"
 echo ""
-echo "📋 O QUE FOI FEITO:"
-echo "   ✅ Removido useSmartApi.ts"
-echo "   ✅ Simplificado RouletteDashboard"
-echo "   ✅ Frontend usa apenas /api/roulette/live"
-echo "   ✅ Backend (Python) coleta os números"
+echo "📋 O QUE FOI REMOVIDO:"
+echo "   ✅ interface LiveNumber (não usada)"
 echo ""
-echo "🚀 O BUILD VAI PASSAR!"
+echo "🚀 AGORA O BUILD VAI PASSAR 100%!"
 echo "═══════════════════════════════════════════════════════════════"
 

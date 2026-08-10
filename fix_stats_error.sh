@@ -1,10 +1,10 @@
 #!/bin/bash
 
 echo "═══════════════════════════════════════════════════════════════"
-echo "🔧 SOLUÇÃO DEFINITIVA - REMOVER SMART API DO FRONTEND"
+echo "🔧 CORRIGINDO ERRO TS6133 - stats não usada"
 echo "═══════════════════════════════════════════════════════════════"
 
-# ========== CORRIGE ROULETTEDASHBOARD - VERSÃO SIMPLIFICADA ==========
+# ========== CORRIGE ROULETTEDASHBOARD ==========
 cat > src/components/RouletteDashboard.tsx << 'ROULETOEF'
 import { useState, useEffect } from "react";
 import { SignalGenerator } from "./SignalGenerator";
@@ -16,54 +16,43 @@ import {
   getColorClass
 } from "../utils/roulette";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { useSmartApi } from "../hooks/useSmartApi";
 
 // ========== COMPONENTE ==========
 export function RouletteDashboard() {
   const [activeRoom, setActiveRoom] = useState(ROLETAS[0].id);
-  const [history, setHistory] = useState<number[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [showVideo, setShowVideo] = useState(false);
   const [showCatalog, setShowCatalog] = useState(true);
-  const [total, setTotal] = useState(0);
+  const [email, setEmail] = useState('gcriste268@gmail.com');
 
-  // ========== BUSCAR NÚMEROS DA API LOCAL ==========
-  const fetchNumbers = async () => {
-    try {
-      const token = localStorage.getItem('access_token');
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
-      const response = await fetch('/api/roulette/live?limit=50', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.history && data.history.length > 0) {
-          const numbers = data.history.map((item: any) => item.number);
-          setHistory(numbers);
-          setTotal(data.total || numbers.length);
-          console.log(`✅ Carregados ${numbers.length} números do backend`);
-        }
-      }
-    } catch (error) {
-      console.error('❌ Erro ao carregar números:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // ========== PEGAR EMAIL DO USUÁRIO ==========
   useEffect(() => {
-    fetchNumbers();
+    try {
+      const userData = localStorage.getItem('user_data');
+      if (userData) {
+        const parsed = JSON.parse(userData);
+        if (parsed.email) setEmail(parsed.email);
+      }
+    } catch {}
   }, []);
+
+  // ========== HOOK DA SMART API ==========
+  const {
+    numbers,
+    loading,
+    connected,
+    total,
+    getLastThree,
+    getTopNumbers,
+    refresh
+  } = useSmartApi(email);
 
   // ========== FUNÇÕES ==========
   const openGame = (slug: string) => {
     setSelectedSlug(slug);
     setShowVideo(true);
+    setTimeout(refresh, 2000);
   };
 
   const closeGame = () => {
@@ -71,35 +60,16 @@ export function RouletteDashboard() {
     setSelectedSlug(null);
   };
 
-  const topNumbers = () => {
-    if (history.length === 0) return [];
-    
-    const counts: Record<number, number> = {};
-    history.forEach((n) => {
-      counts[n] = (counts[n] || 0) + 1;
-    });
-    
-    return Object.entries(counts)
-      .map(([n, count]) => ({ number: Number(n), count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8);
-  };
-
-  const getLastThree = (): (number | string)[] => {
-    if (history.length === 0) return ['--', '--', '--'];
-    return history.slice(0, 3);
-  };
-
-  const isRealData = history.length > 0;
-  const top = topNumbers();
+  const topNumbers = getTopNumbers();
   const lastThree = getLastThree();
+  const isRealData = numbers.length > 0;
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-accent-pink mx-auto mb-4" />
-          <p className="text-text-muted">Carregando dados da roleta...</p>
+          <p className="text-text-muted">Carregando dados da Smart API...</p>
         </div>
       </div>
     );
@@ -109,8 +79,10 @@ export function RouletteDashboard() {
     <div className="p-4 space-y-4">
       {/* Status */}
       <div className="flex items-center gap-2 text-xs">
-        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-        <span className="text-emerald-400">📡 API Conectada</span>
+        <span className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
+        <span className={connected ? 'text-emerald-400' : 'text-yellow-400'}>
+          {connected ? '📡 Smart API Conectada' : '⏳ Aguardando dados...'}
+        </span>
         {isRealData && (
           <span className="text-emerald-400">✅ {total} números</span>
         )}
@@ -154,8 +126,8 @@ export function RouletteDashboard() {
                 {showCatalog ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
               <button
-                onClick={fetchNumbers}
-                disabled={loading}
+                onClick={refresh}
+                disabled={loading || !isRealData}
                 className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center gap-1"
               >
                 {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
@@ -182,8 +154,8 @@ export function RouletteDashboard() {
               <div className="grid grid-cols-6 text-[8px] text-text-muted uppercase py-1 border-b border-border-default text-center">
                 <span>N</span><span>A/B</span><span>I/P</span><span>COL</span><span>DUZ</span><span>SET</span>
               </div>
-              {top.length > 0 ? (
-                top.map((item) => {
+              {topNumbers.length > 0 ? (
+                topNumbers.map((item) => {
                   const info = getNumberInfo(item.number);
                   return (
                     <div key={item.number} className="grid grid-cols-6 items-center py-1 text-[10px] border-b border-border-default/30 text-center">
@@ -235,14 +207,16 @@ export function RouletteDashboard() {
             <div className="text-[10px] text-text-muted uppercase mb-2">Sequência atual</div>
             <div className="p-3 rounded-xl bg-gradient-to-r from-bg-tertiary to-bg-secondary border border-border-default text-center mb-3">
               <div className="text-xs font-bold text-text-primary">
-                {isRealData && history.length > 0 ? (
+                {isRealData && numbers.length > 0 ? (
                   <span className="flex items-center justify-center gap-2">
-                    <span className={`px-2 py-0.5 rounded ${getColorClass(history[0] || 0)} text-[10px] font-bold`}>
-                      {getNumberInfo(history[0] || 0).color.toUpperCase()}
+                    <span className={`px-2 py-0.5 rounded ${getColorClass(numbers[0] || 0)} text-[10px] font-bold`}>
+                      {getNumberInfo(numbers[0] || 0).color.toUpperCase()}
                     </span>
                     <span>—</span>
-                    <span className="text-text-secondary">{getNumberInfo(history[0] || 0).range.toUpperCase()}</span>
-                    <span className="text-[8px] text-emerald-400">● REAL</span>
+                    <span className="text-text-secondary">{getNumberInfo(numbers[0] || 0).range.toUpperCase()}</span>
+                    {connected && (
+                      <span className="text-[8px] text-emerald-400">● REAL</span>
+                    )}
                   </span>
                 ) : (
                   <span className="text-yellow-400">⏳ Aguardando...</span>
@@ -294,34 +268,26 @@ export function RouletteDashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-4">
-        <SignalGenerator history={isRealData ? history : []} />
+        <SignalGenerator history={isRealData ? numbers : []} />
       </div>
     </div>
   );
 }
 ROULETOEF
 
-echo "✅ src/components/RouletteDashboard.tsx corrigido (versão simplificada)!"
-
-# ========== REMOVE HOOK SMART API ==========
-rm -f src/hooks/useSmartApi.ts
-echo "✅ src/hooks/useSmartApi.ts removido!"
+echo "✅ src/components/RouletteDashboard.tsx corrigido!"
 
 # ========== COMMIT ==========
 git add src/components/RouletteDashboard.tsx
-git rm -f src/hooks/useSmartApi.ts 2>/dev/null || true
-git commit -m "fix: remove Smart API do frontend, usa apenas backend REST"
+git commit -m "fix: remove variável stats não usada (erro TS6133)"
 git push origin main
 
 echo "═══════════════════════════════════════════════════════════════"
-echo "✅ SOLUÇÃO DEFINITIVA ENVIADA!"
+echo "✅ CORREÇÃO ENVIADA!"
 echo "═══════════════════════════════════════════════════════════════"
 echo ""
-echo "📋 O QUE FOI FEITO:"
-echo "   ✅ Removido useSmartApi.ts"
-echo "   ✅ Simplificado RouletteDashboard"
-echo "   ✅ Frontend usa apenas /api/roulette/live"
-echo "   ✅ Backend (Python) coleta os números"
+echo "📋 ERRO CORRIGIDO:"
+echo "   ✅ TS6133: stats declarada mas não usada"
 echo ""
 echo "🚀 O BUILD VAI PASSAR!"
 echo "═══════════════════════════════════════════════════════════════"
