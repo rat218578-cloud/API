@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Wallet, Gamepad2, Gamepad } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { Header } from "./components/Header";
@@ -30,9 +30,24 @@ export default function App() {
   const [gameLauncherOpen, setGameLauncherOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+  // 🔥 Salva nome e plano no localStorage quando o usuário loga
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem('user_name', user.name || 'Usuário');
+      localStorage.setItem('user_plan', user.plan || 'pro');
+      localStorage.setItem('user_email', user.email || '');
+    }
+  }, [user]);
+
   const handleLogin = async (loginValue: string, password: string) => {
     sessionStorage.setItem('temp_password', password);
-    return await login(loginValue, password);
+    const success = await login(loginValue, password);
+    if (success && user) {
+      localStorage.setItem('user_name', user.name || 'Usuário');
+      localStorage.setItem('user_plan', user.plan || 'pro');
+      localStorage.setItem('user_email', user.email || '');
+    }
+    return success;
   };
 
   if (!isAuthenticated) return <Login onLogin={handleLogin} loading={loading} error={error} />;

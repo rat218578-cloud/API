@@ -19,6 +19,10 @@ interface HeaderProps {
 }
 
 export function Header({ title, balance, user, onLogout }: HeaderProps) {
+  // 🔥 Usa o nome do usuário ou fallback do localStorage
+  const displayName = user?.name || localStorage.getItem('user_name') || 'Usuário';
+  const displayPlan = user?.plan || localStorage.getItem('user_plan') || 'pro';
+
   return (
     <header className="h-14 border-b border-border-default bg-bg-secondary/80 backdrop-blur-sm flex items-center justify-between px-6 sticky top-0 z-40">
       <div className="flex items-center gap-4">
@@ -76,10 +80,10 @@ export function Header({ title, balance, user, onLogout }: HeaderProps) {
             <UserIcon className="w-3 h-3 text-white" />
           </div>
           <div className="hidden sm:block text-left">
-            <div className="text-[10px] font-semibold text-text-primary">{user?.name || 'Usuário'}</div>
+            <div className="text-[10px] font-semibold text-text-primary">{displayName}</div>
             <div className="text-[8px] text-text-muted flex items-center gap-1">
               <Crown className="w-2.5 h-2.5 text-amber-400" />
-              {user?.plan || 'Pro'}
+              {displayPlan}
             </div>
           </div>
           {onLogout && (
