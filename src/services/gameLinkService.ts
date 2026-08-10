@@ -2,7 +2,7 @@
 export const ROLETAS = [
   { 
     id: 'lightning', 
-    nome: '⚡ Lightning', 
+    nome: '⚡ Lightning Roulette - Evolution', 
     slug: 'evolution/lightning-roulette',
     source: 'lightning',
     provedor: 'Evolution',
@@ -10,7 +10,7 @@ export const ROLETAS = [
   },
   { 
     id: 'immersive', 
-    nome: '🎥 Imersiva', 
+    nome: '🎥 Immersive Vip - Evolution', 
     slug: 'evolution/immersive-roulette',
     source: 'immersive',
     provedor: 'Evolution',
@@ -18,15 +18,15 @@ export const ROLETAS = [
   },
   { 
     id: 'brasileira', 
-    nome: '🇧🇷 Brasileira', 
+    nome: '🇧🇷 BR Roleta Brasileira - Pragmatic', 
     slug: 'evolution/brasileira',
     source: 'brasileira',
-    provedor: 'Evolution',
+    provedor: 'Pragmatic',
     cor: '#6C3CE1'
   },
   { 
     id: 'aovivo', 
-    nome: '🎰 Ao Vivo', 
+    nome: '🎰 Roleta ao Vivo - Evolution', 
     slug: 'evolution/ao-vivo',
     source: 'aovivo',
     provedor: 'Evolution',
@@ -34,7 +34,7 @@ export const ROLETAS = [
   },
   { 
     id: 'speed', 
-    nome: '🏃 Speed', 
+    nome: '🏃 Speed Roulette - Evolution', 
     slug: 'evolution/speed-roulette',
     source: 'speed',
     provedor: 'Evolution',
@@ -42,7 +42,7 @@ export const ROLETAS = [
   },
   { 
     id: 'xxxtreme', 
-    nome: '💥 XXXtreme', 
+    nome: '💥 XXXtreme Lightning - Evolution', 
     slug: 'evolution/xxxtreme-lightning-roulette',
     source: 'xxxtreme',
     provedor: 'Evolution',
@@ -50,7 +50,7 @@ export const ROLETAS = [
   },
   { 
     id: 'vip', 
-    nome: '👑 Vip', 
+    nome: '👑 Roleta Vip - Evolution', 
     slug: 'evolution/vip-roulette',
     source: 'vip',
     provedor: 'Evolution',
@@ -58,7 +58,7 @@ export const ROLETAS = [
   },
   { 
     id: 'vipauto', 
-    nome: '🤖 Vip Auto', 
+    nome: '🤖 Auto Roulette Vip - Evolution', 
     slug: 'evolution/vip-auto-roulette',
     source: 'vipauto',
     provedor: 'Evolution',
@@ -66,23 +66,15 @@ export const ROLETAS = [
   },
   { 
     id: 'speedauto', 
-    nome: '🏃 Speed Auto', 
+    nome: '🏃 Speed Auto Roulette - Evolution', 
     slug: 'evolution/speed-auto-roulette',
     source: 'speedauto',
     provedor: 'Evolution',
     cor: '#6C3CE1'
   },
   { 
-    id: 'relampago', 
-    nome: '⚡ Relâmpago', 
-    slug: 'evolution/relampago-roulette',
-    source: 'relampago',
-    provedor: 'Evolution',
-    cor: '#6C3CE1'
-  },
-  { 
     id: 'brasilPlay', 
-    nome: '🇧🇷 Brasil Play', 
+    nome: '🇧🇷 Roleta Brasileira - Playtech', 
     slug: 'evolution/brasil-play',
     source: 'brasilPlay',
     provedor: 'Playtech',
