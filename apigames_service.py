@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 🎯 API GAMES - NÚMEROS REAIS DA SMART API
-Serviço separado para buscar números ao vivo
 """
 
 import requests
@@ -33,12 +32,10 @@ class ApiGamesService:
         }
         
     def set_email(self, email):
-        """Define o email do usuário"""
         self.email = email
         logger.info(f"📧 Email definido: {email}")
         
     def fetch_numbers(self, since: str = None):
-        """Busca números da Smart API"""
         if not self.email:
             logger.warning("⚠️ Email não definido!")
             return []
@@ -79,7 +76,10 @@ class ApiGamesService:
                             })
                 
                 if numeros:
-                    self.last_signal_id = numeros[0].get('signalId')
+                    # 🔥 INVERTE A ORDEM - mais antigo primeiro
+                    numeros = numeros[::-1]
+                    
+                    self.last_signal_id = numeros[-1].get('signalId') if numeros else None
                     self.processar_numeros(numeros)
                     logger.info(f"✅ +{len(numeros)} números reais")
                 
@@ -109,7 +109,6 @@ class ApiGamesService:
             self.ultimos_numeros = self.ultimos_numeros[-10:]
     
     def start_polling(self, interval=3):
-        """Inicia polling contínuo"""
         self.running = True
         logger.info(f"🚀 Iniciando polling (intervalo: {interval}s)")
         
@@ -134,20 +133,20 @@ class ApiGamesService:
         logger.info("✅ Polling iniciado")
     
     def stop_polling(self):
-        """Para o polling"""
         self.running = False
         logger.info("🔌 Polling parado")
     
     def get_history(self, limit=500):
-        """Retorna histórico de números"""
+        """Retorna histórico de números (mais recentes primeiro)"""
+        # 🔥 Mantém a ordem correta (mais recente primeiro)
         return self.numeros[-limit:] if self.numeros else []
     
     def get_last_numbers(self, count=10):
-        """Retorna os últimos números"""
+        """Retorna os últimos números (mais recentes primeiro)"""
+        # 🔥 Últimos números = os mais recentes
         return self.ultimos_numeros[-count:] if self.ultimos_numeros else []
     
     def get_top_numbers(self, count=8):
-        """Retorna os números mais frequentes"""
         if not self.numeros:
             return []
         
@@ -156,7 +155,6 @@ class ApiGamesService:
         return [{'number': num, 'count': cnt} for num, cnt in freq]
     
     def get_statistics(self):
-        """Retorna estatísticas"""
         if not self.numeros:
             return {}
         
