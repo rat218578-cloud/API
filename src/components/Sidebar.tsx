@@ -45,7 +45,6 @@ export function Sidebar({
 
   return (
     <>
-      {/* Sidebar */}
       <aside className={`fixed left-0 top-0 h-screen bg-bg-secondary border-r border-border-default transition-all duration-300 z-50 flex flex-col ${sidebarWidth}`}>
         <div className="h-16 flex items-center justify-between px-4 border-b border-border-default">
           {!collapsed && (
@@ -130,7 +129,6 @@ export function Sidebar({
         </div>
       </aside>
 
-      {/* Espaçador para o conteúdo principal */}
       <div className={collapsed ? "ml-16" : "ml-64"} />
     </>
   );
