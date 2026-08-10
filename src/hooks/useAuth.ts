@@ -16,7 +16,7 @@ export function useAuth() {
     isAuthenticated: false
   });
 
-  // 🔥 RESTAURA USUÁRIO DO LOCALSTORAGE
+  // Restaura usuário do localStorage
   const restoreUserFromStorage = (): User | null => {
     try {
       const name = localStorage.getItem('user_name');
@@ -38,7 +38,7 @@ export function useAuth() {
     }
   };
 
-  // 🔥 SALVA USUÁRIO NO LOCALSTORAGE
+  // Salva usuário no localStorage
   const saveUserToStorage = (user: User) => {
     localStorage.setItem('user_name', user.name || 'Usuário');
     localStorage.setItem('user_plan', user.plan || 'pro');
@@ -68,7 +68,6 @@ export function useAuth() {
     const accessToken = localStorage.getItem('access_token');
     const refreshTokenStored = localStorage.getItem('refresh_token');
     
-    // 🔥 RESTAURA DO STORAGE PRIMEIRO
     const storedUser = restoreUserFromStorage();
     if (storedUser && accessToken) {
       setState(prev => ({ 
@@ -201,8 +200,6 @@ export function useAuth() {
     login,
     logout,
     validateToken,
-    refreshToken,
-    saveUserToStorage,
-    restoreUserFromStorage
+    refreshToken
   };
 }
