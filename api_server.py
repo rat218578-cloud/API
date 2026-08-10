@@ -3,20 +3,23 @@ from flask_cors import CORS
 import requests
 import logging
 import os
+import random
 from datetime import datetime
 
+# ========== CRIA APP ==========
 app = Flask(__name__, static_folder='dist', static_url_path='')
 CORS(app)
 
+# ========== IMPORTAÇÕES ==========
 try:
     from db import db
-except:
+except Exception as e:
+    print(f"⚠️ Erro ao importar db: {e}")
     db = None
 
 from jwt_helper import jwt_manager
 from session_service import session_service
 from middleware import require_auth, optional_auth
-from smart_api_service import smart_api
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,6 +35,31 @@ session.headers.update({
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 })
 
+# ========== HISTÓRICO DE NÚMEROS ==========
+historico_numeros = []
+
+def gerar_numero_aleatorio():
+    """Gera um número de roleta aleatório (0-36)"""
+    return random.randint(0, 36)
+
+def get_cor(numero):
+    """Retorna a cor do número"""
+    red = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]
+    if numero == 0:
+        return "green"
+    return "red" if numero in red else "black"
+
+def adicionar_numero_ao_historico(numero):
+    """Adiciona um número ao histórico"""
+    global historico_numeros
+    historico_numeros.append({
+        'number': numero,
+        'color': get_cor(numero),
+        'timestamp': datetime.now().isoformat()
+    })
+    if len(historico_numeros) > 500:
+        historico_numeros = historico_numeros[-500:]
+
 # ========== ROTA DE LOGIN ==========
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
@@ -43,7 +71,7 @@ def api_login():
         if not email or not password:
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
         
-        logger.info(f"🔐 Tentando login para: {email}")
+        print(f"🔐 Tentando login para: {email}")
         
         login_data = {
             "login": email,
@@ -66,16 +94,12 @@ def api_login():
         session.headers.update({'Authorization': f'Bearer {access_token_externo}'})
         
         user_id = str(result.get('user', {}).get('id', email))
+        
         jwt_token = jwt_manager.generate_token(user_id, email)
         refresh_token = jwt_manager.generate_refresh_token(user_id, email)
         
         if db:
             session_service.create_session(user_id, email, password, jwt_token, refresh_token)
-        
-        # Inicia Smart API
-        logger.info(f"📧 Configurando Smart API para: {email}")
-        smart_api.set_email(email)
-        smart_api.start_polling(interval=3)
         
         return jsonify({
             'access_token': jwt_token,
@@ -100,15 +124,14 @@ def api_login():
 def api_start_game():
     try:
         slug = request.args.get('slug')
+        print(f"🎮 Gerando link para: {slug}")
+        
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
         
-        # Pega o token da sessão (já injetado pelo middleware)
         auth_header = session.headers.get('Authorization')
         if not auth_header:
             return jsonify({'error': 'Token não encontrado'}), 401
-        
-        logger.info(f"🎮 Gerando link para: {slug}")
         
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
@@ -124,6 +147,7 @@ def api_start_game():
         if response.status_code == 200:
             data = response.json()
             game_url = data.get('iframe_url') or data.get('gameURL')
+            
             if game_url:
                 return jsonify({
                     'success': True,
@@ -142,27 +166,49 @@ def api_start_game():
 @app.route('/api/roulette/live', methods=['GET'])
 @require_auth
 def get_live_numbers():
+    """Retorna números da roleta (simulados)"""
     try:
         limit = int(request.args.get('limit', 50))
-        history = smart_api.get_history(limit)
-        last_numbers = smart_api.get_last_numbers(10)
-        stats = smart_api.get_statistics()
         
-        # Se não tem números, tenta buscar
-        if not history:
-            smart_api.fetch_numbers()
-            history = smart_api.get_history(limit)
-            last_numbers = smart_api.get_last_numbers(10)
-            stats = smart_api.get_statistics()
+        # Se o histórico estiver vazio, gera números iniciais
+        if len(historico_numeros) == 0:
+            for _ in range(20):
+                num = gerar_numero_aleatorio()
+                adicionar_numero_ao_historico(num)
+        
+        history = historico_numeros[-limit:] if historico_numeros else []
+        last_numbers = [h['number'] for h in history[-10:]] if history else []
         
         return jsonify({
             'success': True,
-            'connected': smart_api.running,
-            'total': smart_api.total_numeros,
-            'last_numbers': [n['number'] for n in last_numbers],
+            'connected': True,
+            'total': len(historico_numeros),
+            'last_numbers': last_numbers,
             'history': history,
-            'statistics': stats,
             'timestamp': datetime.now().isoformat()
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"❌ Erro: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ========== ROTA PARA ADICIONAR NÚMERO ==========
+@app.route('/api/roulette/add', methods=['POST'])
+def add_number():
+    """Adiciona um número ao histórico"""
+    try:
+        data = request.json
+        number = data.get('number')
+        
+        if number is None or number < 0 or number > 36:
+            return jsonify({'error': 'Número inválido'}), 400
+        
+        adicionar_numero_ao_historico(number)
+        
+        return jsonify({
+            'success': True,
+            'number': number,
+            'total': len(historico_numeros)
         }), 200
         
     except Exception as e:
@@ -174,9 +220,8 @@ def get_live_numbers():
 @require_auth
 def get_status():
     return jsonify({
-        'polling': smart_api.running,
-        'total_numbers': smart_api.total_numeros,
-        'last_numbers': [n['number'] for n in smart_api.get_last_numbers(5)]
+        'total': len(historico_numeros),
+        'last_numbers': [h['number'] for h in historico_numeros[-10:]] if historico_numeros else []
     }), 200
 
 # ========== ROTA DE REFRESH ==========
@@ -219,7 +264,6 @@ def api_validate():
 @app.route('/api/auth/logout', methods=['POST'])
 @require_auth
 def api_logout():
-    smart_api.stop_polling()
     if db:
         session_service.deactivate_session(request.user_id)
     return jsonify({'success': True}), 200
@@ -237,8 +281,8 @@ def cleanup_expired_sessions():
     if db:
         try:
             session_service.cleanup_expired()
-        except:
-            pass
+        except Exception as e:
+            logger.error(f"❌ Erro ao limpar sessões: {e}")
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
@@ -251,17 +295,19 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - QA.AI (SMART API)")
+    print("🎯 API PROXY - QA.AI (REST MODE)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
-    print("📊 Smart API: Ativada!")
+    print("🗄️  Banco: NeonDB (PostgreSQL)")
+    print("🛡️  Auth: JWT + Refresh Token")
+    print("📊  Números: Simulados (REST API)")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     
     if db:
         try:
             session_service.cleanup_expired()
-        except:
-            pass
+        except Exception as e:
+            print(f"⚠️ Erro ao limpar sessões: {e}")
     
     app.run(host='0.0.0.0', port=5000, debug=False)
