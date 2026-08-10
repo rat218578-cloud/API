@@ -63,6 +63,23 @@ class GameLinkService {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`❌ HTTP ${response.status}: ${errorText}`);
+        
+        // Se for 401, tenta renovar
+        if (response.status === 401) {
+          const refreshToken = localStorage.getItem('refresh_token');
+          if (refreshToken) {
+            const refreshResponse = await fetch('/api/auth/refresh', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ refresh_token: refreshToken })
+            });
+            if (refreshResponse.ok) {
+              const data = await refreshResponse.json();
+              localStorage.setItem('access_token', data.access_token);
+              return this.getGameUrl(slug);
+            }
+          }
+        }
         return null;
       }
 
@@ -78,40 +95,6 @@ class GameLinkService {
       return null;
     } catch (error) {
       console.error(`❌ Erro:`, error);
-      return null;
-    }
-  }
-
-  async getLiveNumbers(limit: number = 500): Promise<any> {
-    try {
-      const token = localStorage.getItem('access_token');
-      if (!token) return null;
-
-      const response = await fetch(`/api/roulette/live?limit=${limit}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (!response.ok) return null;
-      return await response.json();
-    } catch (error) {
-      console.error('❌ Erro ao buscar números ao vivo:', error);
-      return null;
-    }
-  }
-
-  async getWebSocketStatus(): Promise<any> {
-    try {
-      const token = localStorage.getItem('access_token');
-      if (!token) return null;
-
-      const response = await fetch('/api/roulette/status', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (!response.ok) return null;
-      return await response.json();
-    } catch (error) {
-      console.error('❌ Erro ao buscar status:', error);
       return null;
     }
   }
