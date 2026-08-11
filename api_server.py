@@ -12,7 +12,7 @@ from jwt_helper import jwt_manager
 from session_service import session_service
 
 # 🔥 LOGS MÍNIMOS
-logging.basicConfig(level=logging.ERROR)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__, static_folder='dist', static_url_path='')
@@ -30,7 +30,7 @@ session.headers.update({
     'Connection': 'keep-alive'
 })
 
-# 🔥 CACHE EM MEMÓRIA (RÁPIDO)
+# 🔥 CACHE EM MEMÓRIA
 cache = {}
 CACHE_TTL = 300  # 5 minutos
 
@@ -69,7 +69,7 @@ def adicionar_numero_ao_historico(numero):
     if len(historico_numeros) > 500:
         historico_numeros = historico_numeros[-500:]
 
-# ========== LOGIN (COM CACHE) ==========
+# ========== LOGIN (COM RETRY E TIMEOUT MAIOR) ==========
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
     try:
@@ -85,7 +85,7 @@ def api_login():
         if cached:
             return jsonify(cached), 200
         
-        # LOGIN NA API EXTERNA
+        # LOGIN NA API EXTERNA (COM TIMEOUT MAIOR E RETRY)
         login_data = {
             "login": email,
             "email": email,
@@ -93,7 +93,21 @@ def api_login():
             "app_source": "web"
         }
         
-        response = session.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=3)
+        # 🔥 TENTA 2 VEZES COM TIMEOUT DE 10 SEGUNDOS
+        for tentativa in range(2):
+            try:
+                response = session.post(
+                    f'{API_BASE}/api/auth/login', 
+                    json=login_data, 
+                    timeout=10  # 🔥 AUMENTADO PARA 10 SEGUNDOS
+                )
+                break
+            except requests.exceptions.Timeout:
+                if tentativa == 0:
+                    print(f"⏱️ Timeout na tentativa 1, tentando novamente...")
+                    continue
+                else:
+                    return jsonify({'error': 'Tempo limite excedido. Tente novamente.'}), 408
         
         if response.status_code != 200:
             return jsonify({'error': 'Credenciais inválidas'}), 401
@@ -134,10 +148,13 @@ def api_login():
         
         return jsonify(response_data), 200
         
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'Tempo limite excedido. Tente novamente.'}), 408
     except Exception as e:
+        print(f"❌ Erro no login: {e}")
         return jsonify({'error': str(e)}), 500
 
-# ========== START-GAME (COM CACHE) ==========
+# ========== START-GAME (COM TIMEOUT MAIOR) ==========
 @app.route('/api/start-game-v2', methods=['GET'])
 def api_start_game():
     try:
@@ -164,7 +181,7 @@ def api_start_game():
         if not auth_header_externo:
             return jsonify({'error': 'Token externo não encontrado'}), 401
         
-        # 🔥 TIMEOUT MENOR (3 segundos)
+        # 🔥 TIMEOUT DE 10 SEGUNDOS (não é 3)
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
             params={
@@ -173,7 +190,7 @@ def api_start_game():
                 'use_demo': 0,
                 'source': 'watchIsAuthenticated'
             },
-            timeout=3
+            timeout=10  # 🔥 AUMENTADO PARA 10 SEGUNDOS
         )
         
         if response.status_code == 200:
@@ -196,6 +213,8 @@ def api_start_game():
             'error': 'Não foi possível obter a URL do jogo'
         }), 404
         
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'Tempo limite excedido'}), 408
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -301,12 +320,12 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("⚡ API PROXY - QA.AI (ULTRA OTIMIZADO)")
+    print("⚡ API PROXY - QA.AI (TIMEOUT CORRIGIDO)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("🗄️  Banco: PostgreSQL (30 dias)")
     print("⚡ Cache: 5 minutos")
-    print("⏱️  Timeout: 3 segundos")
+    print("⏱️  Timeout: 10 segundos (com retry)")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     
