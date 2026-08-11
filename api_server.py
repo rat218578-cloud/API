@@ -6,6 +6,9 @@ import time
 import logging
 import os
 import random
+import re
+import threading
+import concurrent.futures
 from datetime import datetime
 from db import db
 from jwt_helper import jwt_manager
@@ -30,7 +33,7 @@ session.headers.update({
     'Connection': 'keep-alive'
 })
 
-# 🔥 CACHE EM MEMÓRIA (RÁPIDO)
+# 🔥 CACHE GERAL (LOGIN)
 cache = {}
 CACHE_TTL = 300  # 5 minutos
 
@@ -46,6 +49,29 @@ def set_cache(key, value):
         'value': value,
         'timestamp': time.time()
     }
+
+# 🔥 CACHE POR ROLETA (CADA UMA TEM SEU TOKEN)
+roulette_cache = {}
+ROULETTE_CACHE_TTL = 300  # 5 minutos
+
+def get_roulette_cache(slug):
+    if slug in roulette_cache:
+        data = roulette_cache[slug]
+        if time.time() - data['timestamp'] < ROULETTE_CACHE_TTL:
+            return data['value']
+    return None
+
+def set_roulette_cache(slug, value):
+    roulette_cache[slug] = {
+        'value': value,
+        'timestamp': time.time()
+    }
+
+# 🔥 LIMPAR CACHE DE UMA ROLETA
+def clear_roulette_cache(slug):
+    if slug in roulette_cache:
+        del roulette_cache[slug]
+        print(f"🗑️ Cache limpo para {slug}")
 
 # HISTÓRICO DE NÚMEROS
 historico_numeros = []
@@ -69,7 +95,7 @@ def adicionar_numero_ao_historico(numero):
     if len(historico_numeros) > 500:
         historico_numeros = historico_numeros[-500:]
 
-# ========== LOGIN (COM CACHE) ==========
+# ========== LOGIN ==========
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
     try:
@@ -80,12 +106,10 @@ def api_login():
         if not email or not password:
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
         
-        # 🔥 VERIFICA CACHE PRIMEIRO
         cached = get_cache(f"login:{email}")
         if cached:
             return jsonify(cached), 200
         
-        # LOGIN NA API EXTERNA
         login_data = {
             "login": email,
             "email": email,
@@ -93,7 +117,7 @@ def api_login():
             "app_source": "web"
         }
         
-        response = session.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=3)
+        response = session.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
         
         if response.status_code != 200:
             return jsonify({'error': 'Credenciais inválidas'}), 401
@@ -110,7 +134,6 @@ def api_login():
         jwt_token = jwt_manager.generate_token(user_id, email)
         refresh_token = jwt_manager.generate_refresh_token(user_id, email)
         
-        # SALVA NO BANCO (NÃO BLOQUEIA)
         try:
             session_service.create_session(user_id, email, password, jwt_token, refresh_token)
         except:
@@ -129,7 +152,6 @@ def api_login():
             }
         }
         
-        # 🔥 SALVA EM CACHE
         set_cache(f"login:{email}", response_data)
         
         return jsonify(response_data), 200
@@ -137,7 +159,7 @@ def api_login():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ========== START-GAME (COM CACHE) ==========
+# ========== START-GAME (TOKEN ÚNICO POR ROLETA) ==========
 @app.route('/api/start-game-v2', methods=['GET'])
 def api_start_game():
     try:
@@ -145,11 +167,12 @@ def api_start_game():
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
         
-        # 🔥 VERIFICA CACHE
-        cached = get_cache(f"game:{slug}")
+        # 🔥 VERIFICA SE TEM TOKEN ESPECÍFICO PARA ESTA ROLETA
+        cached = get_roulette_cache(slug)
         if cached:
             return jsonify(cached), 200
         
+        # 🔥 PEGA TOKEN DO HEADER
         auth_header = request.headers.get('Authorization')
         if not auth_header:
             return jsonify({'error': 'Token não encontrado'}), 401
@@ -160,11 +183,15 @@ def api_start_game():
         if not payload:
             return jsonify({'error': 'Token inválido'}), 401
         
+        # 🔥 GERA NOVO TOKEN PARA ESTA ROLETA
+        print(f"🎮 Gerando NOVO token para: {slug}")
+        
+        # USA TOKEN EXTERNO DA SESSÃO
         auth_header_externo = session.headers.get('Authorization')
         if not auth_header_externo:
             return jsonify({'error': 'Token externo não encontrado'}), 401
         
-        # 🔥 TIMEOUT MENOR (3 segundos)
+        # 🔥 FAZ REQUISIÇÃO
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
             params={
@@ -173,7 +200,7 @@ def api_start_game():
                 'use_demo': 0,
                 'source': 'watchIsAuthenticated'
             },
-            timeout=3
+            timeout=5
         )
         
         if response.status_code == 200:
@@ -181,20 +208,98 @@ def api_start_game():
             game_url = data.get('iframe_url') or data.get('gameURL')
             
             if game_url:
+                # 🔥 EXTRAI EVOSESSIONID
+                match = re.search(r'EVOSESSIONID=([^&]+)', game_url)
+                evo_id = match.group(1) if match else None
+                
                 response_data = {
                     'success': True,
                     'slug': slug,
                     'gameURL': game_url,
-                    'iframe_url': game_url
+                    'iframe_url': game_url,
+                    'evo_session_id': evo_id
                 }
-                # 🔥 SALVA EM CACHE (1 minuto)
-                set_cache(f"game:{slug}", response_data)
+                
+                # 🔥 SALVA EM CACHE ESPECÍFICO DA ROLETA
+                set_roulette_cache(slug, response_data)
                 return jsonify(response_data), 200
+        
+        # 🔥 SE FALHOU (EV.12), LIMPA CACHE E TENTA NOVAMENTE
+        if response.status_code == 401 or (response.text and 'EV.12' in response.text):
+            print(f"⚠️ EV.12 para {slug}, limpando cache...")
+            clear_roulette_cache(slug)
+            
+            # 🔥 TENTA NOVAMENTE COM NOVO TOKEN
+            print(f"🔄 Gerando NOVO token para {slug}...")
+            
+            # Força renovação do token externo
+            session.headers.pop('Authorization', None)
+            
+            # Re-login
+            # Tenta pegar email da sessão
+            email = request.headers.get('X-User-Email')
+            if email:
+                response = session.post(f'{API_BASE}/api/auth/login', 
+                    json={"login": email, "email": email, "password": "temp"},
+                    timeout=5
+                )
+                if response.status_code == 200:
+                    result = response.json()
+                    access_token_externo = result.get('access_token')
+                    if access_token_externo:
+                        session.headers.update({'Authorization': f'Bearer {access_token_externo}'})
+            
+            # Tenta novamente
+            response = session.get(
+                f'{API_BASE}/api/start-game-v2',
+                params={
+                    'slug': slug,
+                    'platform': 'WEB',
+                    'use_demo': 0,
+                    'source': 'watchIsAuthenticated'
+                },
+                timeout=5
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                game_url = data.get('iframe_url') or data.get('gameURL')
+                
+                if game_url:
+                    response_data = {
+                        'success': True,
+                        'slug': slug,
+                        'gameURL': game_url,
+                        'iframe_url': game_url
+                    }
+                    set_roulette_cache(slug, response_data)
+                    return jsonify(response_data), 200
         
         return jsonify({
             'success': False,
             'error': 'Não foi possível obter a URL do jogo'
         }), 404
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ========== ROTA PARA LIMPAR CACHE DA ROLETA ==========
+@app.route('/api/roulette/clear-cache', methods=['POST'])
+def clear_roulette_cache_endpoint():
+    """Limpa o cache de uma roleta específica"""
+    try:
+        data = request.json
+        slug = data.get('slug')
+        
+        if not slug:
+            return jsonify({'error': 'slug é obrigatório'}), 400
+        
+        clear_roulette_cache(slug)
+        
+        return jsonify({
+            'success': True,
+            'message': f'Cache limpo para {slug}'
+        }), 200
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -301,16 +406,15 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("⚡ API PROXY - QA.AI (ULTRA OTIMIZADO)")
+    print("⚡ API PROXY - QA.AI (TOKEN ÚNICO POR ROLETA)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("🗄️  Banco: PostgreSQL (30 dias)")
-    print("⚡ Cache: 5 minutos")
-    print("⏱️  Timeout: 3 segundos")
+    print("🎯 Cada roleta tem seu próprio token")
+    print("⚡ Cache: 5 minutos por roleta")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     
-    # Gera números iniciais
     for _ in range(30):
         adicionar_numero_ao_historico(gerar_numero_aleatorio())
     
