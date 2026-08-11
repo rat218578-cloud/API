@@ -93,7 +93,6 @@ def api_login():
         except:
             pass
         
-        # 🔥 POLLING 2 SEGUNDOS
         apigames.set_email(email)
         apigames.start_polling(interval=2)
         
@@ -206,7 +205,8 @@ def api_validate():
     except:
         return jsonify({'valid': False}), 200
 
-@app.route('/api/auth/logout', methods(['POST'])
+# 🔥 CORRIGIDO: methods=['POST']
+@app.route('/api/auth/logout', methods=['POST'])
 def api_logout():
     apigames.stop_polling()
     try:
