@@ -44,11 +44,11 @@ def set_cache(key, value):
         'timestamp': time.time()
     }
 
-# 🔥 MAPEAMENTO SLUG -> SOURCE (INCLUI XXXTREME)
+# 🔥 MAPEAMENTO SLUG -> SOURCE
 SLUG_SOURCE_MAP = {
     'evolution/immersive-roulette': 'immersive',
     'evolution/lightning-roulette': 'lightning',
-    'evolution/xxxtreme-lightning': 'xxxtreme',
+    'evolution/xxxtreme-lightning': 'lightning',  # XXXtreme usa lightning
 }
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -138,6 +138,7 @@ def api_start_game():
         if not auth_header_externo:
             return jsonify({'error': 'Token externo não encontrado'}), 401
         
+        # 🔥 REMOVE O '_t' PARA EVITAR CACHE
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
             params={
@@ -146,7 +147,7 @@ def api_start_game():
                 'use_demo': 0,
                 'source': 'watchIsAuthenticated'
             },
-            timeout=3
+            timeout=5
         )
         
         if response.status_code == 200:
@@ -160,6 +161,31 @@ def api_start_game():
                     'gameURL': game_url,
                     'iframe_url': game_url
                 }), 200
+        
+        # 🔥 SE FALHOU, TENTA COM O SLUG DA LIGHTNING (FALLBACK)
+        if slug == 'evolution/xxxtreme-lightning':
+            print("🔄 Tentando fallback com lightning...")
+            response = session.get(
+                f'{API_BASE}/api/start-game-v2',
+                params={
+                    'slug': 'evolution/lightning-roulette',
+                    'platform': 'WEB',
+                    'use_demo': 0,
+                    'source': 'watchIsAuthenticated'
+                },
+                timeout=5
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                game_url = data.get('iframe_url') or data.get('gameURL')
+                if game_url:
+                    return jsonify({
+                        'success': True,
+                        'slug': slug,
+                        'gameURL': game_url,
+                        'iframe_url': game_url
+                    }), 200
         
         return jsonify({
             'success': False,

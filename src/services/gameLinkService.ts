@@ -28,7 +28,7 @@ export const ROLETAS = [
     id: 'xxxtreme', 
     nome: '⚡ XXXtreme', 
     slug: 'evolution/xxxtreme-lightning',
-    gameId: 'XXXtremeTable01',
+    gameId: 'XxxtremeLigh0001',  // 🔥 TABLE_ID CORRETO!
     provedor: 'Evolution',
     cor: '#FF6B00'
   }
