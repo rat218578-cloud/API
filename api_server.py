@@ -8,7 +8,7 @@ import os
 import random
 import threading
 import concurrent.futures
-from datetime import datetime
+from datetime import datetime, timedelta  # 🔥 ADICIONADO timedelta
 from db import db
 from jwt_helper import jwt_manager
 from session_service import session_service
@@ -22,7 +22,7 @@ CORS(app)
 
 API_BASE = "https://sortenabet.bet.br"
 
-# 🔥 SESSÃO HTTP REUTILIZÁVEL (MANTÉM COOKIES E TOKENS)
+# 🔥 SESSÃO HTTP REUTILIZÁVEL
 session = requests.Session()
 session.headers.update({
     'Content-Type': 'application/json',
@@ -88,7 +88,69 @@ def set_external_token(token):
     """Atualiza o token externo"""
     global external_token, external_token_expires
     external_token = token
-    external_token_expires = datetime.now() + timedelta(hours=23)  # 23 horas
+    external_token_expires = datetime.now() + timedelta(hours=23)
+
+# ========== PRÉ-CARREGAMENTO DE JOGOS ==========
+def preload_game(slug, auth_header):
+    try:
+        if get_cache(f"game:{slug}"):
+            return
+        
+        ext_token = get_external_token()
+        if not ext_token:
+            return
+        
+        headers = {'Authorization': f'Bearer {ext_token}'}
+        if auth_header:
+            headers.update({'Authorization': auth_header})
+        
+        response = session.get(
+            f'{API_BASE}/api/start-game-v2',
+            params={
+                'slug': slug,
+                'platform': 'WEB',
+                'use_demo': 0,
+                'source': 'watchIsAuthenticated'
+            },
+            timeout=2,
+            headers=headers
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            game_url = data.get('iframe_url') or data.get('gameURL')
+            if game_url:
+                if 'evo-games.com' in game_url:
+                    if '?' in game_url:
+                        game_url += '&embedded=1&cc=1'
+                    else:
+                        game_url += '?embedded=1&cc=1'
+                
+                response_data = {
+                    'success': True,
+                    'slug': slug,
+                    'gameURL': game_url,
+                    'iframe_url': game_url
+                }
+                set_cache(f"game:{slug}", response_data)
+                logger.info(f"✅ Jogo {slug} pré-carregado")
+    except Exception as e:
+        logger.error(f"❌ Erro ao pré-carregar {slug}: {e}")
+
+def preload_popular_games(auth_header):
+    popular_slugs = ['roulette', 'blackjack', 'slots', 'baccarat', 'poker']
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        futures = []
+        for slug in popular_slugs:
+            future = executor.submit(preload_game, slug, auth_header)
+            futures.append(future)
+        
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                future.result()
+            except:
+                pass
 
 # ========== LOGIN ==========
 @app.route('/api/auth/login', methods=['POST'])
@@ -168,6 +230,7 @@ def api_login():
         return jsonify(response_data), 200
         
     except Exception as e:
+        logger.error(f"❌ Erro no login: {e}")
         return jsonify({'error': str(e)}), 500
 
 # ========== VALIDAÇÃO ==========
@@ -183,25 +246,6 @@ def api_validate():
         
         if not session_data:
             return jsonify({'valid': False, 'error': 'Token inválido ou expirado'}), 401
-
-        # 🔥 VERIFICA SE O TOKEN EXTERNO AINDA É VÁLIDO
-        ext_token = get_external_token()
-        if not ext_token:
-            # Tenta renovar o token externo
-            try:
-                email = session_data.get('email')
-                password = session_data.get('password_hash')
-                # Não temos a senha em texto puro, então tentamos renovar com refresh
-                # Se falhar, o usuário precisa fazer login novamente
-                return jsonify({
-                    'valid': True,
-                    'user_id': session_data.get('user_id'),
-                    'email': session_data.get('email'),
-                    'expires_at': session_data.get('expires_at'),
-                    'warning': 'Sessão externa expirou. Faça login novamente para garantir acesso.'
-                }), 200
-            except:
-                pass
 
         return jsonify({
             'valid': True,
@@ -255,11 +299,6 @@ def api_start_game():
             logger.info(f"✅ Cache hit para {slug}")
             return jsonify(cached), 200
         
-        # PEGA TOKEN DO HEADER
-        auth_header = request.headers.get('Authorization')
-        if not auth_header:
-            return jsonify({'error': 'Token não encontrado'}), 401
-        
         # 🔥 VERIFICA TOKEN EXTERNO
         ext_token = get_external_token()
         if not ext_token:
@@ -293,7 +332,6 @@ def api_start_game():
                 if game_url:
                     # 🔥 ADICIONA PARÂMETROS PARA EVITAR 403
                     if 'evo-games.com' in game_url:
-                        # Adiciona parâmetros para manter sessão
                         if '?' in game_url:
                             game_url += '&embedded=1&cc=1'
                         else:
@@ -350,12 +388,10 @@ def api_start_game():
         except:
             pass
         
-        # 🔥 SE CHEGOU AQUI, TENTA REFRESHAR O TOKEN EXTERNO
         return jsonify({
             'success': False,
-            'error': 'User authentication failed or your session may be expired, please try again. Error Code: EV.12',
-            'code': 'EV.12'
-        }), 401
+            'error': 'Não foi possível obter a URL do jogo'
+        }), 404
         
     except Exception as e:
         logger.error(f"❌ Erro: {e}")
@@ -447,7 +483,7 @@ def serve_frontend(path):
 # ========== MAIN ==========
 if __name__ == '__main__':
     print("=" * 70)
-    print("🔐 API PROXY - SESSÃO PERSISTENTE (EV.12 FIX)")
+    print("🔐 API PROXY - CORRIGIDO")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("🗄️  Banco: PostgreSQL")
