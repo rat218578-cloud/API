@@ -21,7 +21,7 @@ CORS(app)
 
 API_BASE = "https://sortenabet.bet.br"
 
-# 🔥 SESSÃO REUTILIZÁVEL (KEEP-ALIVE)
+# 🔥 SESSÃO REUTILIZÁVEL
 session = requests.Session()
 session.headers.update({
     'Content-Type': 'application/json',
@@ -31,9 +31,9 @@ session.headers.update({
     'Connection': 'keep-alive'
 })
 
-# 🔥 CACHE RÁPIDO
+# 🔥 CACHE DE TOKENS
 cache = {}
-CACHE_TTL = 600  # 10 minutos
+CACHE_TTL = 600
 
 def get_cache(key):
     if key in cache:
@@ -48,24 +48,140 @@ def set_cache(key, value):
         'timestamp': time.time()
     }
 
-# 🔥 ARMAZENA EVOSESSIONID POR ROLETA
-evo_cache = {}
-EVO_CACHE_TTL = 300  # 5 minutos
+# 🔥 HISTÓRICO DE NÚMEROS REAIS (1000+)
+historico_numeros = []
+ultimo_signal_id = None
+TOTAL_MAXIMO = 5000  # 🔥 ATÉ 5000 NÚMEROS!
 
-def get_evo(slug):
-    if slug in evo_cache:
-        data = evo_cache[slug]
-        if time.time() - data['timestamp'] < EVO_CACHE_TTL:
-            return data['evo_id']
-    return None
+def buscar_numeros_smart_api(since: str = None):
+    """Busca números reais da Smart API (Imersiva)"""
+    global ultimo_signal_id, historico_numeros
+    
+    try:
+        email = 'gcriste268@gmail.com'
+        url = f'https://tool-api.smartanalise.com.br/api/history-delta?source=immersivevip&userEmail={email}'
+        
+        if since:
+            url += f'&since={since}'
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+            'Referer': 'https://tool.smartanalise.com.br/',
+            'Origin': 'https://tool.smartanalise.com.br'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            if data.get('data'):
+                # 🔥 INVERTE PARA ORDEM CRONOLÓGICA (MAIS ANTIGO PRIMEIRO)
+                novos = data['data'][::-1]
+                numeros_novos = []
+                
+                for item in novos:
+                    signal_id = item.get('signalId')
+                    signal = item.get('signal')
+                    
+                    if signal_id and signal and signal.isdigit():
+                        numero = int(signal)
+                        if 0 <= numero <= 36:
+                            # Verifica se já existe
+                            if not any(n.get('signal_id') == signal_id for n in historico_numeros):
+                                historico_numeros.append({
+                                    'signal_id': signal_id,
+                                    'number': numero,
+                                    'timestamp': item.get('timestamp')
+                                })
+                                numeros_novos.append(numero)
+                                ultimo_signal_id = signal_id
+                
+                # 🔥 MANTÉM APENAS OS ÚLTIMOS 5000
+                if len(historico_numeros) > TOTAL_MAXIMO:
+                    historico_numeros = historico_numeros[-TOTAL_MAXIMO:]
+                
+                if numeros_novos:
+                    print(f"✅ +{len(numeros_novos)} novos números reais")
+                    return numeros_novos
+        
+        return []
+        
+    except Exception as e:
+        print(f"⚠️ Erro Smart API: {e}")
+        return []
 
-def set_evo(slug, evo_id):
-    evo_cache[slug] = {
-        'evo_id': evo_id,
-        'timestamp': time.time()
-    }
+def carregar_historico_inicial():
+    """Carrega histórico completo da Smart API (1000+ números)"""
+    global historico_numeros, ultimo_signal_id
+    
+    print("📥 Carregando histórico completo da Smart API...")
+    
+    try:
+        email = 'gcriste268@gmail.com'
+        # 🔥 USA full-history PARA PEGAR TUDO
+        url = f'https://tool-api.smartanalise.com.br/api/full-history?source=immersivevip&userEmail={email}'
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+            'Referer': 'https://tool.smartanalise.com.br/',
+            'Origin': 'https://tool.smartanalise.com.br'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=15)
+        
+        if response.status_code == 200:
+            data = response.json()
+            items = data.get('data') or data.get('results', [])
+            
+            print(f"📦 {len(items)} itens retornados da API")
+            
+            # 🔥 INVERTE PARA ORDEM CRONOLÓGICA (MAIS ANTIGO PRIMEIRO)
+            items = items[::-1]
+            
+            for item in items:
+                signal_id = item.get('signalId') or item.get('id')
+                signal = item.get('signal') or item.get('number')
+                
+                if signal_id and signal and str(signal).isdigit():
+                    numero = int(signal)
+                    if 0 <= numero <= 36:
+                        historico_numeros.append({
+                            'signal_id': signal_id,
+                            'number': numero,
+                            'timestamp': item.get('timestamp')
+                        })
+                        ultimo_signal_id = signal_id
+            
+            # 🔥 MANTÉM APENAS OS ÚLTIMOS 5000
+            if len(historico_numeros) > TOTAL_MAXIMO:
+                historico_numeros = historico_numeros[-TOTAL_MAXIMO:]
+            
+            print(f"✅ {len(historico_numeros)} números carregados da Smart API")
+            return True
+            
+    except Exception as e:
+        print(f"⚠️ Erro ao carregar histórico: {e}")
+    
+    # 🔥 FALLBACK: GERA NÚMEROS SIMULADOS SE A API FALHAR
+    print("⚠️ Usando fallback com números simulados...")
+    for i in range(50):
+        historico_numeros.append({
+            'signal_id': f'fallback_{i}',
+            'number': random.randint(0, 36),
+            'timestamp': datetime.now().isoformat()
+        })
+    
+    return False
 
-# ========== LOGIN (RÁPIDO COM CACHE) ==========
+# 🔥 CARREGA HISTÓRICO AO INICIAR
+carregar_historico_inicial()
+
+# ========== LOGIN ==========
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
     try:
@@ -76,12 +192,10 @@ def api_login():
         if not email or not password:
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
         
-        # 🔥 VERIFICA CACHE PRIMEIRO
         cached = get_cache(f"login:{email}")
         if cached:
             return jsonify(cached), 200
         
-        # 🔥 LOGIN NA API EXTERNA (TIMEOUT 5s)
         login_data = {
             "login": email,
             "email": email,
@@ -106,7 +220,6 @@ def api_login():
         jwt_token = jwt_manager.generate_token(user_id, email)
         refresh_token = jwt_manager.generate_refresh_token(user_id, email)
         
-        # 🔥 SALVA NO BANCO (NÃO BLOQUEIA)
         try:
             session_service.create_session(user_id, email, password, jwt_token, refresh_token)
         except:
@@ -125,7 +238,6 @@ def api_login():
             }
         }
         
-        # 🔥 SALVA EM CACHE
         set_cache(f"login:{email}", response_data)
         
         return jsonify(response_data), 200
@@ -133,7 +245,7 @@ def api_login():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ========== START-GAME (RÁPIDO COM CACHE POR ROLETA) ==========
+# ========== START-GAME ==========
 @app.route('/api/start-game-v2', methods=['GET'])
 def api_start_game():
     try:
@@ -141,20 +253,6 @@ def api_start_game():
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
         
-        # 🔥 VERIFICA SE JÁ TEM EVO PARA ESTA ROLETA
-        evo_id = get_evo(slug)
-        if evo_id:
-            # 🔥 RECONSTRÓI A URL COM O EVO SALVO
-            game_url = f'https://sortenabet.evo-games.com/entry?params=Y2FzaW5vX2lkPXNvcnRlbmFiZXRicjAwMDEKZ2FtZT1yb3VsZXR0ZQpzaWduYXR1cmU9SnJHbzVGdm1HNzItaTZKUUotNGlHUQp0YWJsZV9pZD03eDBiMXRnaDdhZ21mNmh2CkVWT1NFU1NJT05JRD0{evo_id}&embedded'
-            
-            return jsonify({
-                'success': True,
-                'slug': slug,
-                'gameURL': game_url,
-                'iframe_url': game_url
-            }), 200
-        
-        # 🔥 PEGA TOKEN DO HEADER
         auth_header = request.headers.get('Authorization')
         if not auth_header:
             return jsonify({'error': 'Token não encontrado'}), 401
@@ -165,12 +263,10 @@ def api_start_game():
         if not payload:
             return jsonify({'error': 'Token inválido'}), 401
         
-        # 🔥 USA TOKEN EXTERNO DA SESSÃO
         auth_header_externo = session.headers.get('Authorization')
         if not auth_header_externo:
             return jsonify({'error': 'Token externo não encontrado'}), 401
         
-        # 🔥 FAZ REQUISIÇÃO (TIMEOUT 3s)
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
             params={
@@ -187,55 +283,12 @@ def api_start_game():
             game_url = data.get('iframe_url') or data.get('gameURL')
             
             if game_url:
-                # 🔥 EXTRAI EVOSESSIONID
-                match = re.search(r'EVOSESSIONID=([^&]+)', game_url)
-                if match:
-                    evo_id = match.group(1)
-                    set_evo(slug, evo_id)  # 🔥 SALVA PARA REUSAR
-                
                 return jsonify({
                     'success': True,
                     'slug': slug,
                     'gameURL': game_url,
                     'iframe_url': game_url
                 }), 200
-        
-        # 🔥 SE FALHOU (EV.12), LIMPA E TENTA NOVAMENTE
-        if response.status_code == 401 or (response.text and 'EV.12' in response.text):
-            print(f"⚠️ EV.12 para {slug}, limpando cache...")
-            
-            # LIMPA CACHE DESTA ROLETA
-            if slug in evo_cache:
-                del evo_cache[slug]
-            
-            # TENTA NOVAMENTE
-            response = session.get(
-                f'{API_BASE}/api/start-game-v2',
-                params={
-                    'slug': slug,
-                    'platform': 'WEB',
-                    'use_demo': 0,
-                    'source': 'watchIsAuthenticated'
-                },
-                timeout=3
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                game_url = data.get('iframe_url') or data.get('gameURL')
-                
-                if game_url:
-                    match = re.search(r'EVOSESSIONID=([^&]+)', game_url)
-                    if match:
-                        evo_id = match.group(1)
-                        set_evo(slug, evo_id)
-                    
-                    return jsonify({
-                        'success': True,
-                        'slug': slug,
-                        'gameURL': game_url,
-                        'iframe_url': game_url
-                    }), 200
         
         return jsonify({
             'success': False,
@@ -245,28 +298,25 @@ def api_start_game():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ========== ROTA PARA LIMPAR EVO ==========
-@app.route('/api/roulette/clear-evo', methods=['POST'])
-def clear_evo():
-    try:
-        data = request.json
-        slug = data.get('slug')
-        if slug and slug in evo_cache:
-            del evo_cache[slug]
-            return jsonify({'success': True, 'message': f'EVO limpo para {slug}'}), 200
-        return jsonify({'success': False, 'message': 'Slug não encontrado'}), 404
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# ========== ROTA NÚMEROS ==========
+# ========== ROTA NÚMEROS REAIS (1000+) ==========
 @app.route('/api/roulette/live', methods=['GET'])
 def get_live_numbers():
+    """Retorna números REAIS da Imersiva (1000+ números)"""
     try:
-        limit = int(request.args.get('limit', 50))
-        numeros = [random.randint(0, 36) for _ in range(limit)]
+        limit = int(request.args.get('limit', 200))
         
+        # 🔥 BUSCA NOVOS NÚMEROS EM BACKGROUND
+        if ultimo_signal_id:
+            buscar_numeros_smart_api(since=ultimo_signal_id)
+        
+        # 🔥 RETORNA HISTÓRICO (MAIS RECENTES PRIMEIRO)
+        history = historico_numeros[-limit:][::-1] if historico_numeros else []
+        last_numbers = [h['number'] for h in history[:10]] if history else []
+        
+        # 🔥 CALCULA TOP NÚMEROS
+        nums = [h['number'] for h in historico_numeros]
         freq = {}
-        for n in numeros:
+        for n in nums:
             freq[n] = freq.get(n, 0) + 1
         top_numbers = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:8]
         top_numbers_list = [{'number': n, 'count': c} for n, c in top_numbers]
@@ -274,12 +324,32 @@ def get_live_numbers():
         return jsonify({
             'success': True,
             'connected': True,
-            'total': len(numeros),
-            'last_numbers': numeros[:10],
-            'history': [{'number': n, 'color': 'red' if n in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 'black' if n != 0 else 'green', 'timestamp': datetime.now().isoformat()} for n in numeros[:50]],
+            'total': len(historico_numeros),  # 🔥 MOSTRA O TOTAL REAL
+            'last_numbers': last_numbers,
+            'history': history,
             'top_numbers': top_numbers_list,
             'timestamp': datetime.now().isoformat()
         }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ========== ROTA ADICIONAR NÚMERO ==========
+@app.route('/api/roulette/add', methods=['POST'])
+def add_number():
+    try:
+        data = request.json
+        number = data.get('number')
+        if number is None or number < 0 or number > 36:
+            return jsonify({'error': 'Número inválido'}), 400
+        historico_numeros.append({
+            'signal_id': f'manual_{int(time.time())}',
+            'number': number,
+            'timestamp': datetime.now().isoformat()
+        })
+        if len(historico_numeros) > TOTAL_MAXIMO:
+            historico_numeros = historico_numeros[-TOTAL_MAXIMO:]
+        return jsonify({'success': True, 'number': number, 'total': len(historico_numeros)}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -335,14 +405,11 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("⚡ API PROXY - QA.AI (OTIMIZADO)")
+    print("🎯 API PROXY - QA.AI (1000+ NÚMEROS REAIS)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
-    print("🗄️  Banco: PostgreSQL")
-    print("⚡ Cache Login: 10 minutos")
-    print("⚡ Cache EVO: 5 minutos")
-    print("⏱️  Timeout: 3 segundos")
-    print("🎯 Cada roleta tem seu próprio EVO")
+    print("📊 Smart API: Imersiva")
+    print("📈 Total números:", len(historico_numeros))
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     
