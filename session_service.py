@@ -12,6 +12,7 @@ class SessionService:
     @staticmethod
     def create_session(user_id: str, email: str, password: str, access_token: str, refresh_token: str) -> bool:
         try:
+            # 🔥 EXPIRA EM 30 DIAS (antes era 7)
             access_expires = datetime.now() + timedelta(days=30)
             refresh_expires = datetime.now() + timedelta(days=60)
             
@@ -75,6 +76,7 @@ class SessionService:
             if not session:
                 return None
             
+            # 🔥 VERIFICA EXPIRAÇÃO (30 DIAS)
             expires_at = session.get('expires_at')
             if isinstance(expires_at, str):
                 expires_at = datetime.fromisoformat(expires_at)
@@ -108,6 +110,7 @@ class SessionService:
             if session.get('refresh_token') != refresh_token:
                 return None
             
+            # GERA NOVO ACCESS TOKEN (30 DIAS)
             new_access_token = jwt_manager.generate_token(user_id, email)
             new_expires = datetime.now() + timedelta(days=30)
             
@@ -141,6 +144,7 @@ class SessionService:
     @staticmethod
     def cleanup_expired() -> int:
         try:
+            # 🔥 SÓ LIMPA SESSÕES COM MAIS DE 30 DIAS
             query = "UPDATE user_sessions SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE expires_at < NOW() - INTERVAL '30 days' AND is_active = true"
             return db.execute(query)
         except Exception as e:

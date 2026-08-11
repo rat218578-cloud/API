@@ -6,7 +6,6 @@ import time
 import logging
 import os
 import random
-import concurrent.futures
 from datetime import datetime
 from db import db
 from jwt_helper import jwt_manager
@@ -70,47 +69,6 @@ def adicionar_numero_ao_historico(numero):
     if len(historico_numeros) > 500:
         historico_numeros = historico_numeros[-500:]
 
-# ========== FUNÇÃO PARA PRÉ-CARREGAR JOGO ==========
-def preload_single_game(slug, auth_header=None):
-    """Pré-carrega um único jogo em background"""
-    try:
-        # Verifica cache primeiro
-        cached = get_cache(f"game:{slug}")
-        if cached:
-            return cached
-        
-        # Usa o header se fornecido
-        if auth_header:
-            session.headers.update({'Authorization': auth_header})
-        
-        # Faz a requisição
-        response = session.get(
-            f'{API_BASE}/api/start-game-v2',
-            params={
-                'slug': slug,
-                'platform': 'WEB',
-                'use_demo': 0,
-                'source': 'watchIsAuthenticated'
-            },
-            timeout=1.5
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            game_url = data.get('iframe_url') or data.get('gameURL')
-            if game_url:
-                response_data = {
-                    'success': True,
-                    'slug': slug,
-                    'gameURL': game_url,
-                    'iframe_url': game_url
-                }
-                set_cache(f"game:{slug}", response_data)
-                return response_data
-    except Exception as e:
-        logger.error(f"Erro ao pré-carregar {slug}: {e}")
-    return None
-
 # ========== LOGIN (COM CACHE) ==========
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
@@ -122,13 +80,9 @@ def api_login():
         if not email or not password:
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
         
-        # 🔥 VERIFICA CACHE
+        # 🔥 VERIFICA CACHE PRIMEIRO
         cached = get_cache(f"login:{email}")
         if cached:
-            # 🔥 PRÉ-CARREGA JOGOS EM BACKGROUND
-            auth_header = cached.get('access_token')
-            if auth_header:
-                threading.Thread(target=preload_popular_games, args=(f'Bearer {auth_header}',)).start()
             return jsonify(cached), 200
         
         # LOGIN NA API EXTERNA
@@ -156,7 +110,7 @@ def api_login():
         jwt_token = jwt_manager.generate_token(user_id, email)
         refresh_token = jwt_manager.generate_refresh_token(user_id, email)
         
-        # SALVA NO BANCO
+        # SALVA NO BANCO (NÃO BLOQUEIA)
         try:
             session_service.create_session(user_id, email, password, jwt_token, refresh_token)
         except:
@@ -178,34 +132,12 @@ def api_login():
         # 🔥 SALVA EM CACHE
         set_cache(f"login:{email}", response_data)
         
-        # 🔥 PRÉ-CARREGA JOGOS EM BACKGROUND (NÃO BLOQUEIA)
-        import threading
-        threading.Thread(target=preload_popular_games, args=(f'Bearer {jwt_token}',)).start()
-        
         return jsonify(response_data), 200
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ========== PRÉ-CARREGAR JOGOS POPULARES ==========
-def preload_popular_games(auth_header):
-    """Pré-carrega jogos populares em background"""
-    popular_slugs = ['roulette', 'blackjack', 'slots', 'baccarat', 'poker']
-    
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-        futures = []
-        for slug in popular_slugs:
-            future = executor.submit(preload_single_game, slug, auth_header)
-            futures.append(future)
-        
-        # Espera todos terminarem (máximo 2 segundos)
-        for future in concurrent.futures.as_completed(futures, timeout=2):
-            try:
-                future.result()
-            except:
-                pass
-
-# ========== START-GAME (0.5 SEGUNDOS) ==========
+# ========== START-GAME (COM CACHE) ==========
 @app.route('/api/start-game-v2', methods=['GET'])
 def api_start_game():
     try:
@@ -213,7 +145,7 @@ def api_start_game():
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
         
-        # 🔥 1. VERIFICA CACHE (RESPOSTA INSTANTÂNEA)
+        # 🔥 VERIFICA CACHE
         cached = get_cache(f"game:{slug}")
         if cached:
             return jsonify(cached), 200
@@ -228,30 +160,11 @@ def api_start_game():
         if not payload:
             return jsonify({'error': 'Token inválido'}), 401
         
-        # 🔥 2. TENTA BUSCAR EM PARALELO (0.5 SEGUNDOS)
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future = executor.submit(preload_single_game, slug, auth_header)
-            try:
-                result = future.result(timeout=0.5)  # 0.5 segundos!
-                if result:
-                    return jsonify(result), 200
-            except concurrent.futures.TimeoutError:
-                # 🔥 3. SE PASSOU 0.5s, RETORNA PLACEHOLDER + BUSCA EM BACKGROUND
-                # Inicia busca em background
-                import threading
-                threading.Thread(target=preload_single_game, args=(slug, auth_header)).start()
-                
-                # Retorna placeholder
-                return jsonify({
-                    'success': True,
-                    'slug': slug,
-                    'gameURL': f'/api/game/loading/{slug}',
-                    'iframe_url': f'/api/game/loading/{slug}',
-                    'loading': True,
-                    'message': 'Carregando jogo...'
-                }), 200
+        auth_header_externo = session.headers.get('Authorization')
+        if not auth_header_externo:
+            return jsonify({'error': 'Token externo não encontrado'}), 401
         
-        # 🔥 4. FALLBACK: BUSCA NORMAL
+        # 🔥 TIMEOUT MENOR (3 segundos)
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
             params={
@@ -260,7 +173,7 @@ def api_start_game():
                 'use_demo': 0,
                 'source': 'watchIsAuthenticated'
             },
-            timeout=2
+            timeout=3
         )
         
         if response.status_code == 200:
@@ -274,6 +187,7 @@ def api_start_game():
                     'gameURL': game_url,
                     'iframe_url': game_url
                 }
+                # 🔥 SALVA EM CACHE (1 minuto)
                 set_cache(f"game:{slug}", response_data)
                 return jsonify(response_data), 200
         
@@ -281,26 +195,6 @@ def api_start_game():
             'success': False,
             'error': 'Não foi possível obter a URL do jogo'
         }), 404
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# ========== PRÉ-CARREGAMENTO MANUAL ==========
-@app.route('/api/preload-games', methods=['GET'])
-def api_preload_games():
-    """Endpoint para pré-carregar jogos manualmente"""
-    try:
-        auth_header = request.headers.get('Authorization')
-        if not auth_header:
-            return jsonify({'error': 'Token não encontrado'}), 401
-        
-        import threading
-        threading.Thread(target=preload_popular_games, args=(auth_header,)).start()
-        
-        return jsonify({
-            'success': True,
-            'message': 'Pré-carregamento de jogos iniciado em background'
-        }), 200
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -405,16 +299,14 @@ def serve_frontend(path):
         return send_from_directory('dist', path)
     return send_from_directory('dist', 'index.html')
 
-# ========== MAIN ==========
 if __name__ == '__main__':
     print("=" * 70)
-    print("⚡ API PROXY - QA.AI (VÍDEO 0.5s)")
+    print("⚡ API PROXY - QA.AI (ULTRA OTIMIZADO)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("🗄️  Banco: PostgreSQL (30 dias)")
     print("⚡ Cache: 5 minutos")
     print("⏱️  Timeout: 3 segundos")
-    print("🎬 Vídeo: 0.5 segundos")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     
