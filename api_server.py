@@ -6,6 +6,7 @@ import time
 import logging
 import os
 import random
+import re
 from datetime import datetime
 from db import db
 from jwt_helper import jwt_manager
@@ -20,7 +21,7 @@ CORS(app)
 
 API_BASE = "https://sortenabet.bet.br"
 
-# SESSÃO REUTILIZÁVEL (KEEP-ALIVE) - MESMA DO LOGIN
+# SESSÃO REUTILIZÁVEL
 session = requests.Session()
 session.headers.update({
     'Content-Type': 'application/json',
@@ -30,9 +31,9 @@ session.headers.update({
     'Connection': 'keep-alive'
 })
 
-# 🔥 CACHE - MESMA ESTRATÉGIA DO LOGIN
+# 🔥 CACHE
 cache = {}
-CACHE_TTL = 300  # 5 minutos (igual ao login)
+CACHE_TTL = 300
 
 def get_cache(key):
     if key in cache:
@@ -43,6 +44,23 @@ def get_cache(key):
 
 def set_cache(key, value):
     cache[key] = {
+        'value': value,
+        'timestamp': time.time()
+    }
+
+# 🔥 CACHE ESPECÍFICO PARA EVOSESSIONID
+evo_cache = {}
+EVO_CACHE_TTL = 60  # 1 minuto
+
+def get_evo_cache(slug):
+    if slug in evo_cache:
+        data = evo_cache[slug]
+        if time.time() - data['timestamp'] < EVO_CACHE_TTL:
+            return data['value']
+    return None
+
+def set_evo_cache(slug, value):
+    evo_cache[slug] = {
         'value': value,
         'timestamp': time.time()
     }
@@ -69,7 +87,7 @@ def adicionar_numero_ao_historico(numero):
     if len(historico_numeros) > 500:
         historico_numeros = historico_numeros[-500:]
 
-# ========== LOGIN (JÁ RÁPIDO) ==========
+# ========== LOGIN ==========
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
     try:
@@ -80,12 +98,10 @@ def api_login():
         if not email or not password:
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
         
-        # VERIFICA CACHE
         cached = get_cache(f"login:{email}")
         if cached:
             return jsonify(cached), 200
         
-        # LOGIN NA API EXTERNA
         login_data = {
             "login": email,
             "email": email,
@@ -135,7 +151,7 @@ def api_login():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ========== START-GAME (MESMA ESTRATÉGIA DO LOGIN) ==========
+# ========== START-GAME (COM RENOVAÇÃO DE EVOSESSIONID) ==========
 @app.route('/api/start-game-v2', methods=['GET'])
 def api_start_game():
     try:
@@ -143,12 +159,13 @@ def api_start_game():
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
         
-        # 🔥 MESMA ESTRATÉGIA DO LOGIN: VERIFICA CACHE PRIMEIRO
-        cached = get_cache(f"game:{slug}")
-        if cached:
-            return jsonify(cached), 200
+        # 🔥 VERIFICA CACHE DO EVOSESSIONID
+        cached_evo = get_evo_cache(slug)
+        if cached_evo:
+            print(f"⚡ EVO Cache hit para {slug}")
+            return jsonify(cached_evo), 200
         
-        # 🔥 MESMA ESTRATÉGIA DO LOGIN: PEGA TOKEN DO HEADER
+        # PEGA TOKEN DO HEADER
         auth_header = request.headers.get('Authorization')
         if not auth_header:
             return jsonify({'error': 'Token não encontrado'}), 401
@@ -159,12 +176,13 @@ def api_start_game():
         if not payload:
             return jsonify({'error': 'Token inválido'}), 401
         
-        # 🔥 MESMA ESTRATÉGIA DO LOGIN: USA TOKEN EXTERNO DA SESSÃO
         auth_header_externo = session.headers.get('Authorization')
         if not auth_header_externo:
             return jsonify({'error': 'Token externo não encontrado'}), 401
         
-        # 🔥 MESMA ESTRATÉGIA DO LOGIN: FAZ REQUISIÇÃO
+        # 🔥 GERA NOVO EVOSESSIONID
+        print(f"🎮 Gerando NOVO EVOSESSIONID para: {slug}")
+        
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
             params={
@@ -173,31 +191,72 @@ def api_start_game():
                 'use_demo': 0,
                 'source': 'watchIsAuthenticated'
             },
-            timeout=5  # 🔥 TIMEOUT UM POUCO MAIOR QUE O LOGIN (5s)
+            timeout=10
         )
+        
+        print(f"📥 Status: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
             game_url = data.get('iframe_url') or data.get('gameURL')
             
             if game_url:
+                # 🔥 EXTRAI EVOSESSIONID DA URL
+                match = re.search(r'EVOSESSIONID=([^&]+)', game_url)
+                if match:
+                    evo_id = match.group(1)
+                    print(f"🔑 NOVO EVOSESSIONID: {evo_id[:30]}...")
+                
                 response_data = {
                     'success': True,
                     'slug': slug,
                     'gameURL': game_url,
-                    'iframe_url': game_url
+                    'iframe_url': game_url,
+                    'evo_session_id': evo_id if 'evo_id' in locals() else None
                 }
-                # 🔥 MESMA ESTRATÉGIA DO LOGIN: SALVA EM CACHE
-                set_cache(f"game:{slug}", response_data)
+                
+                # 🔥 SALVA EM CACHE (1 minuto)
+                set_evo_cache(slug, response_data)
                 return jsonify(response_data), 200
+        
+        # 🔥 SE DEU 401 OU EV.12, FORÇA RENOVAÇÃO DO TOKEN EXTERNO
+        if response.status_code == 401 or 'EV.12' in response.text:
+            print("🔄 EV.12 detectado, renovando token externo...")
+            
+            # Força re-login
+            session.headers.pop('Authorization', None)
+            
+            # Tenta novamente
+            response = session.get(
+                f'{API_BASE}/api/start-game-v2',
+                params={
+                    'slug': slug,
+                    'platform': 'WEB',
+                    'use_demo': 0,
+                    'source': 'watchIsAuthenticated'
+                },
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                game_url = data.get('iframe_url') or data.get('gameURL')
+                
+                if game_url:
+                    response_data = {
+                        'success': True,
+                        'slug': slug,
+                        'gameURL': game_url,
+                        'iframe_url': game_url
+                    }
+                    set_evo_cache(slug, response_data)
+                    return jsonify(response_data), 200
         
         return jsonify({
             'success': False,
             'error': 'Não foi possível obter a URL do jogo'
         }), 404
         
-    except requests.exceptions.Timeout:
-        return jsonify({'error': 'Tempo limite excedido'}), 408
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -303,12 +362,11 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("⚡ API PROXY - QA.AI (MESMA ESTRATÉGIA)")
+    print("⚡ API PROXY - QA.AI (EVO FIX)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("🗄️  Banco: PostgreSQL")
-    print("⚡ Cache: 5 minutos (login e vídeo)")
-    print("⏱️  Timeout: 5 segundos")
+    print("⚡ EVO Cache: 1 minuto")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     
