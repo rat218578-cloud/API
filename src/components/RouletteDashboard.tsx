@@ -20,10 +20,10 @@ export function RouletteDashboard() {
   const [isConnected, setIsConnected] = useState(false);
   const [isRealData, setIsRealData] = useState(false);
   const [totalNumbers, setTotalNumbers] = useState(0);
-  const [topNumbersList, setTopNumbersList] = useState<{number: number, count: number}[]>([]);
+  const [topNumbersList, setTopNumbersList] = useState<{number: number; count: number}[]>([]);
   const [currentSource, setCurrentSource] = useState<string | null>(null);
 
-  // ========== BUSCAR NÚMEROS POR SOURCE ==========
+  // ========== BUSCAR NÚMEROS ==========
   const fetchNumbers = async (source: string | null) => {
     if (!source) {
       setLoading(false);
@@ -88,7 +88,7 @@ export function RouletteDashboard() {
     }
   };
 
-  // ========== CARREGA QUANDO MUDA A MESA ==========
+  // ========== CARREGA QUANDO MUDA ==========
   useEffect(() => {
     if (selectedSlug) {
       const source = gameLinkService.getSourceBySlug(selectedSlug);

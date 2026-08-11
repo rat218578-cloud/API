@@ -41,7 +41,7 @@ class GameLinkService {
   async getGameUrl(slug: string): Promise<string | null> {
     // Verifica se já está carregando
     const existingPromise = this.loadingPromises[slug];
-    if (existingPromise) {
+    if (existingPromise !== null && existingPromise !== undefined) {
       console.log(`⏳ Aguardando carga de ${slug}...`);
       return existingPromise;
     }
