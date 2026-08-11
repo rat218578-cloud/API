@@ -48,7 +48,15 @@ def set_cache(key, value):
 SLUG_SOURCE_MAP = {
     'evolution/immersive-roulette': 'immersive',
     'evolution/lightning-roulette': 'lightning',
-    'evolution/xxxtreme-lightning': 'lightning',  # XXXtreme usa lightning
+    'evolution/xxxtreme-lightning': 'lightning',
+}
+
+# 🔥 SLUGS QUE EXISTEM NA API
+VALID_SLUGS = {
+    'evolution/lightning-roulette': True,
+    'evolution/immersive-roulette': True,
+    'evolution/brasileira': True,
+    'evolution/xxxtreme-lightning': True,  # 🔥 ADICIONADO!
 }
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -121,6 +129,8 @@ def api_login():
 def api_start_game():
     try:
         slug = request.args.get('slug')
+        print(f"🎮 Gerando link para: {slug}")
+        
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
         
@@ -138,7 +148,7 @@ def api_start_game():
         if not auth_header_externo:
             return jsonify({'error': 'Token externo não encontrado'}), 401
         
-        # 🔥 REMOVE O '_t' PARA EVITAR CACHE
+        # 🔥 TENTA O SLUG EXATO PRIMEIRO
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
             params={
@@ -150,11 +160,14 @@ def api_start_game():
             timeout=5
         )
         
+        print(f"📥 Status: {response.status_code}")
+        
         if response.status_code == 200:
             data = response.json()
             game_url = data.get('iframe_url') or data.get('gameURL')
             
             if game_url:
+                print(f"✅ Link gerado para {slug}")
                 return jsonify({
                     'success': True,
                     'slug': slug,
@@ -163,12 +176,15 @@ def api_start_game():
                 }), 200
         
         # 🔥 SE FALHOU, TENTA COM O SLUG DA LIGHTNING (FALLBACK)
-        if slug == 'evolution/xxxtreme-lightning':
-            print("🔄 Tentando fallback com lightning...")
+        if response.status_code == 404:
+            print(f"🔄 Slug {slug} não encontrado, tentando lightning...")
+            
+            # Tenta o slug da lightning
+            fallback_slug = 'evolution/lightning-roulette'
             response = session.get(
                 f'{API_BASE}/api/start-game-v2',
                 params={
-                    'slug': 'evolution/lightning-roulette',
+                    'slug': fallback_slug,
                     'platform': 'WEB',
                     'use_demo': 0,
                     'source': 'watchIsAuthenticated'
@@ -180,11 +196,13 @@ def api_start_game():
                 data = response.json()
                 game_url = data.get('iframe_url') or data.get('gameURL')
                 if game_url:
+                    print(f"✅ Fallback: link da Lightning para {slug}")
                     return jsonify({
                         'success': True,
                         'slug': slug,
                         'gameURL': game_url,
-                        'iframe_url': game_url
+                        'iframe_url': game_url,
+                        'fallback': True
                     }), 200
         
         return jsonify({
@@ -193,6 +211,7 @@ def api_start_game():
         }), 404
         
     except Exception as e:
+        print(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/roulette/live', methods=['GET'])
@@ -271,7 +290,7 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - SMART API (XXXTREME + IMERSIVA + LIGHTNING)")
+    print("🎯 API PROXY - XXXTREME + IMERSIVA + LIGHTNING")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("📊 Fontes: Imersiva, Lightning, XXXtreme")
