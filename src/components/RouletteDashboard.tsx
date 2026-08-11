@@ -20,12 +20,11 @@ export function RouletteDashboard() {
   const [isConnected, setIsConnected] = useState(false);
   const [totalNumbers, setTotalNumbers] = useState(0);
 
-  // 🔥 VERIFICA SE É A MESA IMERSIVA (ÚNICA COM NÚMEROS REAIS)
+  // 🔥 VERIFICA SE É A MESA IMERSIVA
   const isImersiva = selectedSlug === 'evolution/immersive-roulette';
 
-  // 🔥 BUSCAR NÚMEROS REAIS DA API (SÓ IMERSIVA)
+  // 🔥 BUSCAR NÚMEROS REAIS DA API
   const fetchRealNumbers = async () => {
-    // Só busca números se for a Imersiva
     if (!isImersiva) {
       setLoading(false);
       setHistory([]);
@@ -82,13 +81,13 @@ export function RouletteDashboard() {
     fetchRealNumbers();
   }, [selectedSlug]);
 
-  // 🔥 POLLING A CADA 5 SEGUNDOS (SÓ IMERSIVA)
+  // 🔥 POLLING A CADA 3 SEGUNDOS (SÓ IMERSIVA)
   useEffect(() => {
     if (!isImersiva) return;
 
     const interval = setInterval(() => {
       fetchRealNumbers();
-    }, 5000);
+    }, 3000); // 🔥 3 SEGUNDOS!
 
     return () => clearInterval(interval);
   }, [isImersiva]);
@@ -131,7 +130,6 @@ export function RouletteDashboard() {
     return history.slice(0, 3);
   };
 
-  // 🔥 SE ESTIVER CARREGANDO E FOR IMERSIVA
   if (loading && isImersiva) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
@@ -229,7 +227,7 @@ export function RouletteDashboard() {
               ))}
             </div>
 
-            {/* Tabela de números - SÓ NÚMEROS REAIS */}
+            {/* Tabela de números */}
             <div className="space-y-1 max-h-[200px] overflow-y-auto">
               <div className="grid grid-cols-6 text-[8px] text-text-muted uppercase py-1 border-b border-border-default text-center">
                 <span>N</span><span>A/B</span><span>I/P</span><span>COL</span><span>DUZ</span><span>SET</span>
