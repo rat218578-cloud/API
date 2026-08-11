@@ -5,8 +5,7 @@ import { ROLETAS, gameLinkService } from "../services/gameLinkService";
 import {
   STRATEGIES,
   getNumberInfo,
-  getColorClass,
-  sanitizeHistory
+  getColorClass
 } from "../utils/roulette";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
@@ -98,7 +97,7 @@ export function RouletteDashboard() {
     }
   }, [selectedSlug]);
 
-  // ========== POLLING PARA ATUALIZAR ==========
+  // ========== POLLING ==========
   useEffect(() => {
     if (!currentSource) return;
 

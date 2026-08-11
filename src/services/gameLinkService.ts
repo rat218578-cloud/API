@@ -29,7 +29,7 @@ export const ROLETAS = [
 class GameLinkService {
   private static instance: GameLinkService;
   private gameUrls: Record<string, { url: string; timestamp: number }> = {};
-  private loadingPromises: Record<string, Promise<string | null>> = {};
+  private loadingPromises: Record<string, Promise<string | null> | null> = {};
 
   static getInstance(): GameLinkService {
     if (!GameLinkService.instance) {
@@ -39,10 +39,11 @@ class GameLinkService {
   }
 
   async getGameUrl(slug: string): Promise<string | null> {
-    // Se já está carregando, retorna a promise existente
-    if (this.loadingPromises[slug]) {
+    // Verifica se já está carregando
+    const existingPromise = this.loadingPromises[slug];
+    if (existingPromise) {
       console.log(`⏳ Aguardando carga de ${slug}...`);
-      return this.loadingPromises[slug];
+      return existingPromise;
     }
 
     const promise = this._fetchGameUrl(slug);
@@ -52,7 +53,7 @@ class GameLinkService {
       const result = await promise;
       return result;
     } finally {
-      delete this.loadingPromises[slug];
+      this.loadingPromises[slug] = null;
     }
   }
 
@@ -121,7 +122,7 @@ class GameLinkService {
 
   forceRefresh(slug: string): void {
     delete this.gameUrls[slug];
-    delete this.loadingPromises[slug];
+    this.loadingPromises[slug] = null;
     console.log(`🔄 Refresh forçado para ${slug}`);
   }
 
