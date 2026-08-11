@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { SignalGenerator } from "./SignalGenerator";
 import { LiveGameView } from "./LiveGameView";
 import { ROLETAS } from "../services/gameLinkService";
@@ -19,17 +19,18 @@ export function RouletteDashboard() {
   const [showCatalog, setShowCatalog] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [totalNumbers, setTotalNumbers] = useState(0);
+  const [isSwitching, setIsSwitching] = useState(false);
+  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // 🔥 VERIFICA SE A ROLETA TEM NÚMEROS REAIS
   const hasRealNumbers = (slug: string) => {
-    // 🔥 AMBAS AS ROLETAS AGORA TÊM NÚMEROS REAIS!
     return slug === 'evolution/immersive-roulette' || 
            slug === 'evolution/lightning-roulette';
   };
 
   // 🔥 BUSCAR NÚMEROS REAIS DA API
-  const fetchRealNumbers = async () => {
-    // Só busca números se a roleta tiver números reais
+  const fetchRealNumbers = async (force: boolean = false) => {
     if (!hasRealNumbers(selectedSlug || '')) {
       setLoading(false);
       setHistory([]);
@@ -45,7 +46,6 @@ export function RouletteDashboard() {
         return;
       }
 
-      // 🔥 PASSA O SLUG PARA O BACKEND SABER QUAL FONTE USAR
       const response = await fetch(`/api/roulette/live?slug=${selectedSlug}&limit=200`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -79,23 +79,48 @@ export function RouletteDashboard() {
       setTotalNumbers(0);
     } finally {
       setLoading(false);
+      setIsSwitching(false);
     }
   };
 
-  // 🔥 CARREGA QUANDO MUDA A ROLETA
+  // 🔥 LIMPA TIMEOUTS E INTERVALOS
+  const clearAllTimers = () => {
+    if (fetchTimeoutRef.current) {
+      clearTimeout(fetchTimeoutRef.current);
+      fetchTimeoutRef.current = null;
+    }
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+  };
+
+  // 🔥 CARREGA QUANDO MUDA A ROLETA (INSTANTÂNEO)
   useEffect(() => {
-    fetchRealNumbers();
-  }, [selectedSlug]);
+    // Limpa timers anteriores
+    clearAllTimers();
+    
+    if (selectedSlug && hasRealNumbers(selectedSlug)) {
+      setIsSwitching(true);
+      setLoading(true);
+      
+      // 🔥 CARREGA IMEDIATAMENTE
+      fetchRealNumbers(true);
+      
+      // 🔥 INICIA POLLING (2 SEGUNDOS)
+      pollingIntervalRef.current = setInterval(() => {
+        fetchRealNumbers(false);
+      }, 2000);
+    } else {
+      setHistory([]);
+      setIsConnected(false);
+      setTotalNumbers(0);
+      setLoading(false);
+    }
 
-  // 🔥 POLLING A CADA 3 SEGUNDOS (SÓ PARA ROLETAS COM NÚMEROS REAIS)
-  useEffect(() => {
-    if (!hasRealNumbers(selectedSlug || '')) return;
-
-    const interval = setInterval(() => {
-      fetchRealNumbers();
-    }, 3000);
-
-    return () => clearInterval(interval);
+    return () => {
+      clearAllTimers();
+    };
   }, [selectedSlug]);
 
   const openGame = (slug: string) => {
@@ -109,6 +134,7 @@ export function RouletteDashboard() {
     setHistory([]);
     setIsConnected(false);
     setTotalNumbers(0);
+    clearAllTimers();
   };
 
   const topNumbers = useMemo(() => {
@@ -128,7 +154,7 @@ export function RouletteDashboard() {
   const refreshHistory = () => {
     if (!hasRealNumbers(selectedSlug || '')) return;
     setLoading(true);
-    fetchRealNumbers();
+    fetchRealNumbers(true);
   };
 
   const getLastThree = () => {
@@ -155,9 +181,10 @@ export function RouletteDashboard() {
     <div className="p-4 space-y-4">
       {/* Status */}
       <div className="flex items-center gap-2 text-xs">
-        <span className={`w-2 h-2 rounded-full ${isConnected && isRealData ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
+        <span className={`w-2 h-2 rounded-full ${isConnected && isRealData ? 'bg-emerald-500 animate-pulse' : isSwitching ? 'bg-yellow-500' : 'bg-yellow-500'}`} />
         <span className={isConnected && isRealData ? 'text-emerald-400' : 'text-yellow-400'}>
-          {isConnected && isRealData 
+          {isSwitching && !isRealData ? '🔄 Carregando...' :
+           isConnected && isRealData 
             ? `📡 Números REAIS (${selectedSlug === 'evolution/immersive-roulette' ? 'Imersiva' : 'Lightning'})`
             : showRealIndicator 
               ? '⏳ Aguardando números reais...' 
@@ -190,9 +217,6 @@ export function RouletteDashboard() {
               {isRealData && activeRoom === r.id && (
                 <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">REAL</span>
               )}
-              {!hasReal && !isRealData && activeRoom === r.id && (
-                <span className="text-[8px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full">⏳</span>
-              )}
             </button>
           );
         })}
@@ -224,7 +248,6 @@ export function RouletteDashboard() {
               )}
             </div>
 
-            {/* Estratégias */}
             <div className="grid grid-cols-3 gap-1.5 mb-3">
               {STRATEGIES.slice(0, 3).map((s) => (
                 <div
@@ -240,7 +263,6 @@ export function RouletteDashboard() {
               ))}
             </div>
 
-            {/* Tabela de números */}
             <div className="space-y-1 max-h-[200px] overflow-y-auto">
               <div className="grid grid-cols-6 text-[8px] text-text-muted uppercase py-1 border-b border-border-default text-center">
                 <span>N</span><span>A/B</span><span>I/P</span><span>COL</span><span>DUZ</span><span>SET</span>
@@ -295,7 +317,6 @@ export function RouletteDashboard() {
 
         {/* GRUPOS E ASSERTIVIDADE */}
         <div className="xl:col-span-3 space-y-4">
-          {/* GRUPOS */}
           <div className="bg-bg-card border border-border-default rounded-2xl p-4">
             <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">📈 Grupos</h3>
             <div className="text-[10px] text-text-muted uppercase mb-2">Sequência atual</div>
@@ -337,7 +358,6 @@ export function RouletteDashboard() {
             </div>
           </div>
 
-          {/* ASSERTIVIDADE */}
           <div className="bg-bg-card border border-border-default rounded-2xl p-4">
             <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">🎯 Assertividade</h3>
             <div className="space-y-3">
@@ -362,7 +382,6 @@ export function RouletteDashboard() {
         </div>
       </div>
 
-      {/* SIGNAL GENERATOR */}
       <div className="grid grid-cols-1 gap-4">
         <SignalGenerator history={isRealData ? history : []} />
       </div>
