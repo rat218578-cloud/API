@@ -1,16 +1,15 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import requests
-import json
-import time
 import logging
 import os
-import random
 import re
-from datetime import datetime, timedelta
+import time
+from datetime import datetime
 from db import db
 from jwt_helper import jwt_manager
 from session_service import session_service
+from apigames_service import apigames
 
 # 🔥 LOGS MÍNIMOS
 logging.basicConfig(level=logging.ERROR)
@@ -48,132 +47,11 @@ def set_cache(key, value):
         'timestamp': time.time()
     }
 
-# 🔥 SMART API - NÚMEROS REAIS
-class SmartApiService:
-    def __init__(self):
-        self.base_url = "https://tool-api.smartanalise.com.br/api"
-        self.numeros = []
-        self.total = 0
-        self.last_signal_id = None
-        self.email = 'gcriste268@gmail.com'
-        self.source = 'immersivevip'
-        self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Referer': 'https://tool.smartanalise.com.br/',
-            'Origin': 'https://tool.smartanalise.com.br'
-        }
-        
-    def carregar_historico(self):
-        """Carrega histórico completo da Smart API"""
-        try:
-            url = f"{self.base_url}/full-history?source={self.source}&userEmail={self.email}"
-            print(f"📥 Carregando histórico: {url}")
-            
-            response = requests.get(url, headers=self.headers, timeout=10)
-            
-            if response.status_code == 200:
-                data = response.json()
-                items = data.get('data') or data.get('results', [])
-                
-                # 🔥 INVERTE PARA ORDEM CRONOLÓGICA (MAIS ANTIGO PRIMEIRO)
-                items = items[::-1]
-                
-                for item in items:
-                    signal_id = item.get('signalId') or item.get('id')
-                    signal = item.get('signal') or item.get('number')
-                    
-                    if signal_id and signal and str(signal).isdigit():
-                        numero = int(signal)
-                        if 0 <= numero <= 36:
-                            self.numeros.append({
-                                'number': numero,
-                                'signalId': signal_id,
-                                'timestamp': item.get('timestamp')
-                            })
-                            self.total += 1
-                            self.last_signal_id = signal_id
-                
-                print(f"✅ {self.total} números carregados da Smart API")
-                return True
-                
-        except Exception as e:
-            print(f"⚠️ Erro ao carregar histórico: {e}")
-        
-        return False
-    
-    def buscar_novos(self):
-        """Busca novos números da Smart API"""
-        try:
-            url = f"{self.base_url}/history-delta?source={self.source}&userEmail={self.email}"
-            if self.last_signal_id:
-                url += f"&since={self.last_signal_id}"
-            
-            response = requests.get(url, headers=self.headers, timeout=5)
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                if data.get('data'):
-                    # 🔥 INVERTE PARA ORDEM CRONOLÓGICA (MAIS ANTIGO PRIMEIRO)
-                    novos = data['data'][::-1]
-                    
-                    for item in novos:
-                        signal_id = item.get('signalId')
-                        signal = item.get('signal')
-                        
-                        if signal_id and signal and str(signal).isdigit():
-                            numero = int(signal)
-                            if 0 <= numero <= 36:
-                                if not any(n.get('signalId') == signal_id for n in self.numeros):
-                                    self.numeros.append({
-                                        'number': numero,
-                                        'signalId': signal_id,
-                                        'timestamp': item.get('timestamp')
-                                    })
-                                    self.total += 1
-                                    self.last_signal_id = signal_id
-                    
-                    # Mantém últimos 5000
-                    if len(self.numeros) > 5000:
-                        self.numeros = self.numeros[-5000:]
-                    
-                    return True
-                    
-        except Exception as e:
-            print(f"⚠️ Erro ao buscar novos: {e}")
-        
-        return False
-    
-    def get_history(self, limit=200):
-        """Retorna histórico (mais recentes primeiro)"""
-        if not self.numeros:
-            return []
-        return self.numeros[-limit:][::-1]
-    
-    def get_last_numbers(self, count=10):
-        """Retorna últimos números (mais recentes)"""
-        if not self.numeros:
-            return []
-        history = self.numeros[-count:][::-1]
-        return [h['number'] for h in history]
-    
-    def get_top_numbers(self, count=8):
-        """Retorna números mais frequentes"""
-        if not self.numeros:
-            return []
-        
-        nums = [n['number'] for n in self.numeros]
-        freq = {}
-        for n in nums:
-            freq[n] = freq.get(n, 0) + 1
-        top = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:count]
-        return [{'number': n, 'count': c} for n, c in top]
-
-# 🔥 INSTANCIA E CARREGA HISTÓRICO
-smart_api = SmartApiService()
-smart_api.carregar_historico()
+# 🔥 MAPEAMENTO SLUG -> SOURCE
+SLUG_SOURCE_MAP = {
+    'evolution/immersive-roulette': 'immersive',
+    'evolution/lightning-roulette': 'lightning',
+}
 
 # ========== LOGIN ==========
 @app.route('/api/auth/login', methods=['POST'])
@@ -218,6 +96,10 @@ def api_login():
             session_service.create_session(user_id, email, password, jwt_token, refresh_token)
         except:
             pass
+        
+        # 🔥 INICIA API GAMES COM EMAIL
+        apigames.set_email(email)
+        apigames.start_polling(interval=3)
         
         response_data = {
             'access_token': jwt_token,
@@ -292,24 +174,27 @@ def api_start_game():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ========== ROTA NÚMEROS REAIS ==========
+# ========== ROTA NÚMEROS ==========
 @app.route('/api/roulette/live', methods=['GET'])
 def get_live_numbers():
-    """Retorna números REAIS da Smart API"""
+    """Retorna números REAIS da fonte específica"""
     try:
+        slug = request.args.get('slug', '')
         limit = int(request.args.get('limit', 200))
         
-        # 🔥 BUSCA NOVOS NÚMEROS
-        smart_api.buscar_novos()
+        # 🔥 DETERMINA A FONTE PELO SLUG
+        source = SLUG_SOURCE_MAP.get(slug, 'immersive')
         
-        history = smart_api.get_history(limit)
-        last_numbers = smart_api.get_last_numbers(10)
-        top_numbers = smart_api.get_top_numbers(8)
+        history = apigames.get_history(source, limit)
+        last_numbers = apigames.get_last_numbers(source, 10)
+        top_numbers = apigames.get_top_numbers(source, 8)
+        total = apigames.get_total(source)
         
         return jsonify({
             'success': True,
-            'connected': True,
-            'total': smart_api.total,
+            'connected': apigames.running,
+            'total': total,
+            'source': source,
             'last_numbers': last_numbers,
             'history': history,
             'top_numbers': top_numbers,
@@ -326,17 +211,23 @@ def add_number():
     try:
         data = request.json
         number = data.get('number')
+        source = data.get('source', 'immersive')
+        
         if number is None or number < 0 or number > 36:
             return jsonify({'error': 'Número inválido'}), 400
         
-        smart_api.numeros.append({
+        # 🔥 ADICIONA NA FONTE CORRETA
+        apigames.inicializar_fonte(source)
+        dados = apigames.fontes[source]
+        dados['numeros'].append({
             'number': number,
             'signalId': f'manual_{int(time.time())}',
             'timestamp': datetime.now().isoformat()
         })
-        smart_api.total += 1
+        dados['total_numeros'] += 1
+        dados['ultimos_numeros'] = dados['numeros'][-10:] if dados['numeros'] else []
         
-        return jsonify({'success': True, 'number': number, 'total': smart_api.total}), 200
+        return jsonify({'success': True, 'number': number, 'total': dados['total_numeros']}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -354,6 +245,7 @@ def api_validate():
 # ========== LOGOUT ==========
 @app.route('/api/auth/logout', methods=['POST'])
 def api_logout():
+    apigames.stop_polling()
     try:
         auth_header = request.headers.get('Authorization')
         if auth_header:
@@ -392,10 +284,10 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - SMART API (NÚMEROS REAIS)")
+    print("🎯 API PROXY - SMART API (IMERSIVA + LIGHTNING)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
-    print("📊 Total números:", smart_api.total)
+    print("📊 Fontes: Imersiva, Lightning")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     

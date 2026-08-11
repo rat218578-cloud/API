@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 🎯 API GAMES - NÚMEROS REAIS DA SMART API
+Suporte para múltiplas fontes (Imersiva, Lightning)
 """
 
 import requests
@@ -16,13 +17,10 @@ logger = logging.getLogger(__name__)
 class ApiGamesService:
     def __init__(self):
         self.base_url = "https://tool-api.smartanalise.com.br/api"
-        self.numeros = []
-        self.ultimos_numeros = []
-        self.total_numeros = 0
-        self.last_signal_id = None
-        self.running = False
+        self.fontes = {}  # Dicionário com dados por fonte
         self.email = None
-        self.source = "immersivevip"
+        self.running = False
+        self.threads = []
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'application/json, text/plain, */*',
@@ -35,14 +33,30 @@ class ApiGamesService:
         self.email = email
         logger.info(f"📧 Email definido: {email}")
         
-    def carregar_historico(self):
+    def inicializar_fonte(self, source: str):
+        """Inicializa uma fonte (Imersiva, Lightning, etc)"""
+        if source not in self.fontes:
+            self.fontes[source] = {
+                'numeros': [],
+                'ultimos_numeros': [],
+                'total_numeros': 0,
+                'last_signal_id': None,
+                'carregado': False
+            }
+            logger.info(f"📊 Fonte {source} inicializada")
+        
+    def carregar_historico(self, source: str):
+        """Carrega histórico completo de uma fonte específica"""
         if not self.email:
             logger.warning("⚠️ Email não definido!")
             return False
         
+        self.inicializar_fonte(source)
+        dados = self.fontes[source]
+        
         try:
-            url = f"{self.base_url}/full-history?source={self.source}&userEmail={self.email}"
-            logger.info(f"📥 Carregando histórico: {url}")
+            url = f"{self.base_url}/full-history?source={source}&userEmail={self.email}"
+            logger.info(f"📥 Carregando histórico {source}: {url}")
             
             response = requests.get(url, headers=self.headers, timeout=10)
             
@@ -55,35 +69,42 @@ class ApiGamesService:
                     signal_id = item.get('signalId') or item.get('id')
                     signal = item.get('signal') or item.get('number')
                     
-                    if signal_id and signal:
-                        self.numeros.append({
-                            'number': int(signal),
-                            'signalId': signal_id,
-                            'timestamp': item.get('timestamp')
-                        })
-                        self.total_numeros += 1
-                        self.last_signal_id = signal_id
+                    if signal_id and signal and str(signal).isdigit():
+                        numero = int(signal)
+                        if 0 <= numero <= 36:
+                            dados['numeros'].append({
+                                'number': numero,
+                                'signalId': signal_id,
+                                'timestamp': item.get('timestamp')
+                            })
+                            dados['total_numeros'] += 1
+                            dados['last_signal_id'] = signal_id
                 
-                self.ultimos_numeros = self.numeros[-10:] if self.numeros else []
-                logger.info(f"✅ {self.total_numeros} números carregados do histórico")
+                dados['ultimos_numeros'] = dados['numeros'][-10:] if dados['numeros'] else []
+                dados['carregado'] = True
+                logger.info(f"✅ {source}: {dados['total_numeros']} números carregados")
                 return True
             else:
-                logger.warning(f"⚠️ Status: {response.status_code}")
+                logger.warning(f"⚠️ {source} Status: {response.status_code}")
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ Erro ao carregar histórico: {e}")
+            logger.error(f"❌ Erro ao carregar {source}: {e}")
             return False
     
-    def buscar_novos(self):
+    def buscar_novos(self, source: str):
+        """Busca novos números de uma fonte específica"""
         if not self.email:
             logger.warning("⚠️ Email não definido!")
             return []
         
+        self.inicializar_fonte(source)
+        dados = self.fontes[source]
+        
         try:
-            url = f"{self.base_url}/history-delta?source={self.source}&userEmail={self.email}"
-            if self.last_signal_id:
-                url += f"&since={self.last_signal_id}"
+            url = f"{self.base_url}/history-delta?source={source}&userEmail={self.email}"
+            if dados['last_signal_id']:
+                url += f"&since={dados['last_signal_id']}"
             
             response = requests.get(url, headers=self.headers, timeout=5)
             
@@ -98,39 +119,51 @@ class ApiGamesService:
                         signal_id = item.get('signalId')
                         signal = item.get('signal')
                         
-                        if signal_id and not any(n.get('signalId') == signal_id for n in self.numeros):
-                            self.numeros.append({
-                                'number': int(signal),
-                                'signalId': signal_id,
-                                'timestamp': item.get('timestamp')
-                            })
-                            numeros_novos.append(signal)
-                            self.total_numeros += 1
-                            self.last_signal_id = signal_id
+                        if signal_id and signal and str(signal).isdigit():
+                            numero = int(signal)
+                            if 0 <= numero <= 36:
+                                if not any(n.get('signalId') == signal_id for n in dados['numeros']):
+                                    dados['numeros'].append({
+                                        'number': numero,
+                                        'signalId': signal_id,
+                                        'timestamp': item.get('timestamp')
+                                    })
+                                    numeros_novos.append(signal)
+                                    dados['total_numeros'] += 1
+                                    dados['last_signal_id'] = signal_id
                     
-                    self.ultimos_numeros = self.numeros[-10:] if self.numeros else []
+                    dados['ultimos_numeros'] = dados['numeros'][-10:] if dados['numeros'] else []
                     
                     if numeros_novos:
-                        logger.info(f"✅ +{len(numeros_novos)} novos números")
+                        logger.info(f"✅ {source}: +{len(numeros_novos)} novos números")
                     
                     return numeros_novos
             return []
             
         except Exception as e:
-            logger.error(f"❌ Erro: {e}")
+            logger.error(f"❌ Erro {source}: {e}")
             return []
     
     def start_polling(self, interval=3):
+        """Inicia polling para todas as fontes"""
+        if self.running:
+            return
+        
         self.running = True
         logger.info(f"🚀 Iniciando polling (intervalo: {interval}s)")
-        self.carregar_historico()
+        
+        # 🔥 CARREGA TODAS AS FONTES
+        fontes = ['immersive', 'lightning']
+        for source in fontes:
+            self.carregar_historico(source)
         
         def poll_loop():
             while self.running:
                 try:
-                    novos = self.buscar_novos()
-                    if novos:
-                        logger.info(f"🎯 NOVO(S) NÚMERO(S): {' '.join(novos)}")
+                    for source in ['immersive', 'lightning']:
+                        novos = self.buscar_novos(source)
+                        if novos:
+                            logger.info(f"🎯 {source}: {' '.join(novos[:5])}...")
                     time.sleep(interval)
                 except Exception as e:
                     logger.error(f"❌ Erro no polling: {e}")
@@ -138,37 +171,60 @@ class ApiGamesService:
         
         thread = threading.Thread(target=poll_loop, daemon=True)
         thread.start()
+        self.threads.append(thread)
         logger.info("✅ Polling iniciado")
     
     def stop_polling(self):
         self.running = False
         logger.info("🔌 Polling parado")
     
-    def get_history(self, limit=500):
-        if not self.numeros:
+    def get_history(self, source: str, limit=500):
+        """Retorna histórico de uma fonte específica"""
+        if source not in self.fontes:
             return []
-        return self.numeros[-limit:][::-1] if self.numeros else []
-    
-    def get_last_numbers(self, count=10):
-        if not self.ultimos_numeros:
+        dados = self.fontes[source]
+        if not dados['numeros']:
             return []
-        return self.ultimos_numeros[::-1]
+        return dados['numeros'][-limit:][::-1]
     
-    def get_top_numbers(self, count=8):
-        if not self.numeros:
+    def get_last_numbers(self, source: str, count=10):
+        """Retorna últimos números de uma fonte específica"""
+        if source not in self.fontes:
+            return []
+        dados = self.fontes[source]
+        if not dados['ultimos_numeros']:
+            return []
+        return dados['ultimos_numeros'][::-1]
+    
+    def get_top_numbers(self, source: str, count=8):
+        """Retorna números mais frequentes de uma fonte específica"""
+        if source not in self.fontes:
+            return []
+        dados = self.fontes[source]
+        if not dados['numeros']:
             return []
         
-        nums = [n['number'] for n in self.numeros]
+        nums = [n['number'] for n in dados['numeros']]
         freq = Counter(nums).most_common(count)
         return [{'number': num, 'count': cnt} for num, cnt in freq]
     
-    def get_statistics(self):
-        if not self.numeros:
+    def get_total(self, source: str):
+        """Retorna total de números de uma fonte"""
+        if source not in self.fontes:
+            return 0
+        return self.fontes[source]['total_numeros']
+    
+    def get_statistics(self, source: str):
+        """Retorna estatísticas de uma fonte específica"""
+        if source not in self.fontes:
+            return {}
+        dados = self.fontes[source]
+        if not dados['numeros']:
             return {}
         
         red = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]
         cores = {'red': 0, 'black': 0, 'green': 0}
-        nums = [n['number'] for n in self.numeros[-100:]]
+        nums = [n['number'] for n in dados['numeros'][-100:]]
         
         for num in nums:
             if num == 0:
@@ -179,10 +235,10 @@ class ApiGamesService:
                 cores['black'] += 1
         
         return {
-            'total': self.total_numeros,
+            'total': dados['total_numeros'],
             'colors': cores,
-            'most_frequent': self.get_top_numbers(5),
-            'last_numbers': [n['number'] for n in self.get_last_numbers(10)]
+            'most_frequent': self.get_top_numbers(source, 5),
+            'last_numbers': [n['number'] for n in self.get_last_numbers(source, 10)]
         }
 
 # Instância global
