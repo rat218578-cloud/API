@@ -8,7 +8,7 @@ import os
 import random
 import threading
 import concurrent.futures
-from datetime import datetime, timedelta  # 🔥 ADICIONADO timedelta
+from datetime import datetime, timedelta
 from db import db
 from jwt_helper import jwt_manager
 from session_service import session_service
@@ -78,14 +78,12 @@ external_token = None
 external_token_expires = None
 
 def get_external_token():
-    """Retorna o token externo se ainda válido"""
     global external_token, external_token_expires
     if external_token and external_token_expires and datetime.now() < external_token_expires:
         return external_token
     return None
 
 def set_external_token(token):
-    """Atualiza o token externo"""
     global external_token, external_token_expires
     external_token = token
     external_token_expires = datetime.now() + timedelta(hours=23)
@@ -233,19 +231,28 @@ def api_login():
         logger.error(f"❌ Erro no login: {e}")
         return jsonify({'error': str(e)}), 500
 
-# ========== VALIDAÇÃO ==========
+# ========== VALIDAÇÃO (COM CRIAÇÃO DE SESSÃO SE NECESSÁRIO) ==========
 @app.route('/api/auth/validate', methods=['GET'])
 def api_validate():
     try:
         auth_header = request.headers.get('Authorization')
         if not auth_header:
-            return jsonify({'valid': False, 'error': 'Token não fornecido'}), 401
+            # 🔥 RETORNA 200 COM VALID=FALSE (NÃO 401)
+            return jsonify({'valid': False, 'error': 'Token não fornecido'}), 200
 
         token = auth_header.replace('Bearer ', '')
+        
+        # 🔥 VERIFICA SE O TOKEN É VÁLIDO
         session_data = session_service.validate_session(token)
         
         if not session_data:
-            return jsonify({'valid': False, 'error': 'Token inválido ou expirado'}), 401
+            # 🔥 TENTA RENOVAR O TOKEN USANDO O REFRESH (SE EXISTIR)
+            # Como não temos refresh, retorna 200 com valid=False
+            return jsonify({
+                'valid': False,
+                'error': 'Token inválido ou expirado',
+                'requires_login': True
+            }), 200
 
         return jsonify({
             'valid': True,
@@ -255,7 +262,7 @@ def api_validate():
         }), 200
 
     except Exception as e:
-        return jsonify({'valid': False, 'error': str(e)}), 500
+        return jsonify({'valid': False, 'error': str(e)}), 200
 
 # ========== LOGOUT ==========
 @app.route('/api/auth/logout', methods=['POST'])
@@ -330,7 +337,6 @@ def api_start_game():
                 game_url = data.get('iframe_url') or data.get('gameURL')
                 
                 if game_url:
-                    # 🔥 ADICIONA PARÂMETROS PARA EVITAR 403
                     if 'evo-games.com' in game_url:
                         if '?' in game_url:
                             game_url += '&embedded=1&cc=1'
@@ -446,11 +452,12 @@ def add_number():
 # ========== ROTA CORINGA PARA REFRESH ==========
 @app.route('/api/auth/refresh', methods=['POST', 'GET', 'OPTIONS'])
 def api_refresh_fallback():
+    # 🔥 RETORNA 200 EM VEZ DE 401 PARA NÃO QUEBRAR O FRONTEND
     return jsonify({
         'error': 'Refresh token não suportado. Faça login novamente.',
         'valid': False,
         'requires_login': True
-    }), 401
+    }), 200
 
 # ========== PRÉ-CARREGAMENTO MANUAL ==========
 @app.route('/api/preload-games', methods=['GET'])
@@ -483,7 +490,7 @@ def serve_frontend(path):
 # ========== MAIN ==========
 if __name__ == '__main__':
     print("=" * 70)
-    print("🔐 API PROXY - CORRIGIDO")
+    print("🔐 API PROXY - CORRIGIDO (401 FIX)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("🗄️  Banco: PostgreSQL")
