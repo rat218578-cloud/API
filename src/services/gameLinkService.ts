@@ -28,9 +28,7 @@ export const ROLETAS = [
 
 class GameLinkService {
   private static instance: GameLinkService;
-  // 🔥 CACHE DESATIVADO - SEMPRE GERAR NOVO TOKEN
   private gameUrls: Record<string, { url: string; timestamp: number }> = {};
-  private cacheTTL = 0; // 🔥 ZERO = SEM CACHE
 
   static getInstance(): GameLinkService {
     if (!GameLinkService.instance) {
