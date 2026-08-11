@@ -196,7 +196,7 @@ def api_login():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ========== VALIDAÇÃO ==========
+# ========== VALIDAÇÃO (COM RENOVAÇÃO AUTOMÁTICA) ==========
 @app.route('/api/auth/validate', methods=['GET'])
 def api_validate():
     try:
@@ -209,6 +209,17 @@ def api_validate():
         
         if not session_data:
             return jsonify({'valid': False, 'error': 'Token inválido ou expirado'}), 401
+
+        # 🔥 SE O TOKEN FOI RENOVADO, RETORNA O NOVO TOKEN
+        if session_data.get('renewed'):
+            return jsonify({
+                'valid': True,
+                'user_id': session_data.get('user_id'),
+                'email': session_data.get('email'),
+                'expires_at': session_data.get('expires_at'),
+                'new_token': session_data.get('new_token'),
+                'renewed': True
+            }), 200
 
         return jsonify({
             'valid': True,
@@ -243,7 +254,6 @@ def api_logout():
 @app.route('/api/start-game-v2', methods=['GET', 'POST'])
 def api_start_game():
     try:
-        # PEGA SLUG DA URL OU DO BODY
         slug = request.args.get('slug')
         if not slug and request.method == 'POST':
             data = request.json
@@ -264,6 +274,20 @@ def api_start_game():
         auth_header = request.headers.get('Authorization')
         if not auth_header:
             return jsonify({'error': 'Token não encontrado'}), 401
+        
+        # 🔥 VALIDA SESSÃO PRIMEIRO
+        token = auth_header.replace('Bearer ', '')
+        session_data = session_service.validate_session(token)
+        if not session_data:
+            return jsonify({
+                'error': 'User authentication failed or your session may be expired, please try again. Error Code: EV.12',
+                'code': 'EV.12'
+            }), 401
+        
+        # 🔥 SE RENOVOU, USA O NOVO TOKEN
+        if session_data.get('renewed'):
+            new_token = session_data.get('new_token')
+            auth_header = f'Bearer {new_token}'
         
         # 🔥 TENTA DIRETO NA API EXTERNA
         try:
@@ -384,10 +408,9 @@ def add_number():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ========== ROTA CORINGA PARA REFRESH (EVITA 405) ==========
+# ========== ROTA CORINGA PARA REFRESH ==========
 @app.route('/api/auth/refresh', methods=['POST', 'GET', 'OPTIONS'])
 def api_refresh_fallback():
-    """Rota coringa para evitar erro 405 no frontend"""
     return jsonify({
         'error': 'Refresh token não suportado. Faça login novamente.',
         'valid': False,
@@ -425,11 +448,12 @@ def serve_frontend(path):
 # ========== MAIN ==========
 if __name__ == '__main__':
     print("=" * 70)
-    print("🔐 API PROXY - CORRIGIDO (7 DIAS)")
+    print("🔐 API PROXY - SESSÃO PERSISTENTE (EV.12 FIX)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("🗄️  Banco: PostgreSQL")
-    print("🔑 Token: 7 dias")
+    print("🔑 Token: 7 dias com renovação automática")
+    print("🔄 Renovação: < 1 dia de expiração")
     print("🎮 Rota: /api/start-game-v2 (GET + POST)")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)

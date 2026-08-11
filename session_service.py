@@ -66,8 +66,10 @@ class SessionService:
 
     @staticmethod
     def validate_session(token: str) -> dict:
+        # 🔥 PRIMEIRO VERIFICA SE O TOKEN É VÁLIDO
         payload = jwt_manager.verify_token(token)
         if not payload:
+            logger.warning("⚠️ Token inválido")
             return None
 
         user_id = payload.get('user_id')
@@ -76,8 +78,10 @@ class SessionService:
 
         session = SessionService.get_session_by_user_id(user_id)
         if not session:
+            logger.warning(f"⚠️ Sessão não encontrada para {user_id}")
             return None
 
+        # 🔥 VERIFICA EXPIRAÇÃO
         expires_at = session.get('expires_at')
         if isinstance(expires_at, str):
             expires_at = datetime.fromisoformat(expires_at)
@@ -86,6 +90,34 @@ class SessionService:
             logger.info(f"⚠️ Sessão expirada para {user_id}")
             SessionService.deactivate_session(user_id)
             return None
+
+        # 🔥 SE ESTIVER PRÓXIMO DE EXPIRAR (< 1 dia), RENOVA AUTOMATICAMENTE
+        time_left = expires_at - datetime.now()
+        if time_left < timedelta(days=1):
+            logger.info(f"🔄 Renovando token para {user_id} (expira em {time_left})")
+            new_token = jwt_manager.generate_token(user_id, session.get('email'))
+            new_expires = jwt_manager.get_expires_at()
+            
+            try:
+                query = """
+                    UPDATE user_sessions 
+                    SET access_token = %s, expires_at = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE user_id = %s
+                """
+                db.execute(query, (new_token, new_expires, user_id))
+                logger.info(f"✅ Token renovado para {user_id}")
+                
+                # Retorna o novo token
+                return {
+                    'user_id': session.get('user_id'),
+                    'email': session.get('email'),
+                    'access_token': new_token,
+                    'expires_at': new_expires,
+                    'renewed': True,
+                    'new_token': new_token
+                }
+            except Exception as e:
+                logger.error(f"❌ Erro ao renovar token: {e}")
 
         return session
 
