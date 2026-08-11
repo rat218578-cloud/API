@@ -20,7 +20,6 @@ export function RouletteDashboard() {
   const [isConnected, setIsConnected] = useState(false);
   const [totalNumbers, setTotalNumbers] = useState(0);
   const [isSwitching, setIsSwitching] = useState(false);
-  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // 🔥 VERIFICA SE A ROLETA TEM NÚMEROS REAIS
@@ -52,28 +51,24 @@ export function RouletteDashboard() {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('📊 Dados da API:', data);
         
         if (data.success && data.history && data.history.length > 0) {
           const numbers = data.history.map((item: any) => item.number);
           setHistory(numbers);
           setIsConnected(data.connected || false);
           setTotalNumbers(data.total || numbers.length);
-          console.log(`✅ Carregados ${numbers.length} números REAIS da ${data.source || selectedSlug}`);
+          console.log(`✅ Carregados ${numbers.length} números REAIS`);
         } else {
-          console.warn('⚠️ Nenhum número real disponível');
           setHistory([]);
           setIsConnected(false);
           setTotalNumbers(0);
         }
       } else {
-        console.error('❌ Erro ao carregar números:', response.status);
         setHistory([]);
         setIsConnected(false);
         setTotalNumbers(0);
       }
     } catch (error) {
-      console.error('❌ Erro ao carregar números:', error);
       setHistory([]);
       setIsConnected(false);
       setTotalNumbers(0);
@@ -83,21 +78,17 @@ export function RouletteDashboard() {
     }
   };
 
-  // 🔥 LIMPA TIMEOUTS E INTERVALOS
-  const clearAllTimers = () => {
-    if (fetchTimeoutRef.current) {
-      clearTimeout(fetchTimeoutRef.current);
-      fetchTimeoutRef.current = null;
-    }
+  // 🔥 LIMPA INTERVALOS
+  const clearPolling = () => {
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
       pollingIntervalRef.current = null;
     }
   };
 
-  // 🔥 CARREGA QUANDO MUDA A ROLETA (INSTANTÂNEO)
+  // 🔥 CARREGA QUANDO MUDA A ROLETA
   useEffect(() => {
-    clearAllTimers();
+    clearPolling();
     
     if (selectedSlug && hasRealNumbers(selectedSlug)) {
       setIsSwitching(true);
@@ -116,7 +107,7 @@ export function RouletteDashboard() {
     }
 
     return () => {
-      clearAllTimers();
+      clearPolling();
     };
   }, [selectedSlug]);
 
@@ -131,7 +122,7 @@ export function RouletteDashboard() {
     setHistory([]);
     setIsConnected(false);
     setTotalNumbers(0);
-    clearAllTimers();
+    clearPolling();
   };
 
   const topNumbers = useMemo(() => {
@@ -182,7 +173,7 @@ export function RouletteDashboard() {
         <span className={isConnected && isRealData ? 'text-emerald-400' : 'text-yellow-400'}>
           {isSwitching && !isRealData ? '🔄 Carregando...' :
            isConnected && isRealData 
-            ? `📡 Números REAIS (${selectedSlug === 'evolution/immersive-roulette' ? 'Imersiva' : 'Lightning'})`
+            ? `📡 Números REAIS`
             : showRealIndicator 
               ? '⏳ Aguardando números reais...' 
               : '📊 Mesa sem números reais'}
@@ -194,28 +185,26 @@ export function RouletteDashboard() {
 
       {/* Botões das roletas */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 flex-wrap">
-        {ROLETAS.map((r) => {
-          return (
-            <button
-              key={r.id}
-              onClick={() => {
-                setActiveRoom(r.id);
-                openGame(r.slug);
-              }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${
-                activeRoom === r.id
-                  ? "bg-bg-tertiary border-accent-pink text-text-primary shadow-lg shadow-accent-pink/20"
-                  : "bg-bg-card border-border-default text-text-secondary hover:border-border-hover"
-              }`}
-            >
-              <span className={`w-2 h-2 rounded-full ${activeRoom === r.id ? 'bg-emerald-500 animate-pulse' : 'bg-text-muted'}`} />
-              {r.nome}
-              {isRealData && activeRoom === r.id && (
-                <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">REAL</span>
-              )}
-            </button>
-          );
-        })}
+        {ROLETAS.map((r) => (
+          <button
+            key={r.id}
+            onClick={() => {
+              setActiveRoom(r.id);
+              openGame(r.slug);
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${
+              activeRoom === r.id
+                ? "bg-bg-tertiary border-accent-pink text-text-primary shadow-lg shadow-accent-pink/20"
+                : "bg-bg-card border-border-default text-text-secondary hover:border-border-hover"
+            }`}
+          >
+            <span className={`w-2 h-2 rounded-full ${activeRoom === r.id ? 'bg-emerald-500 animate-pulse' : 'bg-text-muted'}`} />
+            {r.nome}
+            {isRealData && activeRoom === r.id && (
+              <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">REAL</span>
+            )}
+          </button>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
