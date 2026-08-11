@@ -20,7 +20,7 @@ CORS(app)
 
 API_BASE = "https://sortenabet.bet.br"
 
-# SESSÃO REUTILIZÁVEL (KEEP-ALIVE)
+# SESSÃO REUTILIZÁVEL (KEEP-ALIVE) - MESMA DO LOGIN
 session = requests.Session()
 session.headers.update({
     'Content-Type': 'application/json',
@@ -30,9 +30,9 @@ session.headers.update({
     'Connection': 'keep-alive'
 })
 
-# 🔥 CACHE RÁPIDO
+# 🔥 CACHE - MESMA ESTRATÉGIA DO LOGIN
 cache = {}
-CACHE_TTL = 300  # 5 minutos
+CACHE_TTL = 300  # 5 minutos (igual ao login)
 
 def get_cache(key):
     if key in cache:
@@ -69,7 +69,7 @@ def adicionar_numero_ao_historico(numero):
     if len(historico_numeros) > 500:
         historico_numeros = historico_numeros[-500:]
 
-# ========== LOGIN (RÁPIDO) ==========
+# ========== LOGIN (JÁ RÁPIDO) ==========
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
     try:
@@ -80,7 +80,7 @@ def api_login():
         if not email or not password:
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
         
-        # 🔥 VERIFICA CACHE
+        # VERIFICA CACHE
         cached = get_cache(f"login:{email}")
         if cached:
             return jsonify(cached), 200
@@ -110,7 +110,6 @@ def api_login():
         jwt_token = jwt_manager.generate_token(user_id, email)
         refresh_token = jwt_manager.generate_refresh_token(user_id, email)
         
-        # SALVA NO BANCO (NÃO BLOQUEIA)
         try:
             session_service.create_session(user_id, email, password, jwt_token, refresh_token)
         except:
@@ -136,7 +135,7 @@ def api_login():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ========== START-GAME (RÁPIDO COM CACHE) ==========
+# ========== START-GAME (MESMA ESTRATÉGIA DO LOGIN) ==========
 @app.route('/api/start-game-v2', methods=['GET'])
 def api_start_game():
     try:
@@ -144,12 +143,12 @@ def api_start_game():
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
         
-        # 🔥 VERIFICA CACHE PRIMEIRO
+        # 🔥 MESMA ESTRATÉGIA DO LOGIN: VERIFICA CACHE PRIMEIRO
         cached = get_cache(f"game:{slug}")
         if cached:
             return jsonify(cached), 200
         
-        # PEGA TOKEN DO HEADER
+        # 🔥 MESMA ESTRATÉGIA DO LOGIN: PEGA TOKEN DO HEADER
         auth_header = request.headers.get('Authorization')
         if not auth_header:
             return jsonify({'error': 'Token não encontrado'}), 401
@@ -160,12 +159,12 @@ def api_start_game():
         if not payload:
             return jsonify({'error': 'Token inválido'}), 401
         
-        # USA TOKEN EXTERNO
+        # 🔥 MESMA ESTRATÉGIA DO LOGIN: USA TOKEN EXTERNO DA SESSÃO
         auth_header_externo = session.headers.get('Authorization')
         if not auth_header_externo:
             return jsonify({'error': 'Token externo não encontrado'}), 401
         
-        # 🔥 FAZ REQUISIÇÃO (TIMEOUT 5s)
+        # 🔥 MESMA ESTRATÉGIA DO LOGIN: FAZ REQUISIÇÃO
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
             params={
@@ -174,7 +173,7 @@ def api_start_game():
                 'use_demo': 0,
                 'source': 'watchIsAuthenticated'
             },
-            timeout=5
+            timeout=5  # 🔥 TIMEOUT UM POUCO MAIOR QUE O LOGIN (5s)
         )
         
         if response.status_code == 200:
@@ -188,7 +187,7 @@ def api_start_game():
                     'gameURL': game_url,
                     'iframe_url': game_url
                 }
-                # 🔥 SALVA EM CACHE (1 minuto)
+                # 🔥 MESMA ESTRATÉGIA DO LOGIN: SALVA EM CACHE
                 set_cache(f"game:{slug}", response_data)
                 return jsonify(response_data), 200
         
@@ -197,6 +196,8 @@ def api_start_game():
             'error': 'Não foi possível obter a URL do jogo'
         }), 404
         
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'Tempo limite excedido'}), 408
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -302,16 +303,15 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("⚡ API PROXY - QA.AI (IFRAME RÁPIDO)")
+    print("⚡ API PROXY - QA.AI (MESMA ESTRATÉGIA)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("🗄️  Banco: PostgreSQL")
-    print("⚡ Cache: 5 minutos")
+    print("⚡ Cache: 5 minutos (login e vídeo)")
     print("⏱️  Timeout: 5 segundos")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     
-    # Gera números iniciais
     for _ in range(30):
         adicionar_numero_ao_historico(gerar_numero_aleatorio())
     
