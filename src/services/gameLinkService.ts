@@ -30,6 +30,7 @@ class GameLinkService {
   private static instance: GameLinkService;
   private gameUrls: Record<string, { url: string; timestamp: number }> = {};
   private loadingPromises: Record<string, Promise<string | null> | null> = {};
+  private cacheTTL = 5 * 60 * 1000; // 5 minutos de cache
 
   static getInstance(): GameLinkService {
     if (!GameLinkService.instance) {
@@ -39,6 +40,13 @@ class GameLinkService {
   }
 
   async getGameUrl(slug: string): Promise<string | null> {
+    // Verifica cache primeiro
+    const cached = this.gameUrls[slug];
+    if (cached && (Date.now() - cached.timestamp) < this.cacheTTL) {
+      console.log(`📦 Cache hit para ${slug}`);
+      return cached.url;
+    }
+
     // Verifica se já está carregando
     const existingPromise = this.loadingPromises[slug];
     if (existingPromise !== null && existingPromise !== undefined) {
@@ -46,6 +54,7 @@ class GameLinkService {
       return existingPromise;
     }
 
+    // Cria nova promessa de carregamento
     const promise = this._fetchGameUrl(slug);
     this.loadingPromises[slug] = promise;
     
@@ -68,6 +77,10 @@ class GameLinkService {
         return null;
       }
 
+      // TIMEOUT DE 5 SEGUNDOS
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
       const response = await fetch(`/api/start-game-v2?slug=${slug}&_=${Date.now()}`, {
         method: 'GET',
         headers: {
@@ -75,8 +88,11 @@ class GameLinkService {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'Cache-Control': 'no-cache'
-        }
+        },
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       console.log(`📥 Status: ${response.status}`);
 
@@ -109,6 +125,11 @@ class GameLinkService {
 
       const gameUrl = data.iframe_url || data.gameURL;
       if (gameUrl) {
+        // SALVA EM CACHE
+        this.gameUrls[slug] = {
+          url: gameUrl,
+          timestamp: Date.now()
+        };
         console.log(`✅ Link gerado para ${slug}`);
         return gameUrl;
       }
@@ -120,6 +141,7 @@ class GameLinkService {
     }
   }
 
+  // Força refresh do token
   forceRefresh(slug: string): void {
     delete this.gameUrls[slug];
     this.loadingPromises[slug] = null;
@@ -130,13 +152,6 @@ class GameLinkService {
     this.gameUrls = {};
     this.loadingPromises = {};
     console.log('🗑️ Todos os caches limpos');
-  }
-
-  getSourceBySlug(slug: string): string | null {
-    if (slug === 'evolution/immersive-roulette') {
-      return 'immersivevip';
-    }
-    return null;
   }
 }
 

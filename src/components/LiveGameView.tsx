@@ -39,12 +39,12 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
         return;
       }
 
-      // Força renovação do token
+      // Usa o gameLinkService com cache
       const url = await gameLinkService.getGameUrl(slug);
       
       if (url) {
         setGameUrl(url);
-        // Timeout para carregamento
+        // Timeout de carregamento (5 segundos)
         loadTimeoutRef.current = setTimeout(() => {
           setLoading(false);
         }, 5000);
@@ -77,6 +77,7 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
     if (loadTimeoutRef.current) {
       clearTimeout(loadTimeoutRef.current);
     }
+    console.log('✅ Iframe carregado com sucesso!');
   };
 
   const openInNewTab = () => {
@@ -138,7 +139,7 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
             }}
             disabled={loading}
             className="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors disabled:opacity-50"
-            title="Gerar novo link"
+            title="Gerar novo token"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
