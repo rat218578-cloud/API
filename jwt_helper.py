@@ -12,6 +12,7 @@ class JWTManager:
     def __init__(self):
         self.secret = os.getenv('JWT_SECRET', 'qa-ai-secret-key-2026')
         self.refresh_secret = os.getenv('REFRESH_SECRET', 'qa-ai-refresh-secret-2026')
+        # 🔥 30 DIAS DE EXPIRAÇÃO
         self.expires_days = int(os.getenv('JWT_EXPIRES_DAYS', 30))
         self.refresh_expires_days = int(os.getenv('REFRESH_EXPIRES_DAYS', 60))
 
