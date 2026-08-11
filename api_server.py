@@ -87,7 +87,7 @@ def preload_game(slug, auth_header):
                 'source': 'watchIsAuthenticated'
             },
             timeout=2,
-            headers={'Authorization': auth_header}
+            headers={'Authorization': auth_header} if auth_header else {}
         )
         
         if response.status_code == 200:
@@ -179,7 +179,7 @@ def api_login():
         response_data = {
             'access_token': jwt_token,
             'token_type': 'Bearer',
-            'expires_in': 7 * 24 * 60 * 60,  # 7 DIAS
+            'expires_in': 7 * 24 * 60 * 60,
             'user': {
                 'id': user_id,
                 'name': result.get('user', {}).get('name', email.split('@')[0]),
@@ -199,39 +199,74 @@ def api_login():
 
 # ========== VALIDAÇÃO ==========
 @app.route('/api/auth/validate', methods=['GET'])
-@require_auth
 def api_validate():
-    return jsonify({
-        'valid': True,
-        'user_id': request.user_id,
-        'email': request.user_email,
-        'expires_at': request.session_data.get('expires_at')
-    }), 200
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return jsonify({'valid': False, 'error': 'Token não fornecido'}), 401
+
+        token = auth_header.replace('Bearer ', '')
+        session_data = session_service.validate_session(token)
+        
+        if not session_data:
+            return jsonify({'valid': False, 'error': 'Token inválido ou expirado'}), 401
+
+        return jsonify({
+            'valid': True,
+            'user_id': session_data.get('user_id'),
+            'email': session_data.get('email'),
+            'expires_at': session_data.get('expires_at')
+        }), 200
+
+    except Exception as e:
+        return jsonify({'valid': False, 'error': str(e)}), 500
 
 # ========== LOGOUT ==========
 @app.route('/api/auth/logout', methods=['POST'])
-@require_auth
 def api_logout():
-    session_service.deactivate_session(request.user_id)
-    return jsonify({'success': True}), 200
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return jsonify({'success': True}), 200
+        
+        token = auth_header.replace('Bearer ', '')
+        payload = jwt_manager.verify_token(token)
+        if payload:
+            user_id = payload.get('user_id')
+            if user_id:
+                session_service.deactivate_session(user_id)
+        
+        return jsonify({'success': True}), 200
+    except:
+        return jsonify({'success': True}), 200
 
-# ========== START-GAME (PROTEGIDO) ==========
-@app.route('/api/start-game-v2', methods=['GET'])
-@require_auth
+# ========== START-GAME (SEM MIDDLEWARE - DIRETO) ==========
+@app.route('/api/start-game-v2', methods=['GET', 'POST'])
 def api_start_game():
     try:
+        # PEGA SLUG DA URL OU DO BODY
         slug = request.args.get('slug')
+        if not slug and request.method == 'POST':
+            data = request.json
+            slug = data.get('slug') if data else None
+        
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
+        
+        logger.info(f"🎮 Gerando link para: {slug}")
         
         # VERIFICA CACHE
         cached = get_cache(f"game:{slug}")
         if cached:
+            logger.info(f"✅ Cache hit para {slug}")
             return jsonify(cached), 200
         
-        # BUSCA URL DO JOGO
+        # PEGA TOKEN DO HEADER
         auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return jsonify({'error': 'Token não encontrado'}), 401
         
+        # 🔥 TENTA DIRETO NA API EXTERNA
         try:
             response = session.get(
                 f'{API_BASE}/api/start-game-v2',
@@ -241,9 +276,11 @@ def api_start_game():
                     'use_demo': 0,
                     'source': 'watchIsAuthenticated'
                 },
-                timeout=2,
-                headers={'Authorization': auth_header}
+                timeout=5,
+                headers={'Authorization': auth_header} if auth_header else {}
             )
+            
+            logger.info(f"📥 Status: {response.status_code}")
             
             if response.status_code == 200:
                 data = response.json()
@@ -257,18 +294,41 @@ def api_start_game():
                         'iframe_url': game_url
                     }
                     set_cache(f"game:{slug}", response_data)
+                    logger.info(f"✅ URL obtida: {game_url[:50]}...")
                     return jsonify(response_data), 200
-        except requests.Timeout:
-            # BUSCA EM BACKGROUND
-            threading.Thread(target=preload_game, args=(slug, auth_header)).start()
+                    
+        except Exception as e:
+            logger.error(f"❌ Erro na requisição: {e}")
+        
+        # 🔥 FALLBACK: TENTA COM DEMO
+        try:
+            response = session.get(
+                f'{API_BASE}/api/start-game-v2',
+                params={
+                    'slug': slug,
+                    'platform': 'WEB',
+                    'use_demo': 1,
+                    'source': 'watchIsAuthenticated'
+                },
+                timeout=3
+            )
             
-            return jsonify({
-                'success': True,
-                'slug': slug,
-                'gameURL': f'{API_BASE}/api/start-game-v2?slug={slug}',
-                'iframe_url': f'{API_BASE}/api/start-game-v2?slug={slug}',
-                'loading': False
-            }), 200
+            if response.status_code == 200:
+                data = response.json()
+                game_url = data.get('iframe_url') or data.get('gameURL')
+                
+                if game_url:
+                    response_data = {
+                        'success': True,
+                        'slug': slug,
+                        'gameURL': game_url,
+                        'iframe_url': game_url,
+                        'demo': True
+                    }
+                    set_cache(f"game:{slug}", response_data)
+                    return jsonify(response_data), 200
+        except:
+            pass
         
         return jsonify({
             'success': False,
@@ -276,6 +336,7 @@ def api_start_game():
         }), 404
         
     except Exception as e:
+        logger.error(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
 # ========== ROTA NÚMEROS ==========
@@ -326,14 +387,21 @@ def add_number():
 
 # ========== PRÉ-CARREGAMENTO MANUAL ==========
 @app.route('/api/preload-games', methods=['GET'])
-@require_auth
 def api_preload_games():
-    auth_header = request.headers.get('Authorization')
-    threading.Thread(target=preload_popular_games, args=(auth_header,)).start()
-    return jsonify({
-        'success': True,
-        'message': 'Pré-carregamento iniciado'
-    }), 200
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return jsonify({'error': 'Token não encontrado'}), 401
+        
+        threading.Thread(target=preload_popular_games, args=(auth_header,)).start()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Pré-carregamento iniciado'
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # ========== FRONTEND ==========
 @app.route('/', defaults={'path': ''})
@@ -348,12 +416,12 @@ def serve_frontend(path):
 # ========== MAIN ==========
 if __name__ == '__main__':
     print("=" * 70)
-    print("🔐 API PROXY - TOKEN DE 7 DIAS (FIX EV.12)")
+    print("🔐 API PROXY - CORRIGIDO (TOKEN 7 DIAS)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("🗄️  Banco: PostgreSQL")
     print("🔑 Token: 7 dias")
-    print("🛡️  Middleware: @require_auth")
+    print("🎮 Rota: /api/start-game-v2 (GET + POST)")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     
