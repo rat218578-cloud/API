@@ -28,7 +28,6 @@ export const ROLETAS = [
 
 class GameLinkService {
   private static instance: GameLinkService;
-  private gameUrls: Record<string, { url: string; timestamp: number }> = {};
 
   static getInstance(): GameLinkService {
     if (!GameLinkService.instance) {
@@ -38,7 +37,6 @@ class GameLinkService {
   }
 
   async getGameUrl(slug: string): Promise<string | null> {
-    // 🔥 SEMPRE GERAR NOVO TOKEN - IGNORA CACHE
     console.log(`🎮 Gerando NOVO token para: ${slug}`);
 
     try {
@@ -49,7 +47,6 @@ class GameLinkService {
         return null;
       }
 
-      // 🔥 FORÇA GERAÇÃO DE NOVO TOKEN
       const response = await fetch(`/api/start-game-v2?slug=${slug}&_=${Date.now()}`, {
         method: 'GET',
         headers: {
@@ -106,15 +103,11 @@ class GameLinkService {
     }
   }
 
-  // 🔥 FORÇA GERAÇÃO DE NOVO TOKEN
   forceRefresh(slug: string): void {
     console.log(`🔄 Forçando refresh do token para ${slug}`);
-    // LIMPA CACHE
-    delete this.gameUrls[slug];
   }
 
   clearAllCache(): void {
-    this.gameUrls = {};
     console.log('🗑️ Todos os caches limpos');
   }
 }

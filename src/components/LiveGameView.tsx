@@ -18,10 +18,8 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
   const roleta = ROLETAS.find(r => r.slug === slug);
   const cor = roleta?.cor || '#6C3CE1';
 
-  // 🔥 CARREGA SEMPRE QUE ABRIR OU MUDAR O SLUG
   useEffect(() => {
     if (isOpen && slug) {
-      // 🔥 FORÇA REFRESH - GARANTE TOKEN NOVO
       gameLinkService.forceRefresh(slug);
       loadAttempts.current = 0;
       loadGame();
@@ -41,7 +39,6 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
         return;
       }
 
-      // 🔥 SEMPRE GERAR NOVO TOKEN (NÃO USA CACHE)
       const url = await gameLinkService.getGameUrl(slug);
       if (url) {
         setGameUrl(url);
@@ -82,7 +79,6 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
       id="live-game-container"
       className="bg-bg-card border border-border-default rounded-2xl overflow-hidden"
     >
-      {/* Header */}
       <div className="flex items-center justify-between p-3 bg-bg-secondary/80 border-b border-border-default">
         <div className="flex items-center gap-3">
           <span 
@@ -110,7 +106,6 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
           )}
           <button
             onClick={() => {
-              // 🔥 FORÇA REFRESH E GERA NOVO TOKEN
               gameLinkService.forceRefresh(slug);
               loadGame();
             }}
@@ -135,7 +130,6 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
         </div>
       </div>
 
-      {/* Conteúdo */}
       <div className="relative bg-black" style={{ minHeight: '500px', height: '65vh' }}>
         {loading ? (
           <div className="absolute inset-0 flex items-center justify-center">
@@ -168,7 +162,6 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
             allow="autoplay; fullscreen; camera; microphone; accelerometer; gyroscope"
             loading="lazy"
             onError={() => {
-              // 🔥 SE O IFRAME DER ERRO, GERA NOVO TOKEN
               console.log('⚠️ Iframe error, gerando novo token...');
               gameLinkService.forceRefresh(slug);
               loadGame();
@@ -195,7 +188,6 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
         )}
       </div>
 
-      {/* Footer */}
       <div className="p-2 bg-bg-secondary/50 border-t border-border-default">
         <div className="flex items-center justify-between text-[10px] text-text-muted">
           <span>{roleta?.nome || slug}</span>
