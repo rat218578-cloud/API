@@ -11,7 +11,6 @@ class SessionService:
 
     @staticmethod
     def create_session(user_id: str, email: str, password: str, access_token: str) -> bool:
-        """Cria ou atualiza uma sessão no banco"""
         try:
             expires_at = jwt_manager.get_expires_at()
             password_hash = hashlib.sha256(password.encode()).hexdigest()
@@ -54,7 +53,6 @@ class SessionService:
 
     @staticmethod
     def get_session_by_user_id(user_id: str) -> dict:
-        """Busca sessão pelo user_id"""
         try:
             query = """
                 SELECT * FROM user_sessions 
@@ -68,7 +66,6 @@ class SessionService:
 
     @staticmethod
     def validate_session(token: str) -> dict:
-        """Valida se o token é válido"""
         payload = jwt_manager.verify_token(token)
         if not payload:
             return None
@@ -81,7 +78,6 @@ class SessionService:
         if not session:
             return None
 
-        # 🔥 VERIFICA EXPIRAÇÃO (7 DIAS)
         expires_at = session.get('expires_at')
         if isinstance(expires_at, str):
             expires_at = datetime.fromisoformat(expires_at)
@@ -95,7 +91,6 @@ class SessionService:
 
     @staticmethod
     def deactivate_session(user_id: str) -> bool:
-        """Desativa uma sessão"""
         try:
             query = """
                 UPDATE user_sessions 
@@ -111,7 +106,6 @@ class SessionService:
 
     @staticmethod
     def cleanup_expired() -> int:
-        """Remove tokens expirados"""
         try:
             query = """
                 UPDATE user_sessions 

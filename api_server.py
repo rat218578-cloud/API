@@ -12,7 +12,6 @@ from datetime import datetime
 from db import db
 from jwt_helper import jwt_manager
 from session_service import session_service
-from middleware import require_auth
 
 # 🔥 LOGS MÍNIMOS
 logging.basicConfig(level=logging.ERROR)
@@ -240,7 +239,7 @@ def api_logout():
     except:
         return jsonify({'success': True}), 200
 
-# ========== START-GAME (SEM MIDDLEWARE - DIRETO) ==========
+# ========== START-GAME ==========
 @app.route('/api/start-game-v2', methods=['GET', 'POST'])
 def api_start_game():
     try:
@@ -277,7 +276,7 @@ def api_start_game():
                     'source': 'watchIsAuthenticated'
                 },
                 timeout=5,
-                headers={'Authorization': auth_header} if auth_header else {}
+                headers={'Authorization': auth_header}
             )
             
             logger.info(f"📥 Status: {response.status_code}")
@@ -294,7 +293,7 @@ def api_start_game():
                         'iframe_url': game_url
                     }
                     set_cache(f"game:{slug}", response_data)
-                    logger.info(f"✅ URL obtida: {game_url[:50]}...")
+                    logger.info(f"✅ URL obtida")
                     return jsonify(response_data), 200
                     
         except Exception as e:
@@ -385,6 +384,16 @@ def add_number():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# ========== ROTA CORINGA PARA REFRESH (EVITA 405) ==========
+@app.route('/api/auth/refresh', methods=['POST', 'GET', 'OPTIONS'])
+def api_refresh_fallback():
+    """Rota coringa para evitar erro 405 no frontend"""
+    return jsonify({
+        'error': 'Refresh token não suportado. Faça login novamente.',
+        'valid': False,
+        'requires_login': True
+    }), 401
+
 # ========== PRÉ-CARREGAMENTO MANUAL ==========
 @app.route('/api/preload-games', methods=['GET'])
 def api_preload_games():
@@ -416,7 +425,7 @@ def serve_frontend(path):
 # ========== MAIN ==========
 if __name__ == '__main__':
     print("=" * 70)
-    print("🔐 API PROXY - CORRIGIDO (TOKEN 7 DIAS)")
+    print("🔐 API PROXY - CORRIGIDO (7 DIAS)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("🗄️  Banco: PostgreSQL")
