@@ -30,7 +30,7 @@ export function RouletteDashboard() {
   };
 
   // 🔥 BUSCAR NÚMEROS REAIS DA API
-  const fetchRealNumbers = async (force: boolean = false) => {
+  const fetchRealNumbers = async () => {
     if (!hasRealNumbers(selectedSlug || '')) {
       setLoading(false);
       setHistory([]);
@@ -97,19 +97,16 @@ export function RouletteDashboard() {
 
   // 🔥 CARREGA QUANDO MUDA A ROLETA (INSTANTÂNEO)
   useEffect(() => {
-    // Limpa timers anteriores
     clearAllTimers();
     
     if (selectedSlug && hasRealNumbers(selectedSlug)) {
       setIsSwitching(true);
       setLoading(true);
       
-      // 🔥 CARREGA IMEDIATAMENTE
-      fetchRealNumbers(true);
+      fetchRealNumbers();
       
-      // 🔥 INICIA POLLING (2 SEGUNDOS)
       pollingIntervalRef.current = setInterval(() => {
-        fetchRealNumbers(false);
+        fetchRealNumbers();
       }, 2000);
     } else {
       setHistory([]);
@@ -154,7 +151,7 @@ export function RouletteDashboard() {
   const refreshHistory = () => {
     if (!hasRealNumbers(selectedSlug || '')) return;
     setLoading(true);
-    fetchRealNumbers(true);
+    fetchRealNumbers();
   };
 
   const getLastThree = () => {
@@ -181,7 +178,7 @@ export function RouletteDashboard() {
     <div className="p-4 space-y-4">
       {/* Status */}
       <div className="flex items-center gap-2 text-xs">
-        <span className={`w-2 h-2 rounded-full ${isConnected && isRealData ? 'bg-emerald-500 animate-pulse' : isSwitching ? 'bg-yellow-500' : 'bg-yellow-500'}`} />
+        <span className={`w-2 h-2 rounded-full ${isConnected && isRealData ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
         <span className={isConnected && isRealData ? 'text-emerald-400' : 'text-yellow-400'}>
           {isSwitching && !isRealData ? '🔄 Carregando...' :
            isConnected && isRealData 
@@ -198,7 +195,6 @@ export function RouletteDashboard() {
       {/* Botões das roletas */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 flex-wrap">
         {ROLETAS.map((r) => {
-          const hasReal = hasRealNumbers(r.slug);
           return (
             <button
               key={r.id}
