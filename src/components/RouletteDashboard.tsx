@@ -15,7 +15,6 @@ export function RouletteDashboard() {
   const [history, setHistory] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
-  const [showVideo, setShowVideo] = useState(false);
   const [showCatalog, setShowCatalog] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [isRealData, setIsRealData] = useState(false);
@@ -147,11 +146,9 @@ export function RouletteDashboard() {
   // ========== FUNÇÕES ==========
   const openGame = (slug: string) => {
     setSelectedSlug(slug);
-    setShowVideo(true);
   };
 
   const closeGame = () => {
-    setShowVideo(false);
     setSelectedSlug(null);
     setCurrentSource(null);
     setHistory([]);
@@ -275,7 +272,7 @@ export function RouletteDashboard() {
               activeRoom === r.id
                 ? "bg-bg-tertiary border-accent-pink text-text-primary shadow-lg shadow-accent-pink/20"
                 : "bg-bg-card border-border-default text-text-secondary hover:border-border-hover"
-            }`}
+              }`}
           >
             <span className={`w-2 h-2 rounded-full ${activeRoom === r.id ? 'bg-emerald-500 animate-pulse' : 'bg-text-muted'}`} />
             {r.nome}
@@ -360,7 +357,7 @@ export function RouletteDashboard() {
           </div>
         )}
 
-        {/* VÍDEO */}
+        {/* VÍDEO - SEMPRE VISÍVEL QUANDO TEM ROLETA SELECIONADA */}
         <div className={showRealData ? "xl:col-span-7" : "xl:col-span-12"}>
           <LiveGameView
             slug={selectedSlug}
