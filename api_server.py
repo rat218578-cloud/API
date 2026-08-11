@@ -6,7 +6,7 @@ import time
 import logging
 import os
 import random
-import re
+import concurrent.futures
 from datetime import datetime
 from db import db
 from jwt_helper import jwt_manager
@@ -21,7 +21,7 @@ CORS(app)
 
 API_BASE = "https://sortenabet.bet.br"
 
-# 🔥 SESSÃO REUTILIZÁVEL (KEEP-ALIVE)
+# SESSÃO REUTILIZÁVEL
 session = requests.Session()
 session.headers.update({
     'Content-Type': 'application/json',
@@ -33,7 +33,7 @@ session.headers.update({
 
 # 🔥 CACHE EM MEMÓRIA (RÁPIDO)
 cache = {}
-CACHE_TTL = 600  # 10 minutos (mais tempo)
+CACHE_TTL = 300  # 5 minutos
 
 def get_cache(key):
     if key in cache:
@@ -48,24 +48,70 @@ def set_cache(key, value):
         'timestamp': time.time()
     }
 
-# 🔥 CACHE PARA EVOSESSIONID
-evo_cache = {}
-EVO_CACHE_TTL = 120  # 2 minutos
+# HISTÓRICO DE NÚMEROS
+historico_numeros = []
 
-def get_evo_cache(slug):
-    if slug in evo_cache:
-        data = evo_cache[slug]
-        if time.time() - data['timestamp'] < EVO_CACHE_TTL:
-            return data['value']
+def gerar_numero_aleatorio():
+    return random.randint(0, 36)
+
+def get_cor(numero):
+    red = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]
+    if numero == 0:
+        return "green"
+    return "red" if numero in red else "black"
+
+def adicionar_numero_ao_historico(numero):
+    global historico_numeros
+    historico_numeros.append({
+        'number': numero,
+        'color': get_cor(numero),
+        'timestamp': datetime.now().isoformat()
+    })
+    if len(historico_numeros) > 500:
+        historico_numeros = historico_numeros[-500:]
+
+# ========== FUNÇÃO PARA PRÉ-CARREGAR JOGO ==========
+def preload_single_game(slug, auth_header=None):
+    """Pré-carrega um único jogo em background"""
+    try:
+        # Verifica cache primeiro
+        cached = get_cache(f"game:{slug}")
+        if cached:
+            return cached
+        
+        # Usa o header se fornecido
+        if auth_header:
+            session.headers.update({'Authorization': auth_header})
+        
+        # Faz a requisição
+        response = session.get(
+            f'{API_BASE}/api/start-game-v2',
+            params={
+                'slug': slug,
+                'platform': 'WEB',
+                'use_demo': 0,
+                'source': 'watchIsAuthenticated'
+            },
+            timeout=1.5
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            game_url = data.get('iframe_url') or data.get('gameURL')
+            if game_url:
+                response_data = {
+                    'success': True,
+                    'slug': slug,
+                    'gameURL': game_url,
+                    'iframe_url': game_url
+                }
+                set_cache(f"game:{slug}", response_data)
+                return response_data
+    except Exception as e:
+        logger.error(f"Erro ao pré-carregar {slug}: {e}")
     return None
 
-def set_evo_cache(slug, value):
-    evo_cache[slug] = {
-        'value': value,
-        'timestamp': time.time()
-    }
-
-# ========== ROTA DE LOGIN (OTIMIZADA) ==========
+# ========== LOGIN (COM CACHE) ==========
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
     try:
@@ -76,12 +122,16 @@ def api_login():
         if not email or not password:
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
         
-        # 🔥 VERIFICA CACHE (INSTANTÂNEO)
+        # 🔥 VERIFICA CACHE
         cached = get_cache(f"login:{email}")
         if cached:
+            # 🔥 PRÉ-CARREGA JOGOS EM BACKGROUND
+            auth_header = cached.get('access_token')
+            if auth_header:
+                threading.Thread(target=preload_popular_games, args=(f'Bearer {auth_header}',)).start()
             return jsonify(cached), 200
         
-        # 🔥 LOGIN NA API EXTERNA (COM TIMEOUT MENOR)
+        # LOGIN NA API EXTERNA
         login_data = {
             "login": email,
             "email": email,
@@ -89,7 +139,7 @@ def api_login():
             "app_source": "web"
         }
         
-        response = session.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=5)
+        response = session.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=3)
         
         if response.status_code != 200:
             return jsonify({'error': 'Credenciais inválidas'}), 401
@@ -100,14 +150,13 @@ def api_login():
         if not access_token_externo:
             return jsonify({'error': 'Token não retornado'}), 500
         
-        # 🔥 GUARDA TOKEN NA SESSÃO
         session.headers.update({'Authorization': f'Bearer {access_token_externo}'})
         
         user_id = str(result.get('user', {}).get('id', email))
         jwt_token = jwt_manager.generate_token(user_id, email)
         refresh_token = jwt_manager.generate_refresh_token(user_id, email)
         
-        # 🔥 SALVA NO BANCO (ASSÍNCRONO - NÃO BLOQUEIA)
+        # SALVA NO BANCO
         try:
             session_service.create_session(user_id, email, password, jwt_token, refresh_token)
         except:
@@ -129,12 +178,34 @@ def api_login():
         # 🔥 SALVA EM CACHE
         set_cache(f"login:{email}", response_data)
         
+        # 🔥 PRÉ-CARREGA JOGOS EM BACKGROUND (NÃO BLOQUEIA)
+        import threading
+        threading.Thread(target=preload_popular_games, args=(f'Bearer {jwt_token}',)).start()
+        
         return jsonify(response_data), 200
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ========== ROTA START-GAME (OTIMIZADA) ==========
+# ========== PRÉ-CARREGAR JOGOS POPULARES ==========
+def preload_popular_games(auth_header):
+    """Pré-carrega jogos populares em background"""
+    popular_slugs = ['roulette', 'blackjack', 'slots', 'baccarat', 'poker']
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        futures = []
+        for slug in popular_slugs:
+            future = executor.submit(preload_single_game, slug, auth_header)
+            futures.append(future)
+        
+        # Espera todos terminarem (máximo 2 segundos)
+        for future in concurrent.futures.as_completed(futures, timeout=2):
+            try:
+                future.result()
+            except:
+                pass
+
+# ========== START-GAME (0.5 SEGUNDOS) ==========
 @app.route('/api/start-game-v2', methods=['GET'])
 def api_start_game():
     try:
@@ -142,12 +213,11 @@ def api_start_game():
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
         
-        # 🔥 VERIFICA CACHE (INSTANTÂNEO)
-        cached = get_evo_cache(slug)
+        # 🔥 1. VERIFICA CACHE (RESPOSTA INSTANTÂNEA)
+        cached = get_cache(f"game:{slug}")
         if cached:
             return jsonify(cached), 200
         
-        # 🔥 PEGA TOKEN DO HEADER
         auth_header = request.headers.get('Authorization')
         if not auth_header:
             return jsonify({'error': 'Token não encontrado'}), 401
@@ -158,12 +228,30 @@ def api_start_game():
         if not payload:
             return jsonify({'error': 'Token inválido'}), 401
         
-        # 🔥 USA TOKEN EXTERNO DA SESSÃO
-        auth_header_externo = session.headers.get('Authorization')
-        if not auth_header_externo:
-            return jsonify({'error': 'Token externo não encontrado'}), 401
+        # 🔥 2. TENTA BUSCAR EM PARALELO (0.5 SEGUNDOS)
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(preload_single_game, slug, auth_header)
+            try:
+                result = future.result(timeout=0.5)  # 0.5 segundos!
+                if result:
+                    return jsonify(result), 200
+            except concurrent.futures.TimeoutError:
+                # 🔥 3. SE PASSOU 0.5s, RETORNA PLACEHOLDER + BUSCA EM BACKGROUND
+                # Inicia busca em background
+                import threading
+                threading.Thread(target=preload_single_game, args=(slug, auth_header)).start()
+                
+                # Retorna placeholder
+                return jsonify({
+                    'success': True,
+                    'slug': slug,
+                    'gameURL': f'/api/game/loading/{slug}',
+                    'iframe_url': f'/api/game/loading/{slug}',
+                    'loading': True,
+                    'message': 'Carregando jogo...'
+                }), 200
         
-        # 🔥 FAZ REQUISIÇÃO (RÁPIDA)
+        # 🔥 4. FALLBACK: BUSCA NORMAL
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
             params={
@@ -172,7 +260,7 @@ def api_start_game():
                 'use_demo': 0,
                 'source': 'watchIsAuthenticated'
             },
-            timeout=5
+            timeout=2
         )
         
         if response.status_code == 200:
@@ -180,57 +268,39 @@ def api_start_game():
             game_url = data.get('iframe_url') or data.get('gameURL')
             
             if game_url:
-                # 🔥 EXTRAI EVOSESSIONID
-                match = re.search(r'EVOSESSIONID=([^&]+)', game_url)
-                evo_id = match.group(1) if match else None
-                
                 response_data = {
                     'success': True,
                     'slug': slug,
                     'gameURL': game_url,
-                    'iframe_url': game_url,
-                    'evo_session_id': evo_id
+                    'iframe_url': game_url
                 }
-                
-                # 🔥 SALVA EM CACHE
-                set_evo_cache(slug, response_data)
+                set_cache(f"game:{slug}", response_data)
                 return jsonify(response_data), 200
-        
-        # 🔥 SE FALHOU, TENTA RENOVAR O TOKEN EXTERNO
-        if response.status_code == 401 or (response.text and 'EV.12' in response.text):
-            print("🔄 Renovando token externo...")
-            session.headers.pop('Authorization', None)
-            
-            # Tenta novamente
-            response = session.get(
-                f'{API_BASE}/api/start-game-v2',
-                params={
-                    'slug': slug,
-                    'platform': 'WEB',
-                    'use_demo': 0,
-                    'source': 'watchIsAuthenticated'
-                },
-                timeout=5
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                game_url = data.get('iframe_url') or data.get('gameURL')
-                
-                if game_url:
-                    response_data = {
-                        'success': True,
-                        'slug': slug,
-                        'gameURL': game_url,
-                        'iframe_url': game_url
-                    }
-                    set_evo_cache(slug, response_data)
-                    return jsonify(response_data), 200
         
         return jsonify({
             'success': False,
             'error': 'Não foi possível obter a URL do jogo'
         }), 404
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ========== PRÉ-CARREGAMENTO MANUAL ==========
+@app.route('/api/preload-games', methods=['GET'])
+def api_preload_games():
+    """Endpoint para pré-carregar jogos manualmente"""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return jsonify({'error': 'Token não encontrado'}), 401
+        
+        import threading
+        threading.Thread(target=preload_popular_games, args=(auth_header,)).start()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Pré-carregamento de jogos iniciado em background'
+        }), 200
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -241,14 +311,16 @@ def get_live_numbers():
     try:
         limit = int(request.args.get('limit', 50))
         
-        # 🔥 GERA NÚMEROS RÁPIDOS
-        numeros = []
-        for _ in range(limit):
-            numeros.append(random.randint(0, 36))
+        if len(historico_numeros) < 20:
+            for _ in range(20):
+                adicionar_numero_ao_historico(gerar_numero_aleatorio())
         
-        # 🔥 CALCULA TOP NÚMEROS
+        history = historico_numeros[-limit:] if historico_numeros else []
+        last_numbers = [h['number'] for h in history[-10:]] if history else []
+        
+        nums = [h['number'] for h in historico_numeros]
         freq = {}
-        for n in numeros:
+        for n in nums:
             freq[n] = freq.get(n, 0) + 1
         top_numbers = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:8]
         top_numbers_list = [{'number': n, 'count': c} for n, c in top_numbers]
@@ -256,9 +328,9 @@ def get_live_numbers():
         return jsonify({
             'success': True,
             'connected': True,
-            'total': len(numeros),
-            'last_numbers': numeros[:10],
-            'history': [{'number': n, 'color': 'red' if n in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 'black' if n != 0 else 'green', 'timestamp': datetime.now().isoformat()} for n in numeros[:50]],
+            'total': len(historico_numeros),
+            'last_numbers': last_numbers,
+            'history': history,
             'top_numbers': top_numbers_list,
             'timestamp': datetime.now().isoformat()
         }), 200
@@ -274,7 +346,8 @@ def add_number():
         number = data.get('number')
         if number is None or number < 0 or number > 36:
             return jsonify({'error': 'Número inválido'}), 400
-        return jsonify({'success': True, 'number': number}), 200
+        adicionar_numero_ao_historico(number)
+        return jsonify({'success': True, 'number': number, 'total': len(historico_numeros)}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -332,17 +405,22 @@ def serve_frontend(path):
         return send_from_directory('dist', path)
     return send_from_directory('dist', 'index.html')
 
+# ========== MAIN ==========
 if __name__ == '__main__':
     print("=" * 70)
-    print("⚡ API PROXY - QA.AI (TUDO RÁPIDO)")
+    print("⚡ API PROXY - QA.AI (VÍDEO 0.5s)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
-    print("🗄️  Banco: PostgreSQL")
-    print("⚡ Cache Login: 10 minutos")
-    print("⚡ Cache Vídeo: 2 minutos")
-    print("⏱️  Timeout: 5 segundos")
+    print("🗄️  Banco: PostgreSQL (30 dias)")
+    print("⚡ Cache: 5 minutos")
+    print("⏱️  Timeout: 3 segundos")
+    print("🎬 Vídeo: 0.5 segundos")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
+    
+    # Gera números iniciais
+    for _ in range(30):
+        adicionar_numero_ao_historico(gerar_numero_aleatorio())
     
     try:
         session_service.cleanup_expired()
