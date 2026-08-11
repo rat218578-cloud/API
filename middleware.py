@@ -28,10 +28,11 @@ def require_auth(f):
 
             token = parts[1]
 
+            # 🔥 VALIDA SESSÃO (7 DIAS)
             session = session_service.validate_session(token)
             if not session:
                 return jsonify({
-                    'error': 'Token inválido ou expirado',
+                    'error': 'Token inválido ou expirado (7 dias)',
                     'code': 'EV.12'
                 }), 401
 

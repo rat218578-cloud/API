@@ -162,9 +162,8 @@ def api_login():
         
         user_id = str(result.get('user', {}).get('id', email))
         
-        # GERA TOKENS LOCAIS
+        # 🔥 GERA TOKEN (7 DIAS)
         jwt_token = jwt_manager.generate_token(user_id, email)
-        refresh_token = jwt_manager.generate_refresh_token(user_id, email)
         
         # SALVA NO BANCO
         try:
@@ -172,17 +171,15 @@ def api_login():
                 user_id=user_id,
                 email=email,
                 password=password,
-                access_token=jwt_token,
-                refresh_token=refresh_token
+                access_token=jwt_token
             )
         except Exception as e:
             logger.error(f"❌ Erro ao salvar sessão: {e}")
         
         response_data = {
             'access_token': jwt_token,
-            'refresh_token': refresh_token,
             'token_type': 'Bearer',
-            'expires_in': 7 * 24 * 60 * 60,
+            'expires_in': 7 * 24 * 60 * 60,  # 7 DIAS
             'user': {
                 'id': user_id,
                 'name': result.get('user', {}).get('name', email.split('@')[0]),
@@ -196,25 +193,6 @@ def api_login():
         threading.Thread(target=preload_popular_games, args=(f'Bearer {jwt_token}',)).start()
         
         return jsonify(response_data), 200
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# ========== REFRESH TOKEN ==========
-@app.route('/api/auth/refresh', methods=['POST'])
-def api_refresh():
-    try:
-        data = request.json
-        refresh_token = data.get('refresh_token')
-        
-        if not refresh_token:
-            return jsonify({'error': 'Refresh token não fornecido'}), 400
-        
-        result = session_service.refresh_access_token(refresh_token)
-        if not result:
-            return jsonify({'error': 'Refresh token inválido ou expirado'}), 401
-        
-        return jsonify(result), 200
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -370,12 +348,11 @@ def serve_frontend(path):
 # ========== MAIN ==========
 if __name__ == '__main__':
     print("=" * 70)
-    print("🔐 API PROXY - COM REFRESH TOKEN (FIX EV.12)")
+    print("🔐 API PROXY - TOKEN DE 7 DIAS (FIX EV.12)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("🗄️  Banco: PostgreSQL")
-    print("🔑 Access Token: 7 dias")
-    print("🔄 Refresh Token: 30 dias")
+    print("🔑 Token: 7 dias")
     print("🛡️  Middleware: @require_auth")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)

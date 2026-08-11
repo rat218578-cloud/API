@@ -10,23 +10,20 @@ logger = logging.getLogger(__name__)
 class SessionService:
 
     @staticmethod
-    def create_session(user_id: str, email: str, password: str, access_token: str, refresh_token: str) -> bool:
-        """Cria ou atualiza uma sessão com refresh token"""
+    def create_session(user_id: str, email: str, password: str, access_token: str) -> bool:
+        """Cria ou atualiza uma sessão no banco"""
         try:
-            access_expires = jwt_manager.get_expires_at('access')
-            refresh_expires = jwt_manager.get_expires_at('refresh')
-
+            expires_at = jwt_manager.get_expires_at()
             password_hash = hashlib.sha256(password.encode()).hexdigest()
 
             query = """
                 INSERT INTO user_sessions (
-                    user_id, email, access_token, refresh_token, 
+                    user_id, email, access_token, 
                     password_hash, expires_at, session_data, is_active
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, true)
+                ) VALUES (%s, %s, %s, %s, %s, %s, true)
                 ON CONFLICT (user_id) 
                 DO UPDATE SET
                     access_token = EXCLUDED.access_token,
-                    refresh_token = EXCLUDED.refresh_token,
                     password_hash = EXCLUDED.password_hash,
                     expires_at = EXCLUDED.expires_at,
                     updated_at = CURRENT_TIMESTAMP,
@@ -36,40 +33,24 @@ class SessionService:
             session_data = json.dumps({
                 'login_at': datetime.now().isoformat(),
                 'user_agent': 'web',
-                'ip': 'unknown',
-                'refresh_expires': refresh_expires.isoformat()
+                'ip': 'unknown'
             })
 
             db.execute(query, (
                 user_id,
                 email,
                 access_token,
-                refresh_token,
                 password_hash,
-                access_expires,
+                expires_at,
                 session_data
             ))
 
-            logger.info(f"✅ Sessão salva para {email} (refresh até {refresh_expires})")
+            logger.info(f"✅ Sessão salva para {email} (expira em 7 dias)")
             return True
 
         except Exception as e:
             logger.error(f"❌ Erro ao salvar sessão: {e}")
             return False
-
-    @staticmethod
-    def get_session_by_refresh_token(refresh_token: str) -> dict:
-        """Busca sessão pelo refresh token"""
-        try:
-            query = """
-                SELECT * FROM user_sessions 
-                WHERE refresh_token = %s AND is_active = true
-            """
-            result = db.execute(query, (refresh_token,))
-            return result[0] if result else None
-        except Exception as e:
-            logger.error(f"❌ Erro ao buscar sessão: {e}")
-            return None
 
     @staticmethod
     def get_session_by_user_id(user_id: str) -> dict:
@@ -87,8 +68,8 @@ class SessionService:
 
     @staticmethod
     def validate_session(token: str) -> dict:
-        """Valida access token e retorna sessão"""
-        payload = jwt_manager.verify_token(token, 'access')
+        """Valida se o token é válido"""
+        payload = jwt_manager.verify_token(token)
         if not payload:
             return None
 
@@ -100,80 +81,17 @@ class SessionService:
         if not session:
             return None
 
-        # Verifica se expirou (access token)
+        # 🔥 VERIFICA EXPIRAÇÃO (7 DIAS)
         expires_at = session.get('expires_at')
         if isinstance(expires_at, str):
             expires_at = datetime.fromisoformat(expires_at)
 
         if datetime.now() > expires_at:
-            logger.info(f"⚠️ Access token expirado para {user_id}")
+            logger.info(f"⚠️ Sessão expirada para {user_id}")
+            SessionService.deactivate_session(user_id)
             return None
 
         return session
-
-    @staticmethod
-    def refresh_access_token(refresh_token: str) -> dict:
-        """Renova o access token usando refresh token"""
-        # Verifica refresh token
-        payload = jwt_manager.verify_token(refresh_token, 'refresh')
-        if not payload:
-            logger.warning("⚠️ Refresh token inválido")
-            return None
-
-        user_id = payload.get('user_id')
-        email = payload.get('email')
-
-        if not user_id or not email:
-            return None
-
-        # Busca sessão
-        session = SessionService.get_session_by_user_id(user_id)
-        if not session:
-            logger.warning(f"⚠️ Sessão não encontrada para {user_id}")
-            return None
-
-        # Verifica se o refresh token bate com o do banco
-        if session.get('refresh_token') != refresh_token:
-            logger.warning(f"⚠️ Refresh token não coincide para {user_id}")
-            return None
-
-        # Verifica se o refresh ainda é válido (data no session_data)
-        session_data = session.get('session_data', {})
-        if isinstance(session_data, str):
-            session_data = json.loads(session_data)
-
-        refresh_expires = session_data.get('refresh_expires')
-        if refresh_expires:
-            refresh_expires = datetime.fromisoformat(refresh_expires)
-            if datetime.now() > refresh_expires:
-                logger.warning(f"⚠️ Refresh token expirado para {user_id}")
-                SessionService.deactivate_session(user_id)
-                return None
-
-        # Gera NOVO access token
-        new_access_token = jwt_manager.generate_token(user_id, email)
-        new_expires = jwt_manager.get_expires_at('access')
-
-        # Atualiza no banco
-        try:
-            query = """
-                UPDATE user_sessions 
-                SET access_token = %s, expires_at = %s, updated_at = CURRENT_TIMESTAMP
-                WHERE user_id = %s
-            """
-            db.execute(query, (new_access_token, new_expires, user_id))
-
-            logger.info(f"✅ Access token renovado para {email}")
-
-            return {
-                'access_token': new_access_token,
-                'expires_in': 7 * 24 * 60 * 60,
-                'refresh_token': refresh_token
-            }
-
-        except Exception as e:
-            logger.error(f"❌ Erro ao renovar access token: {e}")
-            return None
 
     @staticmethod
     def deactivate_session(user_id: str) -> bool:
@@ -198,8 +116,7 @@ class SessionService:
             query = """
                 UPDATE user_sessions 
                 SET is_active = false, updated_at = CURRENT_TIMESTAMP
-                WHERE expires_at < NOW() 
-                AND is_active = true
+                WHERE expires_at < NOW() AND is_active = true
             """
             count = db.execute(query)
             logger.info(f"✅ {count} sessões expiradas desativadas")
