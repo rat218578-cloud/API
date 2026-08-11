@@ -12,7 +12,7 @@ from jwt_helper import jwt_manager
 from session_service import session_service
 
 # 🔥 LOGS MÍNIMOS
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__, static_folder='dist', static_url_path='')
@@ -20,7 +20,7 @@ CORS(app)
 
 API_BASE = "https://sortenabet.bet.br"
 
-# SESSÃO REUTILIZÁVEL
+# SESSÃO REUTILIZÁVEL (KEEP-ALIVE)
 session = requests.Session()
 session.headers.update({
     'Content-Type': 'application/json',
@@ -30,7 +30,7 @@ session.headers.update({
     'Connection': 'keep-alive'
 })
 
-# 🔥 CACHE EM MEMÓRIA
+# 🔥 CACHE RÁPIDO
 cache = {}
 CACHE_TTL = 300  # 5 minutos
 
@@ -69,7 +69,7 @@ def adicionar_numero_ao_historico(numero):
     if len(historico_numeros) > 500:
         historico_numeros = historico_numeros[-500:]
 
-# ========== LOGIN (COM RETRY E TIMEOUT MAIOR) ==========
+# ========== LOGIN (RÁPIDO) ==========
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
     try:
@@ -80,12 +80,12 @@ def api_login():
         if not email or not password:
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
         
-        # 🔥 VERIFICA CACHE PRIMEIRO
+        # 🔥 VERIFICA CACHE
         cached = get_cache(f"login:{email}")
         if cached:
             return jsonify(cached), 200
         
-        # LOGIN NA API EXTERNA (COM TIMEOUT MAIOR E RETRY)
+        # LOGIN NA API EXTERNA
         login_data = {
             "login": email,
             "email": email,
@@ -93,21 +93,7 @@ def api_login():
             "app_source": "web"
         }
         
-        # 🔥 TENTA 2 VEZES COM TIMEOUT DE 10 SEGUNDOS
-        for tentativa in range(2):
-            try:
-                response = session.post(
-                    f'{API_BASE}/api/auth/login', 
-                    json=login_data, 
-                    timeout=10  # 🔥 AUMENTADO PARA 10 SEGUNDOS
-                )
-                break
-            except requests.exceptions.Timeout:
-                if tentativa == 0:
-                    print(f"⏱️ Timeout na tentativa 1, tentando novamente...")
-                    continue
-                else:
-                    return jsonify({'error': 'Tempo limite excedido. Tente novamente.'}), 408
+        response = session.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
         
         if response.status_code != 200:
             return jsonify({'error': 'Credenciais inválidas'}), 401
@@ -143,18 +129,14 @@ def api_login():
             }
         }
         
-        # 🔥 SALVA EM CACHE
         set_cache(f"login:{email}", response_data)
         
         return jsonify(response_data), 200
         
-    except requests.exceptions.Timeout:
-        return jsonify({'error': 'Tempo limite excedido. Tente novamente.'}), 408
     except Exception as e:
-        print(f"❌ Erro no login: {e}")
         return jsonify({'error': str(e)}), 500
 
-# ========== START-GAME (COM TIMEOUT MAIOR) ==========
+# ========== START-GAME (RÁPIDO COM CACHE) ==========
 @app.route('/api/start-game-v2', methods=['GET'])
 def api_start_game():
     try:
@@ -162,11 +144,12 @@ def api_start_game():
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
         
-        # 🔥 VERIFICA CACHE
+        # 🔥 VERIFICA CACHE PRIMEIRO
         cached = get_cache(f"game:{slug}")
         if cached:
             return jsonify(cached), 200
         
+        # PEGA TOKEN DO HEADER
         auth_header = request.headers.get('Authorization')
         if not auth_header:
             return jsonify({'error': 'Token não encontrado'}), 401
@@ -177,11 +160,12 @@ def api_start_game():
         if not payload:
             return jsonify({'error': 'Token inválido'}), 401
         
+        # USA TOKEN EXTERNO
         auth_header_externo = session.headers.get('Authorization')
         if not auth_header_externo:
             return jsonify({'error': 'Token externo não encontrado'}), 401
         
-        # 🔥 TIMEOUT DE 10 SEGUNDOS (não é 3)
+        # 🔥 FAZ REQUISIÇÃO (TIMEOUT 5s)
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
             params={
@@ -190,7 +174,7 @@ def api_start_game():
                 'use_demo': 0,
                 'source': 'watchIsAuthenticated'
             },
-            timeout=10  # 🔥 AUMENTADO PARA 10 SEGUNDOS
+            timeout=5
         )
         
         if response.status_code == 200:
@@ -213,8 +197,6 @@ def api_start_game():
             'error': 'Não foi possível obter a URL do jogo'
         }), 404
         
-    except requests.exceptions.Timeout:
-        return jsonify({'error': 'Tempo limite excedido'}), 408
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -320,12 +302,12 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("⚡ API PROXY - QA.AI (TIMEOUT CORRIGIDO)")
+    print("⚡ API PROXY - QA.AI (IFRAME RÁPIDO)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
-    print("🗄️  Banco: PostgreSQL (30 dias)")
+    print("🗄️  Banco: PostgreSQL")
     print("⚡ Cache: 5 minutos")
-    print("⏱️  Timeout: 10 segundos (com retry)")
+    print("⏱️  Timeout: 5 segundos")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     
