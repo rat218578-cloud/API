@@ -20,12 +20,17 @@ export function RouletteDashboard() {
   const [isConnected, setIsConnected] = useState(false);
   const [totalNumbers, setTotalNumbers] = useState(0);
 
-  // 🔥 VERIFICA SE É A MESA IMERSIVA
-  const isImersiva = selectedSlug === 'evolution/immersive-roulette';
+  // 🔥 VERIFICA SE A ROLETA TEM NÚMEROS REAIS
+  const hasRealNumbers = (slug: string) => {
+    // 🔥 AMBAS AS ROLETAS AGORA TÊM NÚMEROS REAIS!
+    return slug === 'evolution/immersive-roulette' || 
+           slug === 'evolution/lightning-roulette';
+  };
 
   // 🔥 BUSCAR NÚMEROS REAIS DA API
   const fetchRealNumbers = async () => {
-    if (!isImersiva) {
+    // Só busca números se a roleta tiver números reais
+    if (!hasRealNumbers(selectedSlug || '')) {
       setLoading(false);
       setHistory([]);
       setIsConnected(false);
@@ -40,7 +45,8 @@ export function RouletteDashboard() {
         return;
       }
 
-      const response = await fetch('/api/roulette/live?limit=200', {
+      // 🔥 PASSA O SLUG PARA O BACKEND SABER QUAL FONTE USAR
+      const response = await fetch(`/api/roulette/live?slug=${selectedSlug}&limit=200`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -53,7 +59,7 @@ export function RouletteDashboard() {
           setHistory(numbers);
           setIsConnected(data.connected || false);
           setTotalNumbers(data.total || numbers.length);
-          console.log(`✅ Carregados ${numbers.length} números REAIS`);
+          console.log(`✅ Carregados ${numbers.length} números REAIS da ${data.source || selectedSlug}`);
         } else {
           console.warn('⚠️ Nenhum número real disponível');
           setHistory([]);
@@ -81,16 +87,16 @@ export function RouletteDashboard() {
     fetchRealNumbers();
   }, [selectedSlug]);
 
-  // 🔥 POLLING A CADA 3 SEGUNDOS (SÓ IMERSIVA)
+  // 🔥 POLLING A CADA 3 SEGUNDOS (SÓ PARA ROLETAS COM NÚMEROS REAIS)
   useEffect(() => {
-    if (!isImersiva) return;
+    if (!hasRealNumbers(selectedSlug || '')) return;
 
     const interval = setInterval(() => {
       fetchRealNumbers();
-    }, 3000); // 🔥 3 SEGUNDOS!
+    }, 3000);
 
     return () => clearInterval(interval);
-  }, [isImersiva]);
+  }, [selectedSlug]);
 
   const openGame = (slug: string) => {
     setSelectedSlug(slug);
@@ -120,7 +126,7 @@ export function RouletteDashboard() {
   }, [history]);
 
   const refreshHistory = () => {
-    if (!isImersiva) return;
+    if (!hasRealNumbers(selectedSlug || '')) return;
     setLoading(true);
     fetchRealNumbers();
   };
@@ -130,7 +136,7 @@ export function RouletteDashboard() {
     return history.slice(0, 3);
   };
 
-  if (loading && isImersiva) {
+  if (loading && hasRealNumbers(selectedSlug || '')) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
         <div className="text-center">
@@ -143,6 +149,7 @@ export function RouletteDashboard() {
 
   const lastThree = getLastThree();
   const isRealData = history.length > 0;
+  const showRealIndicator = hasRealNumbers(selectedSlug || '');
 
   return (
     <div className="p-4 space-y-4">
@@ -151,8 +158,8 @@ export function RouletteDashboard() {
         <span className={`w-2 h-2 rounded-full ${isConnected && isRealData ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
         <span className={isConnected && isRealData ? 'text-emerald-400' : 'text-yellow-400'}>
           {isConnected && isRealData 
-            ? '📡 Números REAIS (Imersiva)' 
-            : isImersiva 
+            ? `📡 Números REAIS (${selectedSlug === 'evolution/immersive-roulette' ? 'Imersiva' : 'Lightning'})`
+            : showRealIndicator 
               ? '⏳ Aguardando números reais...' 
               : '📊 Mesa sem números reais'}
         </span>
@@ -163,26 +170,32 @@ export function RouletteDashboard() {
 
       {/* Botões das roletas */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 flex-wrap">
-        {ROLETAS.map((r) => (
-          <button
-            key={r.id}
-            onClick={() => {
-              setActiveRoom(r.id);
-              openGame(r.slug);
-            }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${
-              activeRoom === r.id
-                ? "bg-bg-tertiary border-accent-pink text-text-primary shadow-lg shadow-accent-pink/20"
-                : "bg-bg-card border-border-default text-text-secondary hover:border-border-hover"
-            }`}
-          >
-            <span className={`w-2 h-2 rounded-full ${activeRoom === r.id ? 'bg-emerald-500 animate-pulse' : 'bg-text-muted'}`} />
-            {r.nome}
-            {isRealData && activeRoom === r.id && (
-              <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">REAL</span>
-            )}
-          </button>
-        ))}
+        {ROLETAS.map((r) => {
+          const hasReal = hasRealNumbers(r.slug);
+          return (
+            <button
+              key={r.id}
+              onClick={() => {
+                setActiveRoom(r.id);
+                openGame(r.slug);
+              }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${
+                activeRoom === r.id
+                  ? "bg-bg-tertiary border-accent-pink text-text-primary shadow-lg shadow-accent-pink/20"
+                  : "bg-bg-card border-border-default text-text-secondary hover:border-border-hover"
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${activeRoom === r.id ? 'bg-emerald-500 animate-pulse' : 'bg-text-muted'}`} />
+              {r.nome}
+              {isRealData && activeRoom === r.id && (
+                <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">REAL</span>
+              )}
+              {!hasReal && !isRealData && activeRoom === r.id && (
+                <span className="text-[8px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full">⏳</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
@@ -199,7 +212,7 @@ export function RouletteDashboard() {
               >
                 {showCatalog ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
-              {isImersiva && (
+              {showRealIndicator && (
                 <button
                   onClick={refreshHistory}
                   disabled={loading || !isRealData}
@@ -252,9 +265,9 @@ export function RouletteDashboard() {
                 })
               ) : (
                 <div className="text-center py-4 text-text-muted text-xs">
-                  {isImersiva 
+                  {showRealIndicator 
                     ? '⏳ Aguardando números reais...' 
-                    : '📊 Selecione a Imersiva para números reais'}
+                    : '📊 Selecione a Imersiva ou Lightning para números reais'}
                 </div>
               )}
             </div>
@@ -299,7 +312,7 @@ export function RouletteDashboard() {
                   </span>
                 ) : (
                   <span className="text-yellow-400">
-                    {isImersiva ? '⏳ Aguardando...' : '📊 Sem dados'}
+                    {showRealIndicator ? '⏳ Aguardando...' : '📊 Sem dados'}
                   </span>
                 )}
               </div>
@@ -319,7 +332,7 @@ export function RouletteDashboard() {
             <div className="mt-3 p-2 rounded-lg bg-bg-tertiary border border-border-default text-center">
               <div className="text-[10px] text-text-muted">Tendência</div>
               <div className="text-sm font-bold text-emerald-400">
-                {isRealData ? '⬆ Forte' : isImersiva ? '⏳ Aguardando...' : '📊 Sem dados'}
+                {isRealData ? '⬆ Forte' : showRealIndicator ? '⏳ Aguardando...' : '📊 Sem dados'}
               </div>
             </div>
           </div>
