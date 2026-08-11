@@ -48,138 +48,132 @@ def set_cache(key, value):
         'timestamp': time.time()
     }
 
-# 🔥 HISTÓRICO DE NÚMEROS REAIS (1000+)
-historico_numeros = []
-ultimo_signal_id = None
-TOTAL_MAXIMO = 5000  # 🔥 ATÉ 5000 NÚMEROS!
-
-def buscar_numeros_smart_api(since: str = None):
-    """Busca números reais da Smart API (Imersiva)"""
-    global ultimo_signal_id, historico_numeros
-    
-    try:
-        email = 'gcriste268@gmail.com'
-        url = f'https://tool-api.smartanalise.com.br/api/history-delta?source=immersivevip&userEmail={email}'
-        
-        if since:
-            url += f'&since={since}'
-        
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+# 🔥 SMART API - NÚMEROS REAIS
+class SmartApiService:
+    def __init__(self):
+        self.base_url = "https://tool-api.smartanalise.com.br/api"
+        self.numeros = []
+        self.total = 0
+        self.last_signal_id = None
+        self.email = 'gcriste268@gmail.com'
+        self.source = 'immersivevip'
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+            'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
             'Referer': 'https://tool.smartanalise.com.br/',
             'Origin': 'https://tool.smartanalise.com.br'
         }
         
-        response = requests.get(url, headers=headers, timeout=10)
-        
-        if response.status_code == 200:
-            data = response.json()
+    def carregar_historico(self):
+        """Carrega histórico completo da Smart API"""
+        try:
+            url = f"{self.base_url}/full-history?source={self.source}&userEmail={self.email}"
+            print(f"📥 Carregando histórico: {url}")
             
-            if data.get('data'):
-                # 🔥 INVERTE PARA ORDEM CRONOLÓGICA (MAIS ANTIGO PRIMEIRO)
-                novos = data['data'][::-1]
-                numeros_novos = []
+            response = requests.get(url, headers=self.headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                items = data.get('data') or data.get('results', [])
                 
-                for item in novos:
-                    signal_id = item.get('signalId')
-                    signal = item.get('signal')
+                # 🔥 INVERTE PARA ORDEM CRONOLÓGICA (MAIS ANTIGO PRIMEIRO)
+                items = items[::-1]
+                
+                for item in items:
+                    signal_id = item.get('signalId') or item.get('id')
+                    signal = item.get('signal') or item.get('number')
                     
-                    if signal_id and signal and signal.isdigit():
+                    if signal_id and signal and str(signal).isdigit():
                         numero = int(signal)
                         if 0 <= numero <= 36:
-                            # Verifica se já existe
-                            if not any(n.get('signal_id') == signal_id for n in historico_numeros):
-                                historico_numeros.append({
-                                    'signal_id': signal_id,
-                                    'number': numero,
-                                    'timestamp': item.get('timestamp')
-                                })
-                                numeros_novos.append(numero)
-                                ultimo_signal_id = signal_id
+                            self.numeros.append({
+                                'number': numero,
+                                'signalId': signal_id,
+                                'timestamp': item.get('timestamp')
+                            })
+                            self.total += 1
+                            self.last_signal_id = signal_id
                 
-                # 🔥 MANTÉM APENAS OS ÚLTIMOS 5000
-                if len(historico_numeros) > TOTAL_MAXIMO:
-                    historico_numeros = historico_numeros[-TOTAL_MAXIMO:]
+                print(f"✅ {self.total} números carregados da Smart API")
+                return True
                 
-                if numeros_novos:
-                    print(f"✅ +{len(numeros_novos)} novos números reais")
-                    return numeros_novos
+        except Exception as e:
+            print(f"⚠️ Erro ao carregar histórico: {e}")
         
-        return []
+        return False
+    
+    def buscar_novos(self):
+        """Busca novos números da Smart API"""
+        try:
+            url = f"{self.base_url}/history-delta?source={self.source}&userEmail={self.email}"
+            if self.last_signal_id:
+                url += f"&since={self.last_signal_id}"
+            
+            response = requests.get(url, headers=self.headers, timeout=5)
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                if data.get('data'):
+                    # 🔥 INVERTE PARA ORDEM CRONOLÓGICA (MAIS ANTIGO PRIMEIRO)
+                    novos = data['data'][::-1]
+                    
+                    for item in novos:
+                        signal_id = item.get('signalId')
+                        signal = item.get('signal')
+                        
+                        if signal_id and signal and str(signal).isdigit():
+                            numero = int(signal)
+                            if 0 <= numero <= 36:
+                                if not any(n.get('signalId') == signal_id for n in self.numeros):
+                                    self.numeros.append({
+                                        'number': numero,
+                                        'signalId': signal_id,
+                                        'timestamp': item.get('timestamp')
+                                    })
+                                    self.total += 1
+                                    self.last_signal_id = signal_id
+                    
+                    # Mantém últimos 5000
+                    if len(self.numeros) > 5000:
+                        self.numeros = self.numeros[-5000:]
+                    
+                    return True
+                    
+        except Exception as e:
+            print(f"⚠️ Erro ao buscar novos: {e}")
         
-    except Exception as e:
-        print(f"⚠️ Erro Smart API: {e}")
-        return []
+        return False
+    
+    def get_history(self, limit=200):
+        """Retorna histórico (mais recentes primeiro)"""
+        if not self.numeros:
+            return []
+        return self.numeros[-limit:][::-1]
+    
+    def get_last_numbers(self, count=10):
+        """Retorna últimos números (mais recentes)"""
+        if not self.numeros:
+            return []
+        history = self.numeros[-count:][::-1]
+        return [h['number'] for h in history]
+    
+    def get_top_numbers(self, count=8):
+        """Retorna números mais frequentes"""
+        if not self.numeros:
+            return []
+        
+        nums = [n['number'] for n in self.numeros]
+        freq = {}
+        for n in nums:
+            freq[n] = freq.get(n, 0) + 1
+        top = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:count]
+        return [{'number': n, 'count': c} for n, c in top]
 
-def carregar_historico_inicial():
-    """Carrega histórico completo da Smart API (1000+ números)"""
-    global historico_numeros, ultimo_signal_id
-    
-    print("📥 Carregando histórico completo da Smart API...")
-    
-    try:
-        email = 'gcriste268@gmail.com'
-        # 🔥 USA full-history PARA PEGAR TUDO
-        url = f'https://tool-api.smartanalise.com.br/api/full-history?source=immersivevip&userEmail={email}'
-        
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
-            'Referer': 'https://tool.smartanalise.com.br/',
-            'Origin': 'https://tool.smartanalise.com.br'
-        }
-        
-        response = requests.get(url, headers=headers, timeout=15)
-        
-        if response.status_code == 200:
-            data = response.json()
-            items = data.get('data') or data.get('results', [])
-            
-            print(f"📦 {len(items)} itens retornados da API")
-            
-            # 🔥 INVERTE PARA ORDEM CRONOLÓGICA (MAIS ANTIGO PRIMEIRO)
-            items = items[::-1]
-            
-            for item in items:
-                signal_id = item.get('signalId') or item.get('id')
-                signal = item.get('signal') or item.get('number')
-                
-                if signal_id and signal and str(signal).isdigit():
-                    numero = int(signal)
-                    if 0 <= numero <= 36:
-                        historico_numeros.append({
-                            'signal_id': signal_id,
-                            'number': numero,
-                            'timestamp': item.get('timestamp')
-                        })
-                        ultimo_signal_id = signal_id
-            
-            # 🔥 MANTÉM APENAS OS ÚLTIMOS 5000
-            if len(historico_numeros) > TOTAL_MAXIMO:
-                historico_numeros = historico_numeros[-TOTAL_MAXIMO:]
-            
-            print(f"✅ {len(historico_numeros)} números carregados da Smart API")
-            return True
-            
-    except Exception as e:
-        print(f"⚠️ Erro ao carregar histórico: {e}")
-    
-    # 🔥 FALLBACK: GERA NÚMEROS SIMULADOS SE A API FALHAR
-    print("⚠️ Usando fallback com números simulados...")
-    for i in range(50):
-        historico_numeros.append({
-            'signal_id': f'fallback_{i}',
-            'number': random.randint(0, 36),
-            'timestamp': datetime.now().isoformat()
-        })
-    
-    return False
-
-# 🔥 CARREGA HISTÓRICO AO INICIAR
-carregar_historico_inicial()
+# 🔥 INSTANCIA E CARREGA HISTÓRICO
+smart_api = SmartApiService()
+smart_api.carregar_historico()
 
 # ========== LOGIN ==========
 @app.route('/api/auth/login', methods=['POST'])
@@ -298,40 +292,32 @@ def api_start_game():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ========== ROTA NÚMEROS REAIS (1000+) ==========
+# ========== ROTA NÚMEROS REAIS ==========
 @app.route('/api/roulette/live', methods=['GET'])
 def get_live_numbers():
-    """Retorna números REAIS da Imersiva (1000+ números)"""
+    """Retorna números REAIS da Smart API"""
     try:
         limit = int(request.args.get('limit', 200))
         
-        # 🔥 BUSCA NOVOS NÚMEROS EM BACKGROUND
-        if ultimo_signal_id:
-            buscar_numeros_smart_api(since=ultimo_signal_id)
+        # 🔥 BUSCA NOVOS NÚMEROS
+        smart_api.buscar_novos()
         
-        # 🔥 RETORNA HISTÓRICO (MAIS RECENTES PRIMEIRO)
-        history = historico_numeros[-limit:][::-1] if historico_numeros else []
-        last_numbers = [h['number'] for h in history[:10]] if history else []
-        
-        # 🔥 CALCULA TOP NÚMEROS
-        nums = [h['number'] for h in historico_numeros]
-        freq = {}
-        for n in nums:
-            freq[n] = freq.get(n, 0) + 1
-        top_numbers = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:8]
-        top_numbers_list = [{'number': n, 'count': c} for n, c in top_numbers]
+        history = smart_api.get_history(limit)
+        last_numbers = smart_api.get_last_numbers(10)
+        top_numbers = smart_api.get_top_numbers(8)
         
         return jsonify({
             'success': True,
             'connected': True,
-            'total': len(historico_numeros),  # 🔥 MOSTRA O TOTAL REAL
+            'total': smart_api.total,
             'last_numbers': last_numbers,
             'history': history,
-            'top_numbers': top_numbers_list,
+            'top_numbers': top_numbers,
             'timestamp': datetime.now().isoformat()
         }), 200
         
     except Exception as e:
+        print(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
 # ========== ROTA ADICIONAR NÚMERO ==========
@@ -342,14 +328,15 @@ def add_number():
         number = data.get('number')
         if number is None or number < 0 or number > 36:
             return jsonify({'error': 'Número inválido'}), 400
-        historico_numeros.append({
-            'signal_id': f'manual_{int(time.time())}',
+        
+        smart_api.numeros.append({
             'number': number,
+            'signalId': f'manual_{int(time.time())}',
             'timestamp': datetime.now().isoformat()
         })
-        if len(historico_numeros) > TOTAL_MAXIMO:
-            historico_numeros = historico_numeros[-TOTAL_MAXIMO:]
-        return jsonify({'success': True, 'number': number, 'total': len(historico_numeros)}), 200
+        smart_api.total += 1
+        
+        return jsonify({'success': True, 'number': number, 'total': smart_api.total}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -405,11 +392,10 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - QA.AI (1000+ NÚMEROS REAIS)")
+    print("🎯 API PROXY - SMART API (NÚMEROS REAIS)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
-    print("📊 Smart API: Imersiva")
-    print("📈 Total números:", len(historico_numeros))
+    print("📊 Total números:", smart_api.total)
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     
