@@ -44,6 +44,7 @@ def set_cache(key, value):
         'timestamp': time.time()
     }
 
+# 🔥 MAPEAMENTO SLUG -> SOURCE (INCLUI XXXTREME)
 SLUG_SOURCE_MAP = {
     'evolution/immersive-roulette': 'immersive',
     'evolution/lightning-roulette': 'lightning',
@@ -205,7 +206,6 @@ def api_validate():
     except:
         return jsonify({'valid': False}), 200
 
-# 🔥 CORRIGIDO: methods=['POST']
 @app.route('/api/auth/logout', methods=['POST'])
 def api_logout():
     apigames.stop_polling()
@@ -245,7 +245,7 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - SMART API (POLLING 2s)")
+    print("🎯 API PROXY - SMART API (XXXTREME + IMERSIVA + LIGHTNING)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("📊 Fontes: Imersiva, Lightning, XXXtreme")

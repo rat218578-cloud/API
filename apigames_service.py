@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 🎯 API GAMES - NÚMEROS REAIS DA SMART API
-Suporte para múltiplas fontes (Imersiva, Lightning, XXXtreme)
 """
 
 import requests
@@ -141,13 +140,14 @@ class ApiGamesService:
             logger.error(f"❌ Erro {source}: {e}")
             return []
     
-    def start_polling(self, interval=2):  # 🔥 2 SEGUNDOS!
+    def start_polling(self, interval=2):
         if self.running:
             return
         
         self.running = True
         logger.info(f"🚀 Iniciando polling (intervalo: {interval}s)")
         
+        # 🔥 FONTES: immersive, lightning, xxxtreme
         fontes = ['immersive', 'lightning', 'xxxtreme']
         for source in fontes:
             self.carregar_historico(source)
