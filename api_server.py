@@ -11,16 +11,16 @@ from db import db
 from jwt_helper import jwt_manager
 from session_service import session_service
 
-logging.basicConfig(level=logging.WARNING)  # REDUZ LOGS
+# 🔥 LOGS MÍNIMOS
+logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__, static_folder='dist', static_url_path='')
 CORS(app)
 
-# ========== CONFIGURAÇÕES ==========
 API_BASE = "https://sortenabet.bet.br"
 
-# ========== SESSÃO HTTP (REUTILIZÁVEL) ==========
+# SESSÃO REUTILIZÁVEL
 session = requests.Session()
 session.headers.update({
     'Content-Type': 'application/json',
@@ -30,24 +30,24 @@ session.headers.update({
     'Connection': 'keep-alive'
 })
 
-# ========== CACHE DE TOKENS (MEMÓRIA RÁPIDA) ==========
-token_cache = {}
+# 🔥 CACHE EM MEMÓRIA (RÁPIDO)
+cache = {}
 CACHE_TTL = 300  # 5 minutos
 
-def get_cached_token(email):
-    if email in token_cache:
-        data = token_cache[email]
+def get_cache(key):
+    if key in cache:
+        data = cache[key]
         if time.time() - data['timestamp'] < CACHE_TTL:
-            return data['token']
+            return data['value']
     return None
 
-def set_cached_token(email, token):
-    token_cache[email] = {
-        'token': token,
+def set_cache(key, value):
+    cache[key] = {
+        'value': value,
         'timestamp': time.time()
     }
 
-# ========== HISTÓRICO DE NÚMEROS (SIMULADO) ==========
+# HISTÓRICO DE NÚMEROS
 historico_numeros = []
 
 def gerar_numero_aleatorio():
@@ -69,7 +69,7 @@ def adicionar_numero_ao_historico(numero):
     if len(historico_numeros) > 500:
         historico_numeros = historico_numeros[-500:]
 
-# ========== ROTA DE LOGIN (RÁPIDA) ==========
+# ========== LOGIN (COM CACHE) ==========
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
     try:
@@ -80,23 +80,12 @@ def api_login():
         if not email or not password:
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
         
-        # VERIFICA CACHE PRIMEIRO
-        cached_token = get_cached_token(email)
-        if cached_token:
-            return jsonify({
-                'access_token': cached_token,
-                'refresh_token': cached_token,
-                'token_type': 'Bearer',
-                'expires_in': 7 * 24 * 60 * 60,
-                'user': {
-                    'id': email,
-                    'name': email.split('@')[0],
-                    'email': email,
-                    'plan': 'pro'
-                }
-            }), 200
+        # 🔥 VERIFICA CACHE PRIMEIRO
+        cached = get_cache(f"login:{email}")
+        if cached:
+            return jsonify(cached), 200
         
-        # FAZ LOGIN NA API EXTERNA (COM TIMEOUT MENOR)
+        # LOGIN NA API EXTERNA
         login_data = {
             "login": email,
             "email": email,
@@ -104,13 +93,14 @@ def api_login():
             "app_source": "web"
         }
         
-        response = session.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=5)
-        result = response.json()
+        response = session.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=3)
         
         if response.status_code != 200:
             return jsonify({'error': 'Credenciais inválidas'}), 401
         
+        result = response.json()
         access_token_externo = result.get('access_token')
+        
         if not access_token_externo:
             return jsonify({'error': 'Token não retornado'}), 500
         
@@ -120,85 +110,34 @@ def api_login():
         jwt_token = jwt_manager.generate_token(user_id, email)
         refresh_token = jwt_manager.generate_refresh_token(user_id, email)
         
-        # SALVA NO BANCO (ASSÍNCRONO - NÃO BLOQUEIA)
+        # SALVA NO BANCO (NÃO BLOQUEIA)
         try:
             session_service.create_session(user_id, email, password, jwt_token, refresh_token)
         except:
             pass
         
-        # SALVA EM CACHE
-        set_cached_token(email, jwt_token)
-        
-        return jsonify({
+        response_data = {
             'access_token': jwt_token,
             'refresh_token': refresh_token,
             'token_type': 'Bearer',
-            'expires_in': 7 * 24 * 60 * 60,
+            'expires_in': 30 * 24 * 60 * 60,
             'user': {
                 'id': user_id,
                 'name': result.get('user', {}).get('name', email.split('@')[0]),
                 'email': email,
                 'plan': 'pro'
             }
-        }), 200
+        }
+        
+        # 🔥 SALVA EM CACHE
+        set_cache(f"login:{email}", response_data)
+        
+        return jsonify(response_data), 200
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ========== ROTA DE REFRESH ==========
-@app.route('/api/auth/refresh', methods=['POST'])
-def api_refresh():
-    try:
-        data = request.json
-        refresh_token = data.get('refresh_token')
-        if not refresh_token:
-            return jsonify({'error': 'Refresh token não fornecido'}), 400
-        
-        result = session_service.refresh_access_token(refresh_token)
-        if not result:
-            return jsonify({'error': 'Refresh token inválido'}), 401
-        
-        return jsonify(result), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# ========== ROTA DE VALIDAÇÃO (RÁPIDA) ==========
-@app.route('/api/auth/validate', methods=['GET'])
-def api_validate():
-    try:
-        auth_header = request.headers.get('Authorization')
-        if not auth_header:
-            return jsonify({'valid': False}), 401
-        
-        token = auth_header.replace('Bearer ', '')
-        payload = jwt_manager.verify_token(token)
-        
-        if payload:
-            return jsonify({
-                'valid': True,
-                'user_id': payload.get('user_id'),
-                'email': payload.get('email')
-            }), 200
-        
-        return jsonify({'valid': False}), 401
-    except:
-        return jsonify({'valid': False}), 401
-
-# ========== ROTA DE LOGOUT ==========
-@app.route('/api/auth/logout', methods=['POST'])
-def api_logout():
-    try:
-        auth_header = request.headers.get('Authorization')
-        if auth_header:
-            token = auth_header.replace('Bearer ', '')
-            payload = jwt_manager.verify_token(token)
-            if payload:
-                session_service.deactivate_session(payload.get('user_id'))
-    except:
-        pass
-    return jsonify({'success': True}), 200
-
-# ========== ROTA START-GAME (RÁPIDA) ==========
+# ========== START-GAME (COM CACHE) ==========
 @app.route('/api/start-game-v2', methods=['GET'])
 def api_start_game():
     try:
@@ -206,7 +145,11 @@ def api_start_game():
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
         
-        # PEGA TOKEN DO HEADER
+        # 🔥 VERIFICA CACHE
+        cached = get_cache(f"game:{slug}")
+        if cached:
+            return jsonify(cached), 200
+        
         auth_header = request.headers.get('Authorization')
         if not auth_header:
             return jsonify({'error': 'Token não encontrado'}), 401
@@ -217,12 +160,11 @@ def api_start_game():
         if not payload:
             return jsonify({'error': 'Token inválido'}), 401
         
-        # USA TOKEN EXTERNO DA SESSÃO
         auth_header_externo = session.headers.get('Authorization')
         if not auth_header_externo:
             return jsonify({'error': 'Token externo não encontrado'}), 401
         
-        # FAZ REQUISIÇÃO (COM TIMEOUT MENOR)
+        # 🔥 TIMEOUT MENOR (3 segundos)
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
             params={
@@ -231,7 +173,7 @@ def api_start_game():
                 'use_demo': 0,
                 'source': 'watchIsAuthenticated'
             },
-            timeout=5
+            timeout=3
         )
         
         if response.status_code == 200:
@@ -239,12 +181,15 @@ def api_start_game():
             game_url = data.get('iframe_url') or data.get('gameURL')
             
             if game_url:
-                return jsonify({
+                response_data = {
                     'success': True,
                     'slug': slug,
                     'gameURL': game_url,
                     'iframe_url': game_url
-                })
+                }
+                # 🔥 SALVA EM CACHE (1 minuto)
+                set_cache(f"game:{slug}", response_data)
+                return jsonify(response_data), 200
         
         return jsonify({
             'success': False,
@@ -254,13 +199,12 @@ def api_start_game():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ========== ROTA PARA NÚMEROS (LIVE) ==========
+# ========== ROTA NÚMEROS ==========
 @app.route('/api/roulette/live', methods=['GET'])
 def get_live_numbers():
     try:
         limit = int(request.args.get('limit', 50))
         
-        # Gera números se estiver vazio
         if len(historico_numeros) < 20:
             for _ in range(20):
                 adicionar_numero_ao_historico(gerar_numero_aleatorio())
@@ -268,7 +212,6 @@ def get_live_numbers():
         history = historico_numeros[-limit:] if historico_numeros else []
         last_numbers = [h['number'] for h in history[-10:]] if history else []
         
-        # Calcula top números
         nums = [h['number'] for h in historico_numeros]
         freq = {}
         for n in nums:
@@ -289,45 +232,64 @@ def get_live_numbers():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ========== ROTA PARA ADICIONAR NÚMERO ==========
+# ========== ROTA ADICIONAR NÚMERO ==========
 @app.route('/api/roulette/add', methods=['POST'])
 def add_number():
     try:
         data = request.json
         number = data.get('number')
-        
         if number is None or number < 0 or number > 36:
             return jsonify({'error': 'Número inválido'}), 400
-        
         adicionar_numero_ao_historico(number)
-        
-        return jsonify({
-            'success': True,
-            'number': number,
-            'total': len(historico_numeros)
-        }), 200
-        
+        return jsonify({'success': True, 'number': number, 'total': len(historico_numeros)}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ========== ROTA PÚBLICA ==========
-@app.route('/api/public/info', methods=['GET'])
-def public_info():
-    return jsonify({
-        'message': 'API QA.AI',
-        'version': '1.0',
-        'status': 'online'
-    }), 200
-
-# ========== LIMPEZA ==========
-@app.before_request
-def cleanup():
+# ========== VALIDAÇÃO ==========
+@app.route('/api/auth/validate', methods=['GET'])
+def api_validate():
     try:
-        session_service.cleanup_expired()
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return jsonify({'valid': False}), 401
+        token = auth_header.replace('Bearer ', '')
+        payload = jwt_manager.verify_token(token)
+        if payload:
+            return jsonify({'valid': True, 'user_id': payload.get('user_id'), 'email': payload.get('email')}), 200
+        return jsonify({'valid': False}), 401
+    except:
+        return jsonify({'valid': False}), 401
+
+# ========== LOGOUT ==========
+@app.route('/api/auth/logout', methods=['POST'])
+def api_logout():
+    try:
+        auth_header = request.headers.get('Authorization')
+        if auth_header:
+            token = auth_header.replace('Bearer ', '')
+            payload = jwt_manager.verify_token(token)
+            if payload:
+                session_service.deactivate_session(payload.get('user_id'))
     except:
         pass
+    return jsonify({'success': True}), 200
 
-# ========== ROTAS FRONTEND ==========
+# ========== REFRESH ==========
+@app.route('/api/auth/refresh', methods=['POST'])
+def api_refresh():
+    try:
+        data = request.json
+        refresh_token = data.get('refresh_token')
+        if not refresh_token:
+            return jsonify({'error': 'Refresh token não fornecido'}), 400
+        result = session_service.refresh_access_token(refresh_token)
+        if not result:
+            return jsonify({'error': 'Refresh token inválido'}), 401
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ========== FRONTEND ==========
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve_frontend(path):
@@ -337,14 +299,14 @@ def serve_frontend(path):
         return send_from_directory('dist', path)
     return send_from_directory('dist', 'index.html')
 
-# ========== INICIALIZAÇÃO ==========
 if __name__ == '__main__':
     print("=" * 70)
-    print("⚡ API PROXY - QA.AI (OTIMIZADO)")
+    print("⚡ API PROXY - QA.AI (ULTRA OTIMIZADO)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
-    print("🗄️  Banco: PostgreSQL")
+    print("🗄️  Banco: PostgreSQL (30 dias)")
     print("⚡ Cache: 5 minutos")
+    print("⏱️  Timeout: 3 segundos")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     
