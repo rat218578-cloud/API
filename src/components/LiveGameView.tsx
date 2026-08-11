@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { RefreshCw, X, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Loader2, RefreshCw, X, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
 import { gameLinkService, ROLETAS } from '../services/gameLinkService';
 
 interface LiveGameViewProps {
@@ -9,55 +9,51 @@ interface LiveGameViewProps {
 }
 
 export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
+  const [loading, setLoading] = useState(false);
   const [gameUrl, setGameUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const loadedRef = useRef(false);
+  const loadAttempts = useRef(0);
 
   const roleta = ROLETAS.find(r => r.slug === slug);
   const cor = roleta?.cor || '#6C3CE1';
 
-  // ========== CARREGA O JOGO (SEM LOADER) ==========
+  // 🔥 CARREGA SEMPRE QUE ABRIR OU MUDAR O SLUG
+  useEffect(() => {
+    if (isOpen && slug) {
+      // 🔥 FORÇA REFRESH - GARANTE TOKEN NOVO
+      gameLinkService.forceRefresh(slug);
+      loadAttempts.current = 0;
+      loadGame();
+    }
+  }, [isOpen, slug]);
+
   const loadGame = async () => {
-    // Se já carregou, não recarrega
-    if (loadedRef.current && gameUrl) return;
+    setLoading(true);
+    setError(null);
+    setGameUrl(null);
 
     try {
       const token = localStorage.getItem('access_token');
       if (!token) {
         setError('Você precisa estar logado para jogar');
+        setLoading(false);
         return;
       }
 
-      // Busca a URL (pode ser do cache)
+      // 🔥 SEMPRE GERAR NOVO TOKEN (NÃO USA CACHE)
       const url = await gameLinkService.getGameUrl(slug);
-      
       if (url) {
         setGameUrl(url);
-        loadedRef.current = true;
       } else {
         setError('Não foi possível gerar o link. Tente novamente.');
       }
     } catch (err) {
       setError('Erro ao gerar link');
       console.error(err);
+    } finally {
+      setLoading(false);
     }
-  };
-
-  // ========== CARREGA AO ABRIR ==========
-  useEffect(() => {
-    if (isOpen && slug) {
-      loadedRef.current = false;
-      setGameUrl(null);
-      setError(null);
-      loadGame();
-    }
-  }, [isOpen, slug]);
-
-  // ========== QUANDO O IFRAME CARREGA ==========
-  const handleIframeLoad = () => {
-    console.log('✅ Iframe carregado com sucesso!');
   };
 
   const openInNewTab = () => {
@@ -114,14 +110,15 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
           )}
           <button
             onClick={() => {
-              loadedRef.current = false;
-              setGameUrl(null);
+              // 🔥 FORÇA REFRESH E GERA NOVO TOKEN
+              gameLinkService.forceRefresh(slug);
               loadGame();
             }}
-            className="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
+            disabled={loading}
+            className="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors disabled:opacity-50"
             title="Gerar novo token"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
             onClick={toggleFullscreen}
@@ -138,51 +135,60 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
         </div>
       </div>
 
-      {/* Conteúdo - SEM LOADER */}
-      <div className="relative bg-black" style={{ minHeight: '400px', height: '60vh' }}>
-        {error ? (
+      {/* Conteúdo */}
+      <div className="relative bg-black" style={{ minHeight: '500px', height: '65vh' }}>
+        {loading ? (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center">
+              <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4" style={{ color: cor }} />
+              <p className="text-text-muted text-sm">Gerando novo token...</p>
+            </div>
+          </div>
+        ) : error ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center max-w-md px-4">
               <div className="text-6xl mb-4">🎰</div>
               <p className="text-red-400 text-sm mb-2">{error}</p>
               <button
                 onClick={() => {
-                  loadedRef.current = false;
-                  setGameUrl(null);
+                  gameLinkService.forceRefresh(slug);
                   loadGame();
                 }}
                 className="px-6 py-2 rounded-xl text-sm font-medium text-white"
                 style={{ backgroundColor: cor }}
               >
-                <RefreshCw className="w-4 h-4 inline mr-2" /> Tentar novamente
+                <RefreshCw className="w-4 h-4 inline mr-2" /> Gerar novo token
               </button>
             </div>
           </div>
         ) : gameUrl ? (
           <iframe
-            ref={iframeRef}
             src={gameUrl}
             className="w-full h-full border-0"
             allow="autoplay; fullscreen; camera; microphone; accelerometer; gyroscope"
-            loading="eager"
-            onLoad={handleIframeLoad}
+            loading="lazy"
+            onError={() => {
+              // 🔥 SE O IFRAME DER ERRO, GERA NOVO TOKEN
+              console.log('⚠️ Iframe error, gerando novo token...');
+              gameLinkService.forceRefresh(slug);
+              loadGame();
+            }}
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-orientation-lock"
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
               <div className="text-6xl mb-4">🎰</div>
-              <p className="text-text-muted">Clique em "Gerar link" para começar</p>
+              <p className="text-text-muted">Clique em "Gerar novo token" para começar</p>
               <button
                 onClick={() => {
-                  loadedRef.current = false;
-                  setGameUrl(null);
+                  gameLinkService.forceRefresh(slug);
                   loadGame();
                 }}
                 className="mt-4 px-6 py-2 rounded-xl text-sm font-medium text-white"
                 style={{ backgroundColor: cor }}
               >
-                ▶ Gerar link
+                ▶ Gerar novo token
               </button>
             </div>
           </div>
@@ -194,15 +200,17 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
         <div className="flex items-center justify-between text-[10px] text-text-muted">
           <span>{roleta?.nome || slug}</span>
           <div className="flex items-center gap-3">
-            {gameUrl && (
-              <button
-                onClick={openInNewTab}
-                className="text-accent-cyan hover:text-accent-cyan/80 transition-colors flex items-center gap-1"
-              >
-                <ExternalLink className="w-3 h-3" />
-                Nova aba
-              </button>
-            )}
+            <span className="text-[8px] text-amber-400">Token único por sessão</span>
+            <button
+              onClick={() => {
+                gameLinkService.forceRefresh(slug);
+                loadGame();
+              }}
+              className="text-accent-cyan hover:text-accent-cyan/80 transition-colors flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" />
+              Novo token
+            </button>
             <span className="flex items-center gap-1">
               {gameUrl ? (
                 <>

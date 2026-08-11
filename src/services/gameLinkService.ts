@@ -28,8 +28,9 @@ export const ROLETAS = [
 
 class GameLinkService {
   private static instance: GameLinkService;
-  private urlCache: Record<string, { url: string; timestamp: number }> = {};
-  private cacheTTL = 5 * 60 * 1000; // 5 minutos
+  // 🔥 CACHE DESATIVADO - SEMPRE GERAR NOVO TOKEN
+  private gameUrls: Record<string, { url: string; timestamp: number }> = {};
+  private cacheTTL = 0; // 🔥 ZERO = SEM CACHE
 
   static getInstance(): GameLinkService {
     if (!GameLinkService.instance) {
@@ -39,14 +40,8 @@ class GameLinkService {
   }
 
   async getGameUrl(slug: string): Promise<string | null> {
-    // 🔥 VERIFICA CACHE
-    const cached = this.urlCache[slug];
-    if (cached && (Date.now() - cached.timestamp) < this.cacheTTL) {
-      console.log(`📦 Cache hit para ${slug}`);
-      return cached.url;
-    }
-
-    console.log(`🎮 Gerando link para: ${slug}`);
+    // 🔥 SEMPRE GERAR NOVO TOKEN - IGNORA CACHE
+    console.log(`🎮 Gerando NOVO token para: ${slug}`);
 
     try {
       const token = localStorage.getItem('access_token');
@@ -56,13 +51,15 @@ class GameLinkService {
         return null;
       }
 
+      // 🔥 FORÇA GERAÇÃO DE NOVO TOKEN
       const response = await fetch(`/api/start-game-v2?slug=${slug}&_=${Date.now()}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'Cache-Control': 'no-cache'
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
         }
       });
 
@@ -71,6 +68,27 @@ class GameLinkService {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`❌ HTTP ${response.status}: ${errorText}`);
+        
+        if (response.status === 401) {
+          console.log('🔄 Token expirado, tentando renovar...');
+          const refreshToken = localStorage.getItem('refresh_token');
+          
+          if (refreshToken) {
+            const refreshResponse = await fetch('/api/auth/refresh', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ refresh_token: refreshToken })
+            });
+            
+            if (refreshResponse.ok) {
+              const data = await refreshResponse.json();
+              localStorage.setItem('access_token', data.access_token);
+              console.log('✅ Token renovado!');
+              return this.getGameUrl(slug);
+            }
+          }
+        }
+        
         return null;
       }
 
@@ -79,12 +97,7 @@ class GameLinkService {
 
       const gameUrl = data.iframe_url || data.gameURL;
       if (gameUrl) {
-        // 🔥 SALVA EM CACHE
-        this.urlCache[slug] = {
-          url: gameUrl,
-          timestamp: Date.now()
-        };
-        console.log(`✅ Link gerado para ${slug}`);
+        console.log(`✅ NOVO link gerado para ${slug}`);
         return gameUrl;
       }
 
@@ -95,13 +108,15 @@ class GameLinkService {
     }
   }
 
+  // 🔥 FORÇA GERAÇÃO DE NOVO TOKEN
   forceRefresh(slug: string): void {
-    delete this.urlCache[slug];
-    console.log(`🔄 Refresh forçado para ${slug}`);
+    console.log(`🔄 Forçando refresh do token para ${slug}`);
+    // LIMPA CACHE
+    delete this.gameUrls[slug];
   }
 
   clearAllCache(): void {
-    this.urlCache = {};
+    this.gameUrls = {};
     console.log('🗑️ Todos os caches limpos');
   }
 }
