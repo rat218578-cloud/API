@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2, RefreshCw, X, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
 import { gameLinkService, ROLETAS } from '../services/gameLinkService';
 
@@ -13,17 +13,20 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
   const [gameUrl, setGameUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const roleta = ROLETAS.find(r => r.slug === slug);
   const cor = roleta?.cor || '#6C3CE1';
 
-  useEffect(() => {
-    if (isOpen && slug) {
-      loadGame();
-    }
-  }, [isOpen, slug]);
-
+  // ========== CARREGA O JOGO ==========
   const loadGame = async () => {
+    // Cancela timeout anterior
+    if (loadTimeoutRef.current) {
+      clearTimeout(loadTimeoutRef.current);
+      loadTimeoutRef.current = null;
+    }
+
     setLoading(true);
     setError(null);
     setGameUrl(null);
@@ -36,17 +39,43 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
         return;
       }
 
+      // Força renovação do token
       const url = await gameLinkService.getGameUrl(slug);
+      
       if (url) {
         setGameUrl(url);
+        // Timeout para carregamento
+        loadTimeoutRef.current = setTimeout(() => {
+          setLoading(false);
+        }, 5000);
       } else {
         setError('Não foi possível gerar o link. Tente novamente.');
+        setLoading(false);
       }
     } catch (err) {
       setError('Erro ao gerar link');
       console.error(err);
-    } finally {
       setLoading(false);
+    }
+  };
+
+  // ========== CARREGA AO ABRIR ==========
+  useEffect(() => {
+    if (isOpen && slug) {
+      loadGame();
+    }
+    return () => {
+      if (loadTimeoutRef.current) {
+        clearTimeout(loadTimeoutRef.current);
+      }
+    };
+  }, [isOpen, slug]);
+
+  // ========== QUANDO O IFRAME CARREGA ==========
+  const handleIframeLoad = () => {
+    setLoading(false);
+    if (loadTimeoutRef.current) {
+      clearTimeout(loadTimeoutRef.current);
     }
   };
 
@@ -76,6 +105,7 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
       id="live-game-container"
       className="bg-bg-card border border-border-default rounded-2xl overflow-hidden"
     >
+      {/* Header */}
       <div className="flex items-center justify-between p-3 bg-bg-secondary/80 border-b border-border-default">
         <div className="flex items-center gap-3">
           <span 
@@ -102,9 +132,13 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
             </button>
           )}
           <button
-            onClick={loadGame}
+            onClick={() => {
+              gameLinkService.forceRefresh(slug);
+              loadGame();
+            }}
             disabled={loading}
             className="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors disabled:opacity-50"
+            title="Gerar novo link"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -123,12 +157,13 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
         </div>
       </div>
 
+      {/* Conteúdo */}
       <div className="relative bg-black" style={{ minHeight: '400px', height: '60vh' }}>
         {loading ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
               <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4" style={{ color: cor }} />
-              <p className="text-text-muted text-sm">Carregando jogo...</p>
+              <p className="text-text-muted text-sm">Gerando link...</p>
             </div>
           </div>
         ) : error ? (
@@ -137,7 +172,10 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
               <div className="text-6xl mb-4">🎰</div>
               <p className="text-red-400 text-sm mb-2">{error}</p>
               <button
-                onClick={loadGame}
+                onClick={() => {
+                  gameLinkService.forceRefresh(slug);
+                  loadGame();
+                }}
                 className="px-6 py-2 rounded-xl text-sm font-medium text-white"
                 style={{ backgroundColor: cor }}
               >
@@ -147,10 +185,12 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
           </div>
         ) : gameUrl ? (
           <iframe
+            ref={iframeRef}
             src={gameUrl}
             className="w-full h-full border-0"
             allow="autoplay; fullscreen; camera; microphone; accelerometer; gyroscope"
             loading="eager"
+            onLoad={handleIframeLoad}
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-orientation-lock"
           />
         ) : (
@@ -159,7 +199,10 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
               <div className="text-6xl mb-4">🎰</div>
               <p className="text-text-muted">Clique em "Gerar link" para começar</p>
               <button
-                onClick={loadGame}
+                onClick={() => {
+                  gameLinkService.forceRefresh(slug);
+                  loadGame();
+                }}
                 className="mt-4 px-6 py-2 rounded-xl text-sm font-medium text-white"
                 style={{ backgroundColor: cor }}
               >
@@ -170,6 +213,7 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
         )}
       </div>
 
+      {/* Footer */}
       <div className="p-2 bg-bg-secondary/50 border-t border-border-default">
         <div className="flex items-center justify-between text-[10px] text-text-muted">
           <span>{roleta?.nome || slug}</span>
