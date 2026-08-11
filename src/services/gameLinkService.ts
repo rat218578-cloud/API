@@ -23,11 +23,20 @@ export const ROLETAS = [
     gameId: 'PorROULigh000001',
     provedor: 'Evolution',
     cor: '#6C3CE1'
+  },
+  { 
+    id: 'xxxtreme', 
+    nome: '⚡ XXXtreme', 
+    slug: 'evolution/xxxtreme-lightning',
+    gameId: 'XXXtremeTable01',
+    provedor: 'Evolution',
+    cor: '#FF6B00'
   }
 ];
 
 class GameLinkService {
   private static instance: GameLinkService;
+  private gameUrls: Record<string, { url: string; timestamp: number }> = {};
 
   static getInstance(): GameLinkService {
     if (!GameLinkService.instance) {
@@ -105,9 +114,11 @@ class GameLinkService {
 
   forceRefresh(slug: string): void {
     console.log(`🔄 Forçando refresh do token para ${slug}`);
+    delete this.gameUrls[slug];
   }
 
   clearAllCache(): void {
+    this.gameUrls = {};
     console.log('🗑️ Todos os caches limpos');
   }
 }
