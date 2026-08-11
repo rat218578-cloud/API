@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🎯 API GAMES - IGUAL AO SCRIPT PYTHON
+🎯 API GAMES - NÚMEROS REAIS DA SMART API
 """
 
 import requests
@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 class ApiGamesService:
     def __init__(self):
         self.base_url = "https://tool-api.smartanalise.com.br/api"
-        self.numeros = []  # Lista completa de números
-        self.ultimos_numeros = []  # Últimos 10 números
+        self.numeros = []
+        self.ultimos_numeros = []
         self.total_numeros = 0
         self.last_signal_id = None
         self.running = False
@@ -36,7 +36,6 @@ class ApiGamesService:
         logger.info(f"📧 Email definido: {email}")
         
     def carregar_historico(self):
-        """Carrega o histórico completo (IGUAL AO SCRIPT)"""
         if not self.email:
             logger.warning("⚠️ Email não definido!")
             return False
@@ -50,8 +49,6 @@ class ApiGamesService:
             if response.status_code == 200:
                 data = response.json()
                 items = data.get('data') or data.get('results', [])
-                
-                # Inverte para ordem cronológica (mais antigo primeiro) - IGUAL AO SCRIPT
                 items = items[::-1]
                 
                 for item in items:
@@ -67,9 +64,7 @@ class ApiGamesService:
                         self.total_numeros += 1
                         self.last_signal_id = signal_id
                 
-                # Atualiza últimos 10 números
                 self.ultimos_numeros = self.numeros[-10:] if self.numeros else []
-                
                 logger.info(f"✅ {self.total_numeros} números carregados do histórico")
                 return True
             else:
@@ -81,7 +76,6 @@ class ApiGamesService:
             return False
     
     def buscar_novos(self):
-        """Busca novos números desde o último signal_id (IGUAL AO SCRIPT)"""
         if not self.email:
             logger.warning("⚠️ Email não definido!")
             return []
@@ -97,7 +91,6 @@ class ApiGamesService:
                 data = response.json()
                 
                 if data.get('data'):
-                    # Inverte para ordem cronológica (mais antigo primeiro) - IGUAL AO SCRIPT
                     novos = data['data'][::-1]
                     numeros_novos = []
                     
@@ -105,7 +98,6 @@ class ApiGamesService:
                         signal_id = item.get('signalId')
                         signal = item.get('signal')
                         
-                        # Verifica se já existe
                         if signal_id and not any(n.get('signalId') == signal_id for n in self.numeros):
                             self.numeros.append({
                                 'number': int(signal),
@@ -116,7 +108,6 @@ class ApiGamesService:
                             self.total_numeros += 1
                             self.last_signal_id = signal_id
                     
-                    # Atualiza últimos 10 números
                     self.ultimos_numeros = self.numeros[-10:] if self.numeros else []
                     
                     if numeros_novos:
@@ -130,11 +121,8 @@ class ApiGamesService:
             return []
     
     def start_polling(self, interval=3):
-        """Inicia polling contínuo (IGUAL AO SCRIPT)"""
         self.running = True
         logger.info(f"🚀 Iniciando polling (intervalo: {interval}s)")
-        
-        # Carrega histórico completo primeiro
         self.carregar_historico()
         
         def poll_loop():
@@ -157,14 +145,11 @@ class ApiGamesService:
         logger.info("🔌 Polling parado")
     
     def get_history(self, limit=500):
-        """Retorna histórico de números (mais recentes primeiro)"""
         if not self.numeros:
             return []
-        # Mantém a ordem correta para o frontend (mais recente primeiro)
         return self.numeros[-limit:][::-1] if self.numeros else []
     
     def get_last_numbers(self, count=10):
-        """Retorna os últimos números (mais recentes primeiro)"""
         if not self.ultimos_numeros:
             return []
         return self.ultimos_numeros[::-1]
