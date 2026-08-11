@@ -11,7 +11,6 @@ from jwt_helper import jwt_manager
 from session_service import session_service
 from apigames_service import apigames
 
-# 🔥 LOGS MÍNIMOS
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
@@ -20,7 +19,6 @@ CORS(app)
 
 API_BASE = "https://sortenabet.bet.br"
 
-# 🔥 SESSÃO REUTILIZÁVEL
 session = requests.Session()
 session.headers.update({
     'Content-Type': 'application/json',
@@ -30,7 +28,6 @@ session.headers.update({
     'Connection': 'keep-alive'
 })
 
-# 🔥 CACHE DE TOKENS
 cache = {}
 CACHE_TTL = 600
 
@@ -47,13 +44,12 @@ def set_cache(key, value):
         'timestamp': time.time()
     }
 
-# 🔥 MAPEAMENTO SLUG -> SOURCE
 SLUG_SOURCE_MAP = {
     'evolution/immersive-roulette': 'immersive',
     'evolution/lightning-roulette': 'lightning',
+    'evolution/xxxtreme-lightning': 'xxxtreme',
 }
 
-# ========== LOGIN ==========
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
     try:
@@ -97,9 +93,9 @@ def api_login():
         except:
             pass
         
-        # 🔥 INICIA API GAMES COM EMAIL
+        # 🔥 POLLING 2 SEGUNDOS
         apigames.set_email(email)
-        apigames.start_polling(interval=3)
+        apigames.start_polling(interval=2)
         
         response_data = {
             'access_token': jwt_token,
@@ -121,7 +117,6 @@ def api_login():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ========== START-GAME ==========
 @app.route('/api/start-game-v2', methods=['GET'])
 def api_start_game():
     try:
@@ -174,15 +169,12 @@ def api_start_game():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ========== ROTA NÚMEROS ==========
 @app.route('/api/roulette/live', methods=['GET'])
 def get_live_numbers():
-    """Retorna números REAIS da fonte específica"""
     try:
         slug = request.args.get('slug', '')
         limit = int(request.args.get('limit', 200))
         
-        # 🔥 DETERMINA A FONTE PELO SLUG
         source = SLUG_SOURCE_MAP.get(slug, 'immersive')
         
         history = apigames.get_history(source, limit)
@@ -202,36 +194,8 @@ def get_live_numbers():
         }), 200
         
     except Exception as e:
-        print(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
-# ========== ROTA ADICIONAR NÚMERO ==========
-@app.route('/api/roulette/add', methods=['POST'])
-def add_number():
-    try:
-        data = request.json
-        number = data.get('number')
-        source = data.get('source', 'immersive')
-        
-        if number is None or number < 0 or number > 36:
-            return jsonify({'error': 'Número inválido'}), 400
-        
-        # 🔥 ADICIONA NA FONTE CORRETA
-        apigames.inicializar_fonte(source)
-        dados = apigames.fontes[source]
-        dados['numeros'].append({
-            'number': number,
-            'signalId': f'manual_{int(time.time())}',
-            'timestamp': datetime.now().isoformat()
-        })
-        dados['total_numeros'] += 1
-        dados['ultimos_numeros'] = dados['numeros'][-10:] if dados['numeros'] else []
-        
-        return jsonify({'success': True, 'number': number, 'total': dados['total_numeros']}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-# ========== VALIDAÇÃO ==========
 @app.route('/api/auth/validate', methods=['GET'])
 def api_validate():
     try:
@@ -242,8 +206,7 @@ def api_validate():
     except:
         return jsonify({'valid': False}), 200
 
-# ========== LOGOUT ==========
-@app.route('/api/auth/logout', methods=['POST'])
+@app.route('/api/auth/logout', methods(['POST'])
 def api_logout():
     apigames.stop_polling()
     try:
@@ -257,7 +220,6 @@ def api_logout():
         pass
     return jsonify({'success': True}), 200
 
-# ========== REFRESH ==========
 @app.route('/api/auth/refresh', methods=['POST'])
 def api_refresh():
     try:
@@ -272,7 +234,6 @@ def api_refresh():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ========== FRONTEND ==========
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve_frontend(path):
@@ -284,10 +245,11 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - SMART API (IMERSIVA + LIGHTNING)")
+    print("🎯 API PROXY - SMART API (POLLING 2s)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
-    print("📊 Fontes: Imersiva, Lightning")
+    print("📊 Fontes: Imersiva, Lightning, XXXtreme")
+    print("⏱️  Polling: 2 segundos")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 🎯 API GAMES - NÚMEROS REAIS DA SMART API
-Suporte para múltiplas fontes (Imersiva, Lightning)
+Suporte para múltiplas fontes (Imersiva, Lightning, XXXtreme)
 """
 
 import requests
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class ApiGamesService:
     def __init__(self):
         self.base_url = "https://tool-api.smartanalise.com.br/api"
-        self.fontes = {}  # Dicionário com dados por fonte
+        self.fontes = {}
         self.email = None
         self.running = False
         self.threads = []
@@ -34,7 +34,6 @@ class ApiGamesService:
         logger.info(f"📧 Email definido: {email}")
         
     def inicializar_fonte(self, source: str):
-        """Inicializa uma fonte (Imersiva, Lightning, etc)"""
         if source not in self.fontes:
             self.fontes[source] = {
                 'numeros': [],
@@ -46,7 +45,6 @@ class ApiGamesService:
             logger.info(f"📊 Fonte {source} inicializada")
         
     def carregar_historico(self, source: str):
-        """Carrega histórico completo de uma fonte específica"""
         if not self.email:
             logger.warning("⚠️ Email não definido!")
             return False
@@ -56,7 +54,7 @@ class ApiGamesService:
         
         try:
             url = f"{self.base_url}/full-history?source={source}&userEmail={self.email}"
-            logger.info(f"📥 Carregando histórico {source}: {url}")
+            logger.info(f"📥 Carregando histórico {source}")
             
             response = requests.get(url, headers=self.headers, timeout=10)
             
@@ -93,7 +91,6 @@ class ApiGamesService:
             return False
     
     def buscar_novos(self, source: str):
-        """Busca novos números de uma fonte específica"""
         if not self.email:
             logger.warning("⚠️ Email não definido!")
             return []
@@ -144,23 +141,21 @@ class ApiGamesService:
             logger.error(f"❌ Erro {source}: {e}")
             return []
     
-    def start_polling(self, interval=3):
-        """Inicia polling para todas as fontes"""
+    def start_polling(self, interval=2):  # 🔥 2 SEGUNDOS!
         if self.running:
             return
         
         self.running = True
         logger.info(f"🚀 Iniciando polling (intervalo: {interval}s)")
         
-        # 🔥 CARREGA TODAS AS FONTES
-        fontes = ['immersive', 'lightning']
+        fontes = ['immersive', 'lightning', 'xxxtreme']
         for source in fontes:
             self.carregar_historico(source)
         
         def poll_loop():
             while self.running:
                 try:
-                    for source in ['immersive', 'lightning']:
+                    for source in ['immersive', 'lightning', 'xxxtreme']:
                         novos = self.buscar_novos(source)
                         if novos:
                             logger.info(f"🎯 {source}: {' '.join(novos[:5])}...")
@@ -179,7 +174,6 @@ class ApiGamesService:
         logger.info("🔌 Polling parado")
     
     def get_history(self, source: str, limit=500):
-        """Retorna histórico de uma fonte específica"""
         if source not in self.fontes:
             return []
         dados = self.fontes[source]
@@ -188,7 +182,6 @@ class ApiGamesService:
         return dados['numeros'][-limit:][::-1]
     
     def get_last_numbers(self, source: str, count=10):
-        """Retorna últimos números de uma fonte específica"""
         if source not in self.fontes:
             return []
         dados = self.fontes[source]
@@ -197,7 +190,6 @@ class ApiGamesService:
         return dados['ultimos_numeros'][::-1]
     
     def get_top_numbers(self, source: str, count=8):
-        """Retorna números mais frequentes de uma fonte específica"""
         if source not in self.fontes:
             return []
         dados = self.fontes[source]
@@ -209,37 +201,9 @@ class ApiGamesService:
         return [{'number': num, 'count': cnt} for num, cnt in freq]
     
     def get_total(self, source: str):
-        """Retorna total de números de uma fonte"""
         if source not in self.fontes:
             return 0
         return self.fontes[source]['total_numeros']
-    
-    def get_statistics(self, source: str):
-        """Retorna estatísticas de uma fonte específica"""
-        if source not in self.fontes:
-            return {}
-        dados = self.fontes[source]
-        if not dados['numeros']:
-            return {}
-        
-        red = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]
-        cores = {'red': 0, 'black': 0, 'green': 0}
-        nums = [n['number'] for n in dados['numeros'][-100:]]
-        
-        for num in nums:
-            if num == 0:
-                cores['green'] += 1
-            elif num in red:
-                cores['red'] += 1
-            else:
-                cores['black'] += 1
-        
-        return {
-            'total': dados['total_numeros'],
-            'colors': cores,
-            'most_frequent': self.get_top_numbers(source, 5),
-            'last_numbers': [n['number'] for n in self.get_last_numbers(source, 10)]
-        }
 
 # Instância global
 apigames = ApiGamesService()
