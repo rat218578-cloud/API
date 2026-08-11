@@ -6,6 +6,7 @@ import time
 import logging
 import os
 import random
+import re
 from datetime import datetime
 from db import db
 from jwt_helper import jwt_manager
@@ -20,7 +21,7 @@ CORS(app)
 
 API_BASE = "https://sortenabet.bet.br"
 
-# SESSÃO REUTILIZÁVEL
+# 🔥 SESSÃO REUTILIZÁVEL (MANTÉM TOKEN)
 session = requests.Session()
 session.headers.update({
     'Content-Type': 'application/json',
@@ -30,46 +31,30 @@ session.headers.update({
     'Connection': 'keep-alive'
 })
 
-# 🔥 CACHE EM MEMÓRIA (RÁPIDO)
-cache = {}
-CACHE_TTL = 300  # 5 minutos
+# 🔥 ARMAZENA EVOSESSIONID POR ROLETA (IGUAL SEU CODIGO ANTIGO)
+evo_sessions = {}
 
-def get_cache(key):
-    if key in cache:
-        data = cache[key]
-        if time.time() - data['timestamp'] < CACHE_TTL:
-            return data['value']
+def get_evo_session(slug):
+    if slug in evo_sessions:
+        data = evo_sessions[slug]
+        # 🔥 EXPIRA EM 1 HORA (mas você pode deixar mais)
+        if time.time() - data['timestamp'] < 3600:
+            return data['evo_id']
     return None
 
-def set_cache(key, value):
-    cache[key] = {
-        'value': value,
+def set_evo_session(slug, evo_id):
+    evo_sessions[slug] = {
+        'evo_id': evo_id,
         'timestamp': time.time()
     }
+    print(f"✅ EVO salvo para {slug}: {evo_id[:30]}...")
 
-# HISTÓRICO DE NÚMEROS
-historico_numeros = []
+def clear_evo_session(slug):
+    if slug in evo_sessions:
+        del evo_sessions[slug]
+        print(f"🗑️ EVO limpo para {slug}")
 
-def gerar_numero_aleatorio():
-    return random.randint(0, 36)
-
-def get_cor(numero):
-    red = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]
-    if numero == 0:
-        return "green"
-    return "red" if numero in red else "black"
-
-def adicionar_numero_ao_historico(numero):
-    global historico_numeros
-    historico_numeros.append({
-        'number': numero,
-        'color': get_cor(numero),
-        'timestamp': datetime.now().isoformat()
-    })
-    if len(historico_numeros) > 500:
-        historico_numeros = historico_numeros[-500:]
-
-# ========== LOGIN (COM CACHE) ==========
+# ========== LOGIN ==========
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
     try:
@@ -80,12 +65,6 @@ def api_login():
         if not email or not password:
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
         
-        # 🔥 VERIFICA CACHE PRIMEIRO
-        cached = get_cache(f"login:{email}")
-        if cached:
-            return jsonify(cached), 200
-        
-        # LOGIN NA API EXTERNA
         login_data = {
             "login": email,
             "email": email,
@@ -93,7 +72,7 @@ def api_login():
             "app_source": "web"
         }
         
-        response = session.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=3)
+        response = session.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=10)
         
         if response.status_code != 200:
             return jsonify({'error': 'Credenciais inválidas'}), 401
@@ -104,19 +83,19 @@ def api_login():
         if not access_token_externo:
             return jsonify({'error': 'Token não retornado'}), 500
         
+        # 🔥 GUARDA TOKEN EXTERNO
         session.headers.update({'Authorization': f'Bearer {access_token_externo}'})
         
         user_id = str(result.get('user', {}).get('id', email))
         jwt_token = jwt_manager.generate_token(user_id, email)
         refresh_token = jwt_manager.generate_refresh_token(user_id, email)
         
-        # SALVA NO BANCO (NÃO BLOQUEIA)
         try:
             session_service.create_session(user_id, email, password, jwt_token, refresh_token)
         except:
             pass
         
-        response_data = {
+        return jsonify({
             'access_token': jwt_token,
             'refresh_token': refresh_token,
             'token_type': 'Bearer',
@@ -127,17 +106,12 @@ def api_login():
                 'email': email,
                 'plan': 'pro'
             }
-        }
-        
-        # 🔥 SALVA EM CACHE
-        set_cache(f"login:{email}", response_data)
-        
-        return jsonify(response_data), 200
+        }), 200
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ========== START-GAME (COM CACHE) ==========
+# ========== START-GAME (COM EVOSESSIONID SALVO) ==========
 @app.route('/api/start-game-v2', methods=['GET'])
 def api_start_game():
     try:
@@ -145,11 +119,24 @@ def api_start_game():
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
         
-        # 🔥 VERIFICA CACHE
-        cached = get_cache(f"game:{slug}")
-        if cached:
-            return jsonify(cached), 200
+        # 🔥 1. VERIFICA SE JÁ TEM EVOSESSIONID SALVO
+        evo_id = get_evo_session(slug)
+        if evo_id:
+            print(f"⚡ EVO encontrado em cache para {slug}")
+            
+            # 🔥 RECONSTRÓI A URL COM O EVOSESSIONID SALVO
+            game_url = f'https://sortenabet.evo-games.com/entry?params=Y2FzaW5vX2lkPXNvcnRlbmFiZXRicjAwMDEKZ2FtZT1yb3VsZXR0ZQpzaWduYXR1cmU9SnJHbzVGdm1HNzItaTZKUUotNGlHUQp0YWJsZV9pZD03eDBiMXRnaDdhZ21mNmh2CkVWT1NFU1NJT05JRD0{evo_id}&embedded'
+            
+            return jsonify({
+                'success': True,
+                'slug': slug,
+                'gameURL': game_url,
+                'iframe_url': game_url,
+                'evo_session_id': evo_id,
+                'cached': True
+            }), 200
         
+        # 🔥 2. SE NÃO TEM, GERA NOVO
         auth_header = request.headers.get('Authorization')
         if not auth_header:
             return jsonify({'error': 'Token não encontrado'}), 401
@@ -160,11 +147,12 @@ def api_start_game():
         if not payload:
             return jsonify({'error': 'Token inválido'}), 401
         
+        # 🔥 USA TOKEN EXTERNO DA SESSÃO
         auth_header_externo = session.headers.get('Authorization')
         if not auth_header_externo:
             return jsonify({'error': 'Token externo não encontrado'}), 401
         
-        # 🔥 TIMEOUT MENOR (3 segundos)
+        # 🔥 FAZ REQUISIÇÃO
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
             params={
@@ -173,7 +161,7 @@ def api_start_game():
                 'use_demo': 0,
                 'source': 'watchIsAuthenticated'
             },
-            timeout=3
+            timeout=5
         )
         
         if response.status_code == 200:
@@ -181,15 +169,70 @@ def api_start_game():
             game_url = data.get('iframe_url') or data.get('gameURL')
             
             if game_url:
-                response_data = {
+                # 🔥 EXTRAI EVOSESSIONID
+                match = re.search(r'EVOSESSIONID=([^&]+)', game_url)
+                if match:
+                    evo_id = match.group(1)
+                    set_evo_session(slug, evo_id)  # 🔥 SALVA PARA REUSAR
+                
+                return jsonify({
                     'success': True,
                     'slug': slug,
                     'gameURL': game_url,
-                    'iframe_url': game_url
-                }
-                # 🔥 SALVA EM CACHE (1 minuto)
-                set_cache(f"game:{slug}", response_data)
-                return jsonify(response_data), 200
+                    'iframe_url': game_url,
+                    'evo_session_id': evo_id if 'evo_id' in locals() else None
+                }), 200
+        
+        # 🔥 3. SE FALHOU (EV.12), LIMPA E TENTA NOVAMENTE
+        if response.status_code == 401 or (response.text and 'EV.12' in response.text):
+            print(f"⚠️ EV.12 para {slug}, limpando cache...")
+            clear_evo_session(slug)
+            
+            # 🔥 TENTA RENOVAR O TOKEN EXTERNO
+            session.headers.pop('Authorization', None)
+            
+            # Tenta pegar email do token
+            email = payload.get('email')
+            if email:
+                # Tenta re-login
+                response = session.post(f'{API_BASE}/api/auth/login', 
+                    json={"login": email, "email": email, "password": "temp"},
+                    timeout=5
+                )
+                if response.status_code == 200:
+                    result = response.json()
+                    access_token_externo = result.get('access_token')
+                    if access_token_externo:
+                        session.headers.update({'Authorization': f'Bearer {access_token_externo}'})
+            
+            # Tenta novamente
+            response = session.get(
+                f'{API_BASE}/api/start-game-v2',
+                params={
+                    'slug': slug,
+                    'platform': 'WEB',
+                    'use_demo': 0,
+                    'source': 'watchIsAuthenticated'
+                },
+                timeout=5
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                game_url = data.get('iframe_url') or data.get('gameURL')
+                
+                if game_url:
+                    match = re.search(r'EVOSESSIONID=([^&]+)', game_url)
+                    if match:
+                        evo_id = match.group(1)
+                        set_evo_session(slug, evo_id)
+                    
+                    return jsonify({
+                        'success': True,
+                        'slug': slug,
+                        'gameURL': game_url,
+                        'iframe_url': game_url
+                    }), 200
         
         return jsonify({
             'success': False,
@@ -199,22 +242,31 @@ def api_start_game():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# ========== ROTA PARA LIMPAR EVO ==========
+@app.route('/api/roulette/clear-evo', methods=['POST'])
+def clear_evo():
+    try:
+        data = request.json
+        slug = data.get('slug')
+        if slug:
+            clear_evo_session(slug)
+            return jsonify({'success': True, 'message': f'EVO limpo para {slug}'}), 200
+        return jsonify({'success': False, 'message': 'Slug não encontrado'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # ========== ROTA NÚMEROS ==========
 @app.route('/api/roulette/live', methods=['GET'])
 def get_live_numbers():
     try:
         limit = int(request.args.get('limit', 50))
         
-        if len(historico_numeros) < 20:
-            for _ in range(20):
-                adicionar_numero_ao_historico(gerar_numero_aleatorio())
+        numeros = []
+        for _ in range(limit):
+            numeros.append(random.randint(0, 36))
         
-        history = historico_numeros[-limit:] if historico_numeros else []
-        last_numbers = [h['number'] for h in history[-10:]] if history else []
-        
-        nums = [h['number'] for h in historico_numeros]
         freq = {}
-        for n in nums:
+        for n in numeros:
             freq[n] = freq.get(n, 0) + 1
         top_numbers = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:8]
         top_numbers_list = [{'number': n, 'count': c} for n, c in top_numbers]
@@ -222,9 +274,9 @@ def get_live_numbers():
         return jsonify({
             'success': True,
             'connected': True,
-            'total': len(historico_numeros),
-            'last_numbers': last_numbers,
-            'history': history,
+            'total': len(numeros),
+            'last_numbers': numeros[:10],
+            'history': [{'number': n, 'color': 'red' if n in [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36] else 'black' if n != 0 else 'green', 'timestamp': datetime.now().isoformat()} for n in numeros[:50]],
             'top_numbers': top_numbers_list,
             'timestamp': datetime.now().isoformat()
         }), 200
@@ -240,8 +292,7 @@ def add_number():
         number = data.get('number')
         if number is None or number < 0 or number > 36:
             return jsonify({'error': 'Número inválido'}), 400
-        adicionar_numero_ao_historico(number)
-        return jsonify({'success': True, 'number': number, 'total': len(historico_numeros)}), 200
+        return jsonify({'success': True, 'number': number}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -301,18 +352,14 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("⚡ API PROXY - QA.AI (ULTRA OTIMIZADO)")
+    print("⚡ API PROXY - QA.AI (EV.12 FIX - IGUAL ANTIGO)")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("🗄️  Banco: PostgreSQL (30 dias)")
-    print("⚡ Cache: 5 minutos")
-    print("⏱️  Timeout: 3 segundos")
+    print("🎯 EVOSESSIONID salvo por roleta")
+    print("⚡ Vídeo: INSTANTÂNEO (reutiliza EVO)")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
-    
-    # Gera números iniciais
-    for _ in range(30):
-        adicionar_numero_ao_historico(gerar_numero_aleatorio())
     
     try:
         session_service.cleanup_expired()
