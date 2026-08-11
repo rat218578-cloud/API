@@ -9,52 +9,46 @@ import random
 import re
 from datetime import datetime
 
-# 🔥 LOGS MÍNIMOS
 logging.basicConfig(level=logging.ERROR)
-logger = logging.getLogger(__name__)
 
 app = Flask(__name__, static_folder='dist', static_url_path='')
 CORS(app)
 
 API_BASE = "https://sortenabet.bet.br"
 
-# SESSÃO REUTILIZÁVEL (MANTÉM TOKEN EXTERNO)
+# SESSÃO PRINCIPAL
 session = requests.Session()
 session.headers.update({
     'Content-Type': 'application/json',
     'Origin': 'https://sortenabet.bet.br',
     'Referer': 'https://sortenabet.bet.br/',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    'Connection': 'keep-alive'
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 })
 
-# 🔥 ARMAZENA TOKENS POR ROLETA (CADA UMA COM SEU PRÓPRIO)
-roulette_tokens = {}
+# 🔥 ARMAZENA EVOSESSIONID POR ROLETA (IGUAL ANTIGO)
+evo_cache = {}
 
-def get_roulette_token(slug):
-    """Busca token específico de uma roleta"""
-    if slug in roulette_tokens:
-        data = roulette_tokens[slug]
-        # 🔥 EXPIRA EM 10 MINUTOS (para não ficar eterno)
+def get_evo(slug):
+    if slug in evo_cache:
+        data = evo_cache[slug]
+        # Expira em 10 minutos
         if time.time() - data['timestamp'] < 600:
-            return data['token']
+            return data['evo_id']
     return None
 
-def set_roulette_token(slug, token):
-    """Salva token específico de uma roleta"""
-    roulette_tokens[slug] = {
-        'token': token,
+def set_evo(slug, evo_id):
+    evo_cache[slug] = {
+        'evo_id': evo_id,
         'timestamp': time.time()
     }
-    print(f"✅ Token salvo para {slug}: {token[:30]}...")
+    print(f"✅ EVO salvo para {slug}")
 
-def clear_roulette_token(slug):
-    """Limpa token de uma roleta"""
-    if slug in roulette_tokens:
-        del roulette_tokens[slug]
-        print(f"🗑️ Token limpo para {slug}")
+def clear_evo(slug):
+    if slug in evo_cache:
+        del evo_cache[slug]
+        print(f"🗑️ EVO limpo para {slug}")
 
-# ========== ROTA DE LOGIN ==========
+# ========== LOGIN ==========
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
     try:
@@ -83,14 +77,12 @@ def api_login():
         if not access_token_externo:
             return jsonify({'error': 'Token não retornado'}), 500
         
-        # 🔥 GUARDA TOKEN EXTERNO NA SESSÃO (USADO PARA TODAS)
         session.headers.update({'Authorization': f'Bearer {access_token_externo}'})
         
-        # 🔥 LIMPA TOKENS ANTIGOS DAS ROLETAS
-        roulette_tokens.clear()
+        # 🔥 LIMPA CACHE AO LOGAR
+        evo_cache.clear()
         
         return jsonify({
-            'success': True,
             'access_token': access_token_externo,
             'token_type': 'Bearer',
             'expires_in': 7 * 24 * 60 * 60,
@@ -105,18 +97,15 @@ def api_login():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ========== ROTA DE VALIDAÇÃO ==========
+# ========== VALIDAÇÃO ==========
 @app.route('/api/auth/validate', methods=['GET'])
 def api_validate():
-    try:
-        auth_header = request.headers.get('Authorization')
-        if auth_header:
-            return jsonify({'valid': True}), 200
-        return jsonify({'valid': False}), 200
-    except:
-        return jsonify({'valid': False}), 200
+    auth_header = request.headers.get('Authorization')
+    if auth_header:
+        return jsonify({'valid': True}), 200
+    return jsonify({'valid': False}), 200
 
-# ========== ROTA START-GAME (TOKEN ÚNICO POR ROLETA) ==========
+# ========== START-GAME (IGUAL ANTIGO) ==========
 @app.route('/api/start-game-v2', methods=['GET'])
 def api_start_game():
     try:
@@ -124,35 +113,28 @@ def api_start_game():
         if not slug:
             return jsonify({'error': 'slug é obrigatório'}), 400
         
-        print(f"🎮 Gerando token para: {slug}")
+        print(f"🎮 Gerando link para: {slug}")
         
-        # 🔥 1. VERIFICA SE JÁ TEM TOKEN ESPECÍFICO PARA ESTA ROLETA
-        cached_token = get_roulette_token(slug)
-        if cached_token:
-            print(f"⚡ Token em cache para {slug}")
+        # 🔥 1. VERIFICA SE JÁ TEM EVO PARA ESTA ROLETA
+        evo_id = get_evo(slug)
+        if evo_id:
+            print(f"⚡ EVO encontrado em cache para {slug}")
             
-            # 🔥 RECONSTRÓI URL COM O TOKEN DA ROLETA
-            game_url = f'https://sortenabet.evo-games.com/entry?params=Y2FzaW5vX2lkPXNvcnRlbmFiZXRicjAwMDEKZ2FtZT1yb3VsZXR0ZQpzaWduYXR1cmU9SnJHbzVGdm1HNzItaTZKUUotNGlHUQp0YWJsZV9pZD03eDBiMXRnaDdhZ21mNmh2CkVWT1NFU1NJT05JRD0{cached_token}&embedded'
+            # RECONSTRÓI A URL
+            game_url = f'https://sortenabet.evo-games.com/entry?params=Y2FzaW5vX2lkPXNvcnRlbmFiZXRicjAwMDEKZ2FtZT1yb3VsZXR0ZQpzaWduYXR1cmU9SnJHbzVGdm1HNzItaTZKUUotNGlHUQp0YWJsZV9pZD03eDBiMXRnaDdhZ21mNmh2CkVWT1NFU1NJT05JRD0{evo_id}&embedded'
             
             return jsonify({
                 'success': True,
                 'slug': slug,
                 'gameURL': game_url,
-                'iframe_url': game_url,
-                'cached': True
+                'iframe_url': game_url
             }), 200
         
-        # 🔥 2. PEGA TOKEN DO HEADER
-        auth_header = request.headers.get('Authorization')
+        # 🔥 2. SE NÃO TEM, GERA NOVO TOKEN PARA ESTA ROLETA
+        auth_header = session.headers.get('Authorization')
         if not auth_header:
             return jsonify({'error': 'Token não encontrado'}), 401
         
-        # 🔥 3. GERA NOVO TOKEN PARA ESTA ROLETA
-        auth_header_externo = session.headers.get('Authorization')
-        if not auth_header_externo:
-            return jsonify({'error': 'Token externo não encontrado'}), 401
-        
-        # 🔥 FAZ REQUISIÇÃO (COM TIMEOUT)
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
             params={
@@ -164,8 +146,6 @@ def api_start_game():
             timeout=5
         )
         
-        print(f"📥 Status: {response.status_code}")
-        
         if response.status_code == 200:
             data = response.json()
             game_url = data.get('iframe_url') or data.get('gameURL')
@@ -175,29 +155,27 @@ def api_start_game():
                 match = re.search(r'EVOSESSIONID=([^&]+)', game_url)
                 if match:
                     evo_id = match.group(1)
-                    # 🔥 SALVA TOKEN ESPECÍFICO PARA ESTA ROLETA
-                    set_roulette_token(slug, evo_id)
-                    print(f"✅ NOVO token salvo para {slug}")
+                    set_evo(slug, evo_id)
+                    print(f"✅ NOVO EVO gerado para {slug}")
                 
                 return jsonify({
                     'success': True,
                     'slug': slug,
                     'gameURL': game_url,
-                    'iframe_url': game_url,
-                    'new_token': True
+                    'iframe_url': game_url
                 }), 200
         
-        # 🔥 4. SE FALHOU (EV.12), LIMPA E TENTA NOVAMENTE
+        # 🔥 3. SE FALHOU (EV.12), LIMPA E TENTA NOVAMENTE
         if response.status_code == 401 or (response.text and 'EV.12' in response.text):
-            print(f"⚠️ EV.12 para {slug}, limpando cache...")
+            print(f"⚠️ EV.12 para {slug}, gerando NOVO token...")
             
-            # 🔥 LIMPA APENAS O TOKEN DESTA ROLETA
-            clear_roulette_token(slug)
+            # LIMPA O CACHE DESTA ROLETA
+            clear_evo(slug)
             
-            # 🔥 TENTA RENOVAR O TOKEN EXTERNO
+            # REMOVE TOKEN EXTERNO
             session.headers.pop('Authorization', None)
             
-            # 🔥 TENTA NOVAMENTE (VAI GERAR NOVO TOKEN)
+            # TENTA NOVAMENTE
             response = session.get(
                 f'{API_BASE}/api/start-game-v2',
                 params={
@@ -217,7 +195,7 @@ def api_start_game():
                     match = re.search(r'EVOSESSIONID=([^&]+)', game_url)
                     if match:
                         evo_id = match.group(1)
-                        set_roulette_token(slug, evo_id)
+                        set_evo(slug, evo_id)
                     
                     return jsonify({
                         'success': True,
@@ -232,21 +210,17 @@ def api_start_game():
         }), 404
         
     except Exception as e:
-        print(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
-# ========== ROTA PARA LIMPAR TOKEN DE UMA ROLETA ==========
-@app.route('/api/roulette/clear-token', methods=['POST'])
-def clear_roulette_token_endpoint():
-    try:
-        data = request.json
-        slug = data.get('slug')
-        if slug:
-            clear_roulette_token(slug)
-            return jsonify({'success': True, 'message': f'Token limpo para {slug}'}), 200
-        return jsonify({'success': False, 'message': 'Slug não encontrado'}), 404
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+# ========== ROTA PARA LIMPAR CACHE ==========
+@app.route('/api/roulette/clear-cache', methods=['POST'])
+def clear_cache():
+    data = request.json
+    slug = data.get('slug')
+    if slug:
+        clear_evo(slug)
+        return jsonify({'success': True}), 200
+    return jsonify({'success': False}), 404
 
 # ========== ROTA NÚMEROS ==========
 @app.route('/api/roulette/live', methods=['GET'])
@@ -285,11 +259,11 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - TOKEN ÚNICO POR ROLETA")
+    print("🎰 ROLETA - TOKEN ÚNICO POR ROLETA")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("🎯 Cada roleta tem seu próprio token")
-    print("🔄 Token expira em 10 minutos")
+    print("🔄 Cache: 10 minutos")
     print("🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     
