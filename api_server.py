@@ -11,7 +11,7 @@ from jwt_helper import jwt_manager
 from session_service import session_service
 from apigames_service import apigames
 
-logging.basicConfig(level=logging.ERROR)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__, static_folder='dist', static_url_path='')
@@ -44,11 +44,10 @@ def set_cache(key, value):
         'timestamp': time.time()
     }
 
-# 🔥 MAPEAMENTO SLUG -> SOURCE (XXXTREME USA XXTREME!)
 SLUG_SOURCE_MAP = {
     'evolution/immersive-roulette': 'immersive',
     'evolution/lightning-roulette': 'lightning',
-    'evolution/xxxtreme-lightning-roulette': 'xxxtreme',  // 🔥 USA XXTREME!
+    'evolution/xxxtreme-lightning-roulette': 'xxxtreme'
 }
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -59,7 +58,7 @@ def api_login():
         password = data.get('password')
         
         if not email or not password:
-            return jsonify({'error': 'Email e senha são obrigatórios'}), 400
+            return jsonify({'error': 'Email e senha sao obrigatorios'}), 400
         
         cached = get_cache(f"login:{email}")
         if cached:
@@ -75,13 +74,13 @@ def api_login():
         response = session.post(f'{API_BASE}/api/auth/login', json=login_data, timeout=5)
         
         if response.status_code != 200:
-            return jsonify({'error': 'Credenciais inválidas'}), 401
+            return jsonify({'error': 'Credenciais invalidas'}), 401
         
         result = response.json()
         access_token_externo = result.get('access_token')
         
         if not access_token_externo:
-            return jsonify({'error': 'Token não retornado'}), 500
+            return jsonify({'error': 'Token nao retornado'}), 500
         
         session.headers.update({'Authorization': f'Bearer {access_token_externo}'})
         
@@ -121,24 +120,24 @@ def api_login():
 def api_start_game():
     try:
         slug = request.args.get('slug')
-        print(f"🎮 Gerando link para: {slug}")
+        print(f"Gerando link para: {slug}")
         
         if not slug:
-            return jsonify({'error': 'slug é obrigatório'}), 400
+            return jsonify({'error': 'slug obrigatorio'}), 400
         
         auth_header = request.headers.get('Authorization')
         if not auth_header:
-            return jsonify({'error': 'Token não encontrado'}), 401
+            return jsonify({'error': 'Token nao encontrado'}), 401
         
         token = auth_header.replace('Bearer ', '')
         payload = jwt_manager.verify_token(token)
         
         if not payload:
-            return jsonify({'error': 'Token inválido'}), 401
+            return jsonify({'error': 'Token invalido'}), 401
         
         auth_header_externo = session.headers.get('Authorization')
         if not auth_header_externo:
-            return jsonify({'error': 'Token externo não encontrado'}), 401
+            return jsonify({'error': 'Token externo nao encontrado'}), 401
         
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
@@ -151,14 +150,14 @@ def api_start_game():
             timeout=5
         )
         
-        print(f"📥 Status: {response.status_code}")
+        print(f"Status: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
             game_url = data.get('iframe_url') or data.get('gameURL')
             
             if game_url:
-                print(f"✅ Link gerado para {slug}")
+                print(f"Link gerado para {slug}")
                 return jsonify({
                     'success': True,
                     'slug': slug,
@@ -168,11 +167,11 @@ def api_start_game():
         
         return jsonify({
             'success': False,
-            'error': 'Não foi possível obter a URL do jogo'
+            'error': 'Nao foi possivel obter a URL do jogo'
         }), 404
         
     except Exception as e:
-        print(f"❌ Erro: {e}")
+        print(f"Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/roulette/live', methods=['GET'])
@@ -182,14 +181,18 @@ def get_live_numbers():
         limit = int(request.args.get('limit', 200))
         
         source = SLUG_SOURCE_MAP.get(slug, 'lightning')
-        print(f"📊 Buscando números para {slug} -> fonte {source}")
+        print(f"Buscando numeros para {slug} -> fonte {source}")
+        
+        if source not in apigames.fontes:
+            print(f"Fonte {source} nao inicializada, carregando...")
+            apigames.carregar_historico(source)
         
         history = apigames.get_history(source, limit)
         last_numbers = apigames.get_last_numbers(source, 10)
         top_numbers = apigames.get_top_numbers(source, 8)
         total = apigames.get_total(source)
         
-        print(f"📊 Total: {total} números da fonte {source}")
+        print(f"Total: {total} numeros da fonte {source}")
         
         return jsonify({
             'success': True,
@@ -203,7 +206,7 @@ def get_live_numbers():
         }), 200
         
     except Exception as e:
-        print(f"❌ Erro: {e}")
+        print(f"Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/auth/validate', methods=['GET'])
@@ -236,10 +239,10 @@ def api_refresh():
         data = request.json
         refresh_token = data.get('refresh_token')
         if not refresh_token:
-            return jsonify({'error': 'Refresh token não fornecido'}), 400
+            return jsonify({'error': 'Refresh token nao fornecido'}), 400
         result = session_service.refresh_access_token(refresh_token)
         if not result:
-            return jsonify({'error': 'Refresh token inválido'}), 401
+            return jsonify({'error': 'Refresh token invalido'}), 401
         return jsonify(result), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -255,12 +258,11 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - XXXTREME USA XXTREME!")
+    print("API PROXY - XXXTREME")
     print("=" * 70)
-    print("📡 API Base:", API_BASE)
-    print("📊 Fontes: Imersiva, Lightning, XXXtreme")
-    print("⏱️  Polling: 2 segundos")
-    print("🌐 Rodando em: http://localhost:5000")
+    print("API Base:", API_BASE)
+    print("Polling: 2 segundos")
+    print("Rodando em: http://localhost:5000")
     print("=" * 70)
     
     try:
