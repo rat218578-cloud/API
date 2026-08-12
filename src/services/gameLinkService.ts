@@ -20,6 +20,7 @@ export const ROLETAS = [
     id: 'brasileira_playtech', 
     nome: '🇧🇷 Brasileira', 
     slug: 'playtech/roulette',
+    gameCodeName: "rol;rol_brazilianrol",
     gameId: 'rol;rol_loungerol',
     provedor: 'Playtech',
     cor: '#10b981'
