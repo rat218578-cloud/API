@@ -25,7 +25,8 @@ export function RouletteDashboard() {
   // 🔥 VERIFICA SE A ROLETA TEM NÚMEROS REAIS
   const hasRealNumbers = (slug: string) => {
     return slug === 'evolution/immersive-roulette' || 
-           slug === 'evolution/lightning-roulette';
+           slug === 'evolution/lightning-roulette' ||
+           slug === 'evolution/xxxtreme-lightning-roulette';  // 🔥 ADICIONADO!
   };
 
   // 🔥 BUSCAR NÚMEROS REAIS DA API
@@ -51,13 +52,14 @@ export function RouletteDashboard() {
 
       if (response.ok) {
         const data = await response.json();
+        console.log('📊 Dados da API:', data);
         
         if (data.success && data.history && data.history.length > 0) {
           const numbers = data.history.map((item: any) => item.number);
           setHistory(numbers);
           setIsConnected(data.connected || false);
           setTotalNumbers(data.total || numbers.length);
-          console.log(`✅ Carregados ${numbers.length} números REAIS`);
+          console.log(`✅ Carregados ${numbers.length} números REAIS da ${data.source || selectedSlug}`);
         } else {
           setHistory([]);
           setIsConnected(false);
