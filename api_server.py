@@ -3,7 +3,7 @@ from flask_cors import CORS
 import requests
 import logging
 import os
-import re
+import urllib.parse
 import time
 from datetime import datetime
 from db import db
@@ -44,18 +44,16 @@ def set_cache(key, value):
         'timestamp': time.time()
     }
 
-# 🔥 MAPEAMENTO - Playtech usa slug original para API
 SLUG_SOURCE_MAP = {
     'evolution/immersive-roulette': 'immersive',
     'evolution/lightning-roulette': 'lightning',
     'evolution/xxxtreme-lightning-roulette': 'xxxtreme',
-    'playtech/roulette': 'brasilPlay',           # ← Slug para Smart API
-    'rol;rol_brazilianrol': 'brasilPlay',        # ← gameCodeName para Smart API
+    'playtech/roulette': 'brasilPlay',
+    'rol;rol_brazilianrol': 'brasilPlay',
 }
 
-# 🔥 MAPEAMENTO: gameCodeName -> slug da API
 PLAYTECH_MAP = {
-    'rol;rol_brazilianrol': 'playtech/roulette',     # gameCodeName -> slug API
+    'rol;rol_brazilianrol': 'playtech/roulette',
 }
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -128,7 +126,7 @@ def api_login():
 def api_start_game():
     try:
         slug = request.args.get('slug')
-        print(f"🎮 Gerando link para: {slug}")
+        print(f"Gerando link para: {slug}")
         
         if not slug:
             return jsonify({'error': 'slug obrigatorio'}), 400
@@ -142,16 +140,49 @@ def api_start_game():
         
         if not payload:
             return jsonify({'error': 'Token invalido'}), 401
-        
+
+        # ======================================================
+        # 🔥 1. SE FOR PLAYTECH, GERA O LINK DE VIDEO MANUALMENTE
+        # ======================================================
+        if slug == 'playtech/roulette' or slug == 'rol;rol_brazilianrol':
+            print(f"   Playtech detectado. Gerando link de video...")
+            
+            base_url = "https://cachedownload-cactusbr.onegameslink.com/livedistributed/26.6.3.10/"
+            redirect_time = int(time.time() * 1000)
+            
+            params = {
+                "game": "rol",
+                "launch_alias": "rol_brazilianrol", 
+                "lobby": "https://sortenabet.bet.br",
+                "deposit": "https://sortenabet.bet.br/user/wallet",
+                "language": "PT-BR",
+                "redirect_time": redirect_time,
+                "backUrl": "https://login-bramega2.onegameslink.com/",
+                "_entry": "live"
+            }
+            
+            query_string = "&".join([f"{k}={urllib.parse.quote(str(v))}" for k, v in params.items()])
+            game_url = f"{base_url}?{query_string}"
+            
+            print(f"   Link de video gerado com sucesso!")
+            return jsonify({
+                'success': True,
+                'slug': slug,
+                'gameURL': game_url,
+                'iframe_url': game_url
+            }), 200
+
+        # ======================================================
+        # 🔥 2. SE FOR EVOLUTION, USA A API NORMAL
+        # ======================================================
         auth_header_externo = session.headers.get('Authorization')
         if not auth_header_externo:
             return jsonify({'error': 'Token externo nao encontrado'}), 401
         
-        # 🔥 CORREÇÃO: Usar slug original para API da Sorte na Bet
         api_slug = slug
         if slug in PLAYTECH_MAP:
             api_slug = PLAYTECH_MAP[slug]
-            print(f"   🔄 Playtech: {slug} → {api_slug}")
+            print(f"   Evolution/Slots: {slug} -> {api_slug}")
         
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
@@ -164,14 +195,14 @@ def api_start_game():
             timeout=5
         )
         
-        print(f"📥 Status: {response.status_code}")
+        print(f"Status: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
             game_url = data.get('iframe_url') or data.get('gameURL')
             
             if game_url:
-                print(f"✅ Link gerado para {api_slug}")
+                print(f"Link gerado para {api_slug}")
                 return jsonify({
                     'success': True,
                     'slug': slug,
@@ -185,7 +216,7 @@ def api_start_game():
         }), 404
         
     except Exception as e:
-        print(f"❌ Erro: {e}")
+        print(f"Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/roulette/live', methods=['GET'])
@@ -195,10 +226,10 @@ def get_live_numbers():
         limit = int(request.args.get('limit', 200))
         
         source = SLUG_SOURCE_MAP.get(slug, 'immersive')
-        print(f"📊 Buscando numeros para {slug} -> fonte {source}")
+        print(f"Buscando numeros para {slug} -> fonte {source}")
         
         if source not in apigames.fontes:
-            print(f"   🔄 Fonte {source} nao inicializada, carregando...")
+            print(f"Fonte {source} nao inicializada, carregando...")
             apigames.carregar_historico(source)
         
         history = apigames.get_history(source, limit)
@@ -206,7 +237,7 @@ def get_live_numbers():
         top_numbers = apigames.get_top_numbers(source, 8)
         total = apigames.get_total(source)
         
-        print(f"   ✅ Total: {total} numeros da fonte {source}")
+        print(f"Total: {total} numeros da fonte {source}")
         
         return jsonify({
             'success': True,
@@ -220,7 +251,7 @@ def get_live_numbers():
         }), 200
         
     except Exception as e:
-        print(f"❌ Erro: {e}")
+        print(f"Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/auth/validate', methods=['GET'])
@@ -272,15 +303,15 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - CORRIGIDO")
+    print("API PROXY - PLAYTECH FIX")
     print("=" * 70)
-    print(f"📡 API Base: {API_BASE}")
-    print(f"🔄 Polling: 2 segundos")
-    print(f"🌐 Rodando em: http://localhost:5000")
+    print(f"API Base: {API_BASE}")
+    print(f"Polling: 2 segundos")
+    print(f"Rodando em: http://localhost:5000")
     print("=" * 70)
-    print("📋 MAPEAMENTO PLAYTECH:")
+    print("Mapeamento Playtech:")
     for gamecode, slug in PLAYTECH_MAP.items():
-        print(f"   {gamecode} → {slug}")
+        print(f"   {gamecode} -> {slug}")
     print("=" * 70)
     
     try:
