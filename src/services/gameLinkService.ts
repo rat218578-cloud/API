@@ -17,10 +17,11 @@ export const ROLETAS = [
     cor: '#6C3CE1'
   },
   { 
-    id: 'brasileira_playtech',  // 🔥 ID ÚNICO!
+    id: 'brasileira_playtech', 
     nome: '🇧🇷 Brasileira', 
     slug: 'playtech/roulette',
-    gameId: 'rol;rol_lounge',
+    gameCodeName: 'rol;rol_brazilianrol',  // 🔥 CORRETO!
+    gameId: 'rol;rol_loungerol',
     provedor: 'Playtech',
     cor: '#10b981'
   },
@@ -56,7 +57,16 @@ class GameLinkService {
         return null;
       }
 
-      const response = await fetch(`/api/start-game-v2?slug=${slug}&_=${Date.now()}`, {
+      // 🔥 CORREÇÃO: Verifica se é Playtech e usa gameCodeName
+      const roleta = ROLETAS.find(r => r.slug === slug);
+      let urlSlug = slug;
+      
+      if (roleta?.provedor === 'Playtech' && roleta.gameCodeName) {
+        urlSlug = roleta.gameCodeName;
+        console.log(`   🔄 Playtech detectado! Usando gameCodeName: ${urlSlug}`);
+      }
+
+      const response = await fetch(`/api/start-game-v2?slug=${urlSlug}&_=${Date.now()}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
