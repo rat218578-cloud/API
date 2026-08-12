@@ -10,12 +10,11 @@ import {
 } from "../utils/roulette";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
-// 🔥 FUNÇÃO FORA DO COMPONENTE
 const hasRealNumbers = (slug: string) => {
   return slug === 'evolution/immersive-roulette' || 
          slug === 'evolution/lightning-roulette' ||
          slug === 'evolution/xxxtreme-lightning-roulette' ||
-         slug === 'pragmatic/roulette';
+         slug === 'playtech/roulette';
 };
 
 export function RouletteDashboard() {
@@ -163,7 +162,6 @@ export function RouletteDashboard() {
 
   return (
     <div className="p-4 space-y-4">
-      {/* Status */}
       <div className="flex items-center gap-2 text-xs">
         <span className={`w-2 h-2 rounded-full ${isConnected && isRealData ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
         <span className={isConnected && isRealData ? 'text-emerald-400' : 'text-yellow-400'}>
@@ -179,7 +177,6 @@ export function RouletteDashboard() {
         )}
       </div>
 
-      {/* Botões das roletas */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 flex-wrap">
         {ROLETAS.map((r) => (
           <button
@@ -204,7 +201,6 @@ export function RouletteDashboard() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        {/* CATÁLOGO */}
         <div className={`xl:col-span-2 transition-all duration-300 ${showCatalog ? 'block' : 'hidden xl:block'}`}>
           <div className="bg-bg-card border border-border-default rounded-2xl p-3">
             <div className="flex items-center justify-between mb-3">
@@ -277,7 +273,6 @@ export function RouletteDashboard() {
           </div>
         </div>
 
-        {/* VÍDEO */}
         <div className="xl:col-span-7">
           {showVideo && selectedSlug ? (
             <LiveGameView
@@ -296,7 +291,6 @@ export function RouletteDashboard() {
           )}
         </div>
 
-        {/* GRUPOS E ASSERTIVIDADE */}
         <div className="xl:col-span-3 space-y-4">
           <div className="bg-bg-card border border-border-default rounded-2xl p-4">
             <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">📈 Grupos</h3>
@@ -369,10 +363,3 @@ export function RouletteDashboard() {
     </div>
   );
 }
-// 🔥 ATUALIZA HASREALNUMBERS
-const hasRealNumbers = (slug: string) => {
-  return slug === 'evolution/immersive-roulette' || 
-         slug === 'evolution/lightning-roulette' ||
-         slug === 'evolution/xxxtreme-lightning-roulette' ||
-         slug === 'playtech/roulette';  // 🔥 PLAYTECH!
-};

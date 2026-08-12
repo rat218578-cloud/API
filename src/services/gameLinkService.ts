@@ -17,10 +17,10 @@ export const ROLETAS = [
     cor: '#6C3CE1'
   },
   { 
-    id: 'brasileira', 
+    id: 'brasileira_playtech',  // 🔥 ID ÚNICO!
     nome: '🇧🇷 Brasileira', 
-    slug: 'playtech/roulette',  // 🔥 PLAYTECH!
-    gameId: 'rol;rol_lounge',   // 🔥 GAME ID CORRETO!
+    slug: 'playtech/roulette',
+    gameId: 'rol;rol_lounge',
     provedor: 'Playtech',
     cor: '#10b981'
   },
