@@ -44,12 +44,20 @@ def set_cache(key, value):
         'timestamp': time.time()
     }
 
+# 🔥 MAPEAMENTO CORRETO - Playtech usa gameCodeName
 SLUG_SOURCE_MAP = {
     'evolution/immersive-roulette': 'immersive',
     'evolution/lightning-roulette': 'lightning',
     'evolution/xxxtreme-lightning-roulette': 'xxxtreme',
-    'playtech/roulette': 'brasilPlay',
-    'rol;rol_brazilianrol': 'brasilPlay'
+    'playtech/roulette': 'brasilPlay',           # ← Slug para Smart API
+    'rol;rol_brazilianrol': 'brasilPlay',        # ← gameCodeName para Smart API
+}
+
+# 🔥 MAPEAMENTO DE gameCodeName para Playtech
+PLAYTECH_GAMECODE = {
+    'playtech/roulette': 'rol;rol_brazilianrol',        # Roleta Brasileira
+    'playtech/auto-roulette': 'rol;rol_slingshot',       # Auto Roulette
+    'playtech/speed-auto-roulette': 'rol;rol_primeslingshot',  # Speed Auto
 }
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -122,7 +130,7 @@ def api_login():
 def api_start_game():
     try:
         slug = request.args.get('slug')
-        print(f"Gerando link para: {slug}")
+        print(f"🎮 Gerando link para: {slug}")
         
         if not slug:
             return jsonify({'error': 'slug obrigatorio'}), 400
@@ -141,6 +149,11 @@ def api_start_game():
         if not auth_header_externo:
             return jsonify({'error': 'Token externo nao encontrado'}), 401
         
+        # 🔥 CORREÇÃO: Para Playtech, usar gameCodeName em vez de slug
+        if slug in PLAYTECH_GAMECODE:
+            slug = PLAYTECH_GAMECODE[slug]
+            print(f"   🔄 Playtech convertido para: {slug}")
+        
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
             params={
@@ -152,14 +165,14 @@ def api_start_game():
             timeout=5
         )
         
-        print(f"Status: {response.status_code}")
+        print(f"📥 Status: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
             game_url = data.get('iframe_url') or data.get('gameURL')
             
             if game_url:
-                print(f"Link gerado para {slug}")
+                print(f"✅ Link gerado para {slug}")
                 return jsonify({
                     'success': True,
                     'slug': slug,
@@ -173,7 +186,7 @@ def api_start_game():
         }), 404
         
     except Exception as e:
-        print(f"Erro: {e}")
+        print(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/roulette/live', methods=['GET'])
@@ -182,11 +195,12 @@ def get_live_numbers():
         slug = request.args.get('slug', '')
         limit = int(request.args.get('limit', 200))
         
+        # 🔥 CORREÇÃO: Usar o mapeamento correto
         source = SLUG_SOURCE_MAP.get(slug, 'immersive')
-        print(f"Buscando numeros para {slug} -> fonte {source}")
+        print(f"📊 Buscando numeros para {slug} -> fonte {source}")
         
         if source not in apigames.fontes:
-            print(f"Fonte {source} nao inicializada, carregando...")
+            print(f"   🔄 Fonte {source} nao inicializada, carregando...")
             apigames.carregar_historico(source)
         
         history = apigames.get_history(source, limit)
@@ -194,7 +208,7 @@ def get_live_numbers():
         top_numbers = apigames.get_top_numbers(source, 8)
         total = apigames.get_total(source)
         
-        print(f"Total: {total} numeros da fonte {source}")
+        print(f"   ✅ Total: {total} numeros da fonte {source}")
         
         return jsonify({
             'success': True,
@@ -208,7 +222,7 @@ def get_live_numbers():
         }), 200
         
     except Exception as e:
-        print(f"Erro: {e}")
+        print(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/auth/validate', methods=['GET'])
@@ -260,11 +274,15 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("API PROXY - PLAYTECH FIX")
+    print("🎯 API PROXY - PLAYTECH FIX (CORRIGIDO)")
     print("=" * 70)
-    print(f"API Base: {API_BASE}")
-    print("Polling: 2 segundos")
-    print("Rodando em: http://localhost:5000")
+    print(f"📡 API Base: {API_BASE}")
+    print(f"🔄 Polling: 2 segundos")
+    print(f"🌐 Rodando em: http://localhost:5000")
+    print("=" * 70)
+    print("📋 MAPEAMENTO PLAYTECH:")
+    for slug, gamecode in PLAYTECH_GAMECODE.items():
+        print(f"   {slug} → {gamecode}")
     print("=" * 70)
     
     try:
