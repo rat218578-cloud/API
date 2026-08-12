@@ -17,7 +17,7 @@ export const ROLETAS = [
     cor: '#6C3CE1'
   },
   { 
-    id: 'brasileira_playtech',  // 🔥 ID ÚNICO!
+    id: 'brasileira_playtech', 
     nome: '🇧🇷 Brasileira', 
     slug: 'playtech/roulette',
     gameId: 'rol;rol_lounge',
