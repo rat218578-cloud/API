@@ -47,7 +47,8 @@ def set_cache(key, value):
 SLUG_SOURCE_MAP = {
     'evolution/immersive-roulette': 'immersive',
     'evolution/lightning-roulette': 'lightning',
-    'evolution/xxxtreme-lightning-roulette': 'xxxtreme'
+    'evolution/xxxtreme-lightning-roulette': 'xxxtreme',
+    'pragmatic/roulette': 'brasilPlay',  # 🔥 BRASILEIRA!
 }
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -180,7 +181,7 @@ def get_live_numbers():
         slug = request.args.get('slug', '')
         limit = int(request.args.get('limit', 200))
         
-        source = SLUG_SOURCE_MAP.get(slug, 'lightning')
+        source = SLUG_SOURCE_MAP.get(slug, 'immersive')
         print(f"Buscando numeros para {slug} -> fonte {source}")
         
         if source not in apigames.fontes:
@@ -258,9 +259,10 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("API PROXY - XXXTREME")
+    print("API PROXY - BRASILEIRA COM NUMEROS REAIS")
     print("=" * 70)
-    print("API Base:", API_BASE)
+    print(f"API Base: {API_BASE}")
+    print("Fontes: Imersiva, Lightning, XXXtreme, Brasileira")
     print("Polling: 2 segundos")
     print("Rodando em: http://localhost:5000")
     print("=" * 70)

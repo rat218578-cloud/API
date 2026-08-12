@@ -375,3 +375,10 @@ export function RouletteDashboard() {
     </div>
   );
 }
+// 🔥 ADICIONA BRASILEIRA NO hasRealNumbers
+const hasRealNumbers = (slug: string) => {
+    return slug === 'evolution/immersive-roulette' || 
+           slug === 'evolution/lightning-roulette' ||
+           slug === 'evolution/xxxtreme-lightning-roulette' ||
+           slug === 'pragmatic/roulette';  // 🔥 BRASILEIRA!
+};

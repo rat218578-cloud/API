@@ -19,16 +19,16 @@ export const ROLETAS = [
   { 
     id: 'brasileira', 
     nome: '🇧🇷 Brasileira', 
-    slug: 'evolution/brasileira',
-    gameId: 'PorROULigh000001',
-    provedor: 'Evolution',
-    cor: '#6C3CE1'
+    slug: 'pragmatic/roulette',
+    gameId: 'pragmatic_roulette',
+    provedor: 'Pragmatic',
+    cor: '#10b981'
   },
   { 
     id: 'xxxtreme', 
     nome: '⚡ XXXtreme', 
     slug: 'evolution/xxxtreme-lightning-roulette',
-    gameId: 'XxxtremeLigh0001',  // 🔥 TABLE_ID CORRETO!
+    gameId: 'XxxtremeLigh0001',
     provedor: 'Evolution',
     cor: '#FF6B00'
   }
