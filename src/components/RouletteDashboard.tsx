@@ -10,6 +10,14 @@ import {
 } from "../utils/roulette";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
+// 🔥 FUNÇÃO FORA DO COMPONENTE
+const hasRealNumbers = (slug: string) => {
+  return slug === 'evolution/immersive-roulette' || 
+         slug === 'evolution/lightning-roulette' ||
+         slug === 'evolution/xxxtreme-lightning-roulette' ||
+         slug === 'pragmatic/roulette';
+};
+
 export function RouletteDashboard() {
   const [activeRoom, setActiveRoom] = useState(ROLETAS[0].id);
   const [history, setHistory] = useState<number[]>([]);
@@ -22,15 +30,6 @@ export function RouletteDashboard() {
   const [isSwitching, setIsSwitching] = useState(false);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 🔥 VERIFICA SE A ROLETA TEM NÚMEROS REAIS
-  const hasRealNumbers = (slug: string) => {
-    return slug === 'evolution/immersive-roulette' || 
-           slug === 'evolution/lightning-roulette' ||
-           slug === 'evolution/xxxtreme-lightning-roulette' ||
-           slug === 'pragmatic/roulette';
-  };
-
-  // 🔥 BUSCAR NÚMEROS REAIS DA API
   const fetchRealNumbers = async () => {
     if (!hasRealNumbers(selectedSlug || '')) {
       setLoading(false);
@@ -53,14 +52,11 @@ export function RouletteDashboard() {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('📊 Dados da API:', data);
-        
         if (data.success && data.history && data.history.length > 0) {
           const numbers = data.history.map((item: any) => item.number);
           setHistory(numbers);
           setIsConnected(data.connected || false);
           setTotalNumbers(data.total || numbers.length);
-          console.log(`✅ Carregados ${numbers.length} números REAIS da ${data.source || selectedSlug}`);
         } else {
           setHistory([]);
           setIsConnected(false);
@@ -81,7 +77,6 @@ export function RouletteDashboard() {
     }
   };
 
-  // 🔥 LIMPA INTERVALOS
   const clearPolling = () => {
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
@@ -89,14 +84,12 @@ export function RouletteDashboard() {
     }
   };
 
-  // 🔥 CARREGA QUANDO MUDA A ROLETA
   useEffect(() => {
     clearPolling();
     
     if (selectedSlug && hasRealNumbers(selectedSlug)) {
       setIsSwitching(true);
       setLoading(true);
-      
       fetchRealNumbers();
       
       pollingIntervalRef.current = setInterval(() => {
