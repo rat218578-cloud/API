@@ -20,6 +20,7 @@ export const ROLETAS = [
     id: 'brasileira', 
     nome: '🇧🇷 Brasileira', 
     slug: 'pragmatic/roulette',
+     gameId: 'rol;rol_lounge',  
     gameId: 'pragmatic_roulette',
     provedor: 'Pragmatic',
     cor: '#10b981'
