@@ -147,9 +147,10 @@ class ApiGamesService:
         self.running = True
         logger.info(f"🚀 Iniciando polling (intervalo: {interval}s)")
         
-        # 🔥 FONTES: immersive, lightning, xxxtreme
+        # 🔥 FONTES: immersive, lightning, xxxtreme (TODAS!)
         fontes = ['immersive', 'lightning', 'xxxtreme']
         for source in fontes:
+            logger.info(f"🔄 Carregando {source}...")
             self.carregar_historico(source)
         
         def poll_loop():
@@ -158,7 +159,7 @@ class ApiGamesService:
                     for source in ['immersive', 'lightning', 'xxxtreme']:
                         novos = self.buscar_novos(source)
                         if novos:
-                            logger.info(f"🎯 {source}: {' '.join(novos[:5])}...")
+                            logger.info(f"🎯 {source}: +{len(novos)} novos números")
                     time.sleep(interval)
                 except Exception as e:
                     logger.error(f"❌ Erro no polling: {e}")

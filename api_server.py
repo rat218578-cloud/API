@@ -44,11 +44,11 @@ def set_cache(key, value):
         'timestamp': time.time()
     }
 
-# 🔥 MAPEAMENTO SLUG -> SOURCE
+# 🔥 MAPEAMENTO SLUG -> SOURCE (XXXTREME USA XXTREME!)
 SLUG_SOURCE_MAP = {
     'evolution/immersive-roulette': 'immersive',
     'evolution/lightning-roulette': 'lightning',
-    'evolution/xxxtreme-lightning-roulette': 'xxxtreme',  # 🔥 AGORA USA XXTREME!
+    'evolution/xxxtreme-lightning-roulette': 'xxxtreme',  // 🔥 USA XXTREME!
 }
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -166,32 +166,6 @@ def api_start_game():
                     'iframe_url': game_url
                 }), 200
         
-        # 🔥 FALLBACK PARA LIGHTNING
-        if response.status_code == 404:
-            print(f"🔄 Fallback para lightning: {slug}")
-            response = session.get(
-                f'{API_BASE}/api/start-game-v2',
-                params={
-                    'slug': 'evolution/lightning-roulette',
-                    'platform': 'WEB',
-                    'use_demo': 0,
-                    'source': 'watchIsAuthenticated'
-                },
-                timeout=5
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                game_url = data.get('iframe_url') or data.get('gameURL')
-                if game_url:
-                    return jsonify({
-                        'success': True,
-                        'slug': slug,
-                        'gameURL': game_url,
-                        'iframe_url': game_url,
-                        'fallback': True
-                    }), 200
-        
         return jsonify({
             'success': False,
             'error': 'Não foi possível obter a URL do jogo'
@@ -207,12 +181,15 @@ def get_live_numbers():
         slug = request.args.get('slug', '')
         limit = int(request.args.get('limit', 200))
         
-        source = SLUG_SOURCE_MAP.get(slug, 'immersive')
+        source = SLUG_SOURCE_MAP.get(slug, 'lightning')
+        print(f"📊 Buscando números para {slug} -> fonte {source}")
         
         history = apigames.get_history(source, limit)
         last_numbers = apigames.get_last_numbers(source, 10)
         top_numbers = apigames.get_top_numbers(source, 8)
         total = apigames.get_total(source)
+        
+        print(f"📊 Total: {total} números da fonte {source}")
         
         return jsonify({
             'success': True,
@@ -226,6 +203,7 @@ def get_live_numbers():
         }), 200
         
     except Exception as e:
+        print(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/auth/validate', methods=['GET'])
@@ -277,7 +255,7 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - XXXTREME + IMERSIVA + LIGHTNING")
+    print("🎯 API PROXY - XXXTREME USA XXTREME!")
     print("=" * 70)
     print("📡 API Base:", API_BASE)
     print("📊 Fontes: Imersiva, Lightning, XXXtreme")
