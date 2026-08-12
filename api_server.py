@@ -48,7 +48,7 @@ SLUG_SOURCE_MAP = {
     'evolution/immersive-roulette': 'immersive',
     'evolution/lightning-roulette': 'lightning',
     'evolution/xxxtreme-lightning-roulette': 'xxxtreme',
-    'pragmatic/roulette': 'brasilPlay',  # 🔥 BRASILEIRA!
+    'playtech/roulette': 'brasilPlay',  // 🔥 PLAYTECH!
 }
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -175,7 +175,7 @@ def api_start_game():
         print(f"Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/roulette/live', methods=['GET'])
+@app.route('/api/roulette/live', methods(['GET'])
 def get_live_numbers():
     try:
         slug = request.args.get('slug', '')
@@ -259,7 +259,7 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("API PROXY - BRASILEIRA COM NUMEROS REAIS")
+    print("API PROXY - BRASILEIRA (PLAYTECH)")
     print("=" * 70)
     print(f"API Base: {API_BASE}")
     print("Fontes: Imersiva, Lightning, XXXtreme, Brasileira")

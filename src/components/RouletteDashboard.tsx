@@ -369,3 +369,10 @@ export function RouletteDashboard() {
     </div>
   );
 }
+// 🔥 ATUALIZA HASREALNUMBERS
+const hasRealNumbers = (slug: string) => {
+  return slug === 'evolution/immersive-roulette' || 
+         slug === 'evolution/lightning-roulette' ||
+         slug === 'evolution/xxxtreme-lightning-roulette' ||
+         slug === 'playtech/roulette';  // 🔥 PLAYTECH!
+};

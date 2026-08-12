@@ -1,4 +1,4 @@
-// ========== ROLETAS EVOLUTION ==========
+// ========== ROLETAS ==========
 export const ROLETAS = [
   { 
     id: 'lightning', 
@@ -19,9 +19,9 @@ export const ROLETAS = [
   { 
     id: 'brasileira', 
     nome: '🇧🇷 Brasileira', 
-    slug: 'pragmatic/roulette',
-    gameId: 'pragmatic_roulette',
-    provedor: 'Pragmatic',
+    slug: 'playtech/roulette',  // 🔥 PLAYTECH!
+    gameId: 'rol;rol_lounge',   // 🔥 GAME ID CORRETO!
+    provedor: 'Playtech',
     cor: '#10b981'
   },
   { 
