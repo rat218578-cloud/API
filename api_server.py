@@ -48,15 +48,7 @@ def set_cache(key, value):
 SLUG_SOURCE_MAP = {
     'evolution/immersive-roulette': 'immersive',
     'evolution/lightning-roulette': 'lightning',
-    'evolution/xxxtreme-lightning': 'lightning',
-}
-
-# 🔥 SLUGS QUE EXISTEM NA API
-VALID_SLUGS = {
-    'evolution/lightning-roulette': True,
-    'evolution/immersive-roulette': True,
-    'evolution/brasileira': True,
-    'evolution/xxxtreme-lightning': True,  # 🔥 ADICIONADO!
+    'evolution/xxxtreme-lightning-roulette': 'xxxtreme',  # 🔥 AGORA USA XXTREME!
 }
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -148,7 +140,6 @@ def api_start_game():
         if not auth_header_externo:
             return jsonify({'error': 'Token externo não encontrado'}), 401
         
-        # 🔥 TENTA O SLUG EXATO PRIMEIRO
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
             params={
@@ -175,16 +166,13 @@ def api_start_game():
                     'iframe_url': game_url
                 }), 200
         
-        # 🔥 SE FALHOU, TENTA COM O SLUG DA LIGHTNING (FALLBACK)
+        # 🔥 FALLBACK PARA LIGHTNING
         if response.status_code == 404:
-            print(f"🔄 Slug {slug} não encontrado, tentando lightning...")
-            
-            # Tenta o slug da lightning
-            fallback_slug = 'evolution/lightning-roulette'
+            print(f"🔄 Fallback para lightning: {slug}")
             response = session.get(
                 f'{API_BASE}/api/start-game-v2',
                 params={
-                    'slug': fallback_slug,
+                    'slug': 'evolution/lightning-roulette',
                     'platform': 'WEB',
                     'use_demo': 0,
                     'source': 'watchIsAuthenticated'
@@ -196,7 +184,6 @@ def api_start_game():
                 data = response.json()
                 game_url = data.get('iframe_url') or data.get('gameURL')
                 if game_url:
-                    print(f"✅ Fallback: link da Lightning para {slug}")
                     return jsonify({
                         'success': True,
                         'slug': slug,
