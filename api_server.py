@@ -44,7 +44,7 @@ def set_cache(key, value):
         'timestamp': time.time()
     }
 
-# 🔥 MAPEAMENTO CORRETO - Playtech usa gameCodeName
+# 🔥 MAPEAMENTO - Playtech usa slug original para API
 SLUG_SOURCE_MAP = {
     'evolution/immersive-roulette': 'immersive',
     'evolution/lightning-roulette': 'lightning',
@@ -53,11 +53,9 @@ SLUG_SOURCE_MAP = {
     'rol;rol_brazilianrol': 'brasilPlay',        # ← gameCodeName para Smart API
 }
 
-# 🔥 MAPEAMENTO DE gameCodeName para Playtech
-PLAYTECH_GAMECODE = {
-    'playtech/roulette': 'rol;rol_brazilianrol',        # Roleta Brasileira
-    'playtech/auto-roulette': 'rol;rol_slingshot',       # Auto Roulette
-    'playtech/speed-auto-roulette': 'rol;rol_primeslingshot',  # Speed Auto
+# 🔥 MAPEAMENTO: gameCodeName -> slug da API
+PLAYTECH_MAP = {
+    'rol;rol_brazilianrol': 'playtech/roulette',     # gameCodeName -> slug API
 }
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -149,15 +147,16 @@ def api_start_game():
         if not auth_header_externo:
             return jsonify({'error': 'Token externo nao encontrado'}), 401
         
-        # 🔥 CORREÇÃO: Para Playtech, usar gameCodeName em vez de slug
-        if slug in PLAYTECH_GAMECODE:
-            slug = PLAYTECH_GAMECODE[slug]
-            print(f"   🔄 Playtech convertido para: {slug}")
+        # 🔥 CORREÇÃO: Usar slug original para API da Sorte na Bet
+        api_slug = slug
+        if slug in PLAYTECH_MAP:
+            api_slug = PLAYTECH_MAP[slug]
+            print(f"   🔄 Playtech: {slug} → {api_slug}")
         
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
             params={
-                'slug': slug,
+                'slug': api_slug,
                 'platform': 'WEB',
                 'use_demo': 0,
                 'source': 'watchIsAuthenticated'
@@ -172,7 +171,7 @@ def api_start_game():
             game_url = data.get('iframe_url') or data.get('gameURL')
             
             if game_url:
-                print(f"✅ Link gerado para {slug}")
+                print(f"✅ Link gerado para {api_slug}")
                 return jsonify({
                     'success': True,
                     'slug': slug,
@@ -195,7 +194,6 @@ def get_live_numbers():
         slug = request.args.get('slug', '')
         limit = int(request.args.get('limit', 200))
         
-        # 🔥 CORREÇÃO: Usar o mapeamento correto
         source = SLUG_SOURCE_MAP.get(slug, 'immersive')
         print(f"📊 Buscando numeros para {slug} -> fonte {source}")
         
@@ -274,15 +272,15 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("🎯 API PROXY - PLAYTECH FIX (CORRIGIDO)")
+    print("🎯 API PROXY - CORRIGIDO")
     print("=" * 70)
     print(f"📡 API Base: {API_BASE}")
     print(f"🔄 Polling: 2 segundos")
     print(f"🌐 Rodando em: http://localhost:5000")
     print("=" * 70)
     print("📋 MAPEAMENTO PLAYTECH:")
-    for slug, gamecode in PLAYTECH_GAMECODE.items():
-        print(f"   {slug} → {gamecode}")
+    for gamecode, slug in PLAYTECH_MAP.items():
+        print(f"   {gamecode} → {slug}")
     print("=" * 70)
     
     try:
