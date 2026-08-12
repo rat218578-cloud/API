@@ -49,7 +49,7 @@ SLUG_SOURCE_MAP = {
     'evolution/lightning-roulette': 'lightning',
     'evolution/xxxtreme-lightning-roulette': 'xxxtreme',
     'playtech/roulette': 'brasilPlay',
-    'rol;rol_brazilianrol': 'brasilPlay',  // 🔥 Playtech gameCodeName
+    'rol;rol_brazilianrol': 'brasilPlay'
 }
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -260,10 +260,9 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("API PROXY - PLAYTECH CORRIGIDA")
+    print("API PROXY - PLAYTECH FIX")
     print("=" * 70)
     print(f"API Base: {API_BASE}")
-    print("Fontes: Imersiva, Lightning, XXXtreme, Brasileira")
     print("Polling: 2 segundos")
     print("Rodando em: http://localhost:5000")
     print("=" * 70)
