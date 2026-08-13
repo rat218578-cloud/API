@@ -146,17 +146,12 @@ def api_start_game():
         user_id = payload.get('user_id')
 
         # ======================================================
-        # 🔥 1. SE FOR PLAYTECH, GERA O LINK DE VIDEO MANUALMENTE
+        # 🔥 1. SE FOR PLAYTECH, GERA O LINK MANUALMENTE E RETORNA
         # ======================================================
         if slug == 'playtech/roulette' or slug == 'rol;rol_brazilianrol':
             print(f"   Playtech detectado. Gerando link de video...")
             
             # 🔥 PASSO CRÍTICO: Pegue o external_token único desse usuário
-            # Você precisa buscar no seu banco de dados ou no cache
-            # Exemplo: user_data = db.get_user(user_id)
-            # external_token = user_data['external_token']
-            
-            # Simulação (substitua isso pela consulta real ao seu banco):
             user_data = get_cache(f"login:{payload.get('email')}")
             if user_data:
                 external_token = user_data.get('external_token')
@@ -184,6 +179,8 @@ def api_start_game():
             game_url = f"{base_url}?{query_string}"
             
             print(f"   Link de video gerado para usuario {user_id}!")
+            
+            # 🔥 JÁ RETORNA AQUI! NÃO DEIXA O CÓDIGO SEGUIR EM FRENTE!
             return jsonify({
                 'success': True,
                 'slug': slug,
@@ -194,11 +191,14 @@ def api_start_game():
         # ======================================================
         # 🔥 2. SE FOR EVOLUTION, USA A API NORMAL
         # ======================================================
+        # (Só chega aqui se NÃO for Playtech)
+        
         auth_header_externo = session.headers.get('Authorization')
         if not auth_header_externo:
             return jsonify({'error': 'Token externo nao encontrado'}), 401
         
         api_slug = slug
+        # Evolution não precisa de mapeamento, mas mantemos o código de segurança
         if slug in PLAYTECH_MAP:
             api_slug = PLAYTECH_MAP[slug]
             print(f"   Evolution/Slots: {slug} -> {api_slug}")
