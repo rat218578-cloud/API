@@ -112,9 +112,7 @@ def api_login():
                 'name': result.get('user', {}).get('name', email.split('@')[0]),
                 'email': email,
                 'plan': 'pro'
-            },
-            # 🔥 SALVE O TOKEN EXTERNO PARA USAR DEPOIS
-            'external_token': access_token_externo
+            }
         }
         
         set_cache(f"login:{email}", response_data)
@@ -142,45 +140,31 @@ def api_start_game():
         
         if not payload:
             return jsonify({'error': 'Token invalido'}), 401
-        
-        user_id = payload.get('user_id')
 
         # ======================================================
-        # 🔥 1. SE FOR PLAYTECH, GERA O LINK MANUALMENTE E RETORNA
+        # 🔥 1. SE FOR PLAYTECH, GERA O LINK DE VIDEO MANUALMENTE
         # ======================================================
         if slug == 'playtech/roulette' or slug == 'rol;rol_brazilianrol':
             print(f"   Playtech detectado. Gerando link de video...")
             
-            # 🔥 PASSO CRÍTICO: Pegue o external_token único desse usuário
-            user_data = get_cache(f"login:{payload.get('email')}")
-            if user_data:
-                external_token = user_data.get('external_token')
-            else:
-                external_token = "token_fallback_se_nao_encontrar"
-                
-            # 🔥 Usando o GameLauncher (QUE É O QUE FUNCIONA COM VÍDEO)
-            base_url = "https://login-bramega2.onegameslink.com/GameLauncher"
-            
-            # Cria um username no formato que a Playtech espera
-            username = f"{user_id}_sortenabetbetbr_{user_id}"
+            base_url = "https://cachedownload-cactusbr.onegameslink.com/livedistributed/26.6.3.10/"
+            redirect_time = int(time.time() * 1000)
             
             params = {
-                "gameCodeName": "rol;rol_brazilianrol",
-                "username": username,
-                "casino": "cactus.br",
-                "clientPlatform": "web",
-                "externalToken": external_token,  # ✅ TOKEN ÚNICO DO USUÁRIO!
-                "language": "pt",
-                "lobbyUrl": "https://api-production-49c4.up.railway.app",
-                "depositUrl": "https://api-production-49c4.up.railway.app/user/wallet"
+                "game": "rol",
+                "launch_alias": "rol_brazilianrol", 
+                "lobby": "https://sortenabet.bet.br",
+                "deposit": "https://sortenabet.bet.br/user/wallet",
+                "language": "PT-BR",
+                "redirect_time": redirect_time,
+                "backUrl": "https://login-bramega2.onegameslink.com/",
+                "_entry": "live"
             }
             
             query_string = "&".join([f"{k}={urllib.parse.quote(str(v))}" for k, v in params.items()])
             game_url = f"{base_url}?{query_string}"
             
-            print(f"   Link de video gerado para usuario {user_id}!")
-            
-            # 🔥 JÁ RETORNA AQUI! NÃO DEIXA O CÓDIGO SEGUIR EM FRENTE!
+            print(f"   Link de video gerado com sucesso!")
             return jsonify({
                 'success': True,
                 'slug': slug,
@@ -191,14 +175,11 @@ def api_start_game():
         # ======================================================
         # 🔥 2. SE FOR EVOLUTION, USA A API NORMAL
         # ======================================================
-        # (Só chega aqui se NÃO for Playtech)
-        
         auth_header_externo = session.headers.get('Authorization')
         if not auth_header_externo:
             return jsonify({'error': 'Token externo nao encontrado'}), 401
         
         api_slug = slug
-        # Evolution não precisa de mapeamento, mas mantemos o código de segurança
         if slug in PLAYTECH_MAP:
             api_slug = PLAYTECH_MAP[slug]
             print(f"   Evolution/Slots: {slug} -> {api_slug}")
@@ -322,7 +303,7 @@ def serve_frontend(path):
 
 if __name__ == '__main__':
     print("=" * 70)
-    print("API PROXY - PLAYTECH FIX (TOKEN DINAMICO)")
+    print("API PROXY - PLAYTECH FIX")
     print("=" * 70)
     print(f"API Base: {API_BASE}")
     print(f"Polling: 2 segundos")
