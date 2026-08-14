@@ -217,7 +217,6 @@ export function FootballStudioDashboard() {
                 const awayCard = getCardInfo(round.away);
                 const isWin = round.resultado === 'H';
                 const isLoss = round.resultado === 'A';
-                const isDraw = round.resultado === 'D';
 
                 return (
                   <div key={index} className="flex items-center gap-2 p-2 rounded-lg bg-bg-tertiary/50 border border-border-default/30">
