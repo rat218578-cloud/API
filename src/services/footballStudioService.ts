@@ -1,5 +1,6 @@
 // src/services/footballStudioService.ts
 
+// 🔴 API APENAS PARA A MESA 1 (Studio 1)
 const API_URL = 'https://app.domcroupier.com/inc/historico.php';
 
 export interface FootballStudioRound {
@@ -10,16 +11,33 @@ export interface FootballStudioRound {
   troca_de_baralho: boolean;
 }
 
+// ✅ APENAS 2 MESAS
 export const MESAS_FOOTBALL = [
-  { id: 'studio_1', nome: 'Studio 1', slug: 'evolution/football-studio', gameId: 'TopCard000000001', provedor: 'Evolution', cor: '#22c55e' },
-  { id: 'studio_4', nome: 'Studio 4', slug: 'evolution/football-studio', gameId: 'TopCard000000004', provedor: 'Evolution', cor: '#22c55e' },
-  { id: 'studio_5', nome: 'Studio 5', slug: 'evolution/football-studio', gameId: 'TopCard000000005', provedor: 'Evolution', cor: '#22c55e' },
+  { 
+    id: 'studio_1', 
+    nome: '⚽ Football Studio 1', 
+    slug: 'evolution/football-studio', 
+    gameId: 'TopCard000000001', 
+    provedor: 'Evolution', 
+    cor: '#22c55e',
+    temHistorico: true  // ✅ USA A API
+  },
+  { 
+    id: 'studio_4', 
+    nome: '⚽ Football Studio 4', 
+    slug: 'evolution/football-studio', 
+    gameId: 'TopCard000000004', 
+    provedor: 'Evolution', 
+    cor: '#22c55e',
+    temHistorico: false // ❌ SEM HISTORICO (só video)
+  }
 ];
 
 class FootballStudioService {
   private history: FootballStudioRound[] = [];
   private pollingInterval: NodeJS.Timeout | null = null;
   private lastUpdate: Date | null = null;
+  private mesaAtual: string = 'studio_1';
 
   async fetchHistory(): Promise<FootballStudioRound[]> {
     try {
@@ -121,6 +139,12 @@ class FootballStudioService {
       confianca: Math.round(confidence),
       ultimos10: last10
     };
+  }
+
+  // Limpa historico ao trocar de mesa
+  clearHistory() {
+    this.history = [];
+    this.lastUpdate = null;
   }
 }
 
