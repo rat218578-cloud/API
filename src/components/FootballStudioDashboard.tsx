@@ -55,7 +55,6 @@ export function FootballStudioDashboard() {
 
   const lastTen = history.slice(-10).reverse();
 
-  // Extrai numero e naipe das cartas
   const getCardInfo = (card: string) => {
     if (!card) return { number: '?', suit: '?' };
     const number = card.slice(0, -1);
@@ -68,7 +67,6 @@ export function FootballStudioDashboard() {
 
   return (
     <div className="p-4 space-y-4">
-      {/* CABECALHO COM MESAS */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 flex-wrap">
         {MESAS_FOOTBALL.map((mesa) => (
           <button
@@ -89,24 +87,20 @@ export function FootballStudioDashboard() {
         ))}
       </div>
 
-      {/* STATUS */}
       <div className="flex items-center gap-2 text-xs">
         <span className={`w-2 h-2 rounded-full ${history.length > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
         <span className={history.length > 0 ? 'text-emerald-400' : 'text-yellow-400'}>
-          {history.length > 0 ? '📡 Conectado' : '⏳ Aguardando dados...'}
+          {history.length > 0 ? 'Conectado' : 'Aguardando dados...'}
         </span>
         {history.length > 0 && (
           <span className="text-emerald-400">✅ {stats.total} rodadas</span>
         )}
       </div>
 
-      {/* GRID PRINCIPAL */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        {/* COLUNA ESQUERDA - ANALISE */}
         <div className="xl:col-span-3 space-y-4">
-          {/* Estatisticas */}
           <div className="bg-bg-card border border-border-default rounded-2xl p-4">
-            <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">📊 Estatisticas</h3>
+            <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">Estatisticas</h3>
             <div className="grid grid-cols-3 gap-2">
               <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center">
                 <div className="text-[10px] text-text-muted uppercase">Casa</div>
@@ -123,10 +117,9 @@ export function FootballStudioDashboard() {
             </div>
           </div>
 
-          {/* Sinais e Probabilidades */}
           {signals && (
             <div className="bg-bg-card border border-border-default rounded-2xl p-4">
-              <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">🎯 Sinal de Entrada</h3>
+              <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">Sinal de Entrada</h3>
               
               <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30 text-center mb-3">
                 <div className="text-xs text-text-muted">NOVO SINAL</div>
@@ -172,7 +165,6 @@ export function FootballStudioDashboard() {
             </div>
           )}
 
-          {/* BOTAO PARA VER CARTAS */}
           <button
             onClick={() => setShowCards(!showCards)}
             className="w-full btn-primary py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
@@ -182,7 +174,6 @@ export function FootballStudioDashboard() {
           </button>
         </div>
 
-        {/* COLUNA CENTRAL - VIDEO */}
         <div className="xl:col-span-6">
           {showVideo && selectedSlug ? (
             <LiveGameView
@@ -201,11 +192,10 @@ export function FootballStudioDashboard() {
           )}
         </div>
 
-        {/* COLUNA DIREITA - HISTORICO RAPIDO */}
         <div className="xl:col-span-3 space-y-4">
           <div className="bg-bg-card border border-border-default rounded-2xl p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider">📋 Ultimas</h3>
+              <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider">Ultimas</h3>
               <span className="text-[10px] text-text-muted flex items-center gap-1">
                 <Clock className="w-3 h-3" />
                 {lastUpdate ? lastUpdate.toLocaleTimeString('pt-BR') : '--'}
@@ -245,10 +235,9 @@ export function FootballStudioDashboard() {
         </div>
       </div>
 
-      {/* HISTORICO COMPLETO EM BAIXO */}
       <div className="bg-bg-card border border-border-default rounded-2xl overflow-hidden">
         <div className="p-4 border-b border-border-default flex justify-between items-center">
-          <h3 className="font-bold text-text-primary">📊 Historico Completo</h3>
+          <h3 className="font-bold text-text-primary">Historico Completo</h3>
           <span className="text-xs text-text-muted flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Atualizado a cada 2s • {stats.total} rodadas

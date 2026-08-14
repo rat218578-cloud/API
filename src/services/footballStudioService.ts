@@ -11,9 +11,9 @@ export interface FootballStudioRound {
 }
 
 export const MESAS_FOOTBALL = [
-  { id: 'studio_1', nome: '⚽ Studio 1', slug: 'evolution/football-studio', gameId: 'TopCard000000001', provedor: 'Evolution', cor: '#22c55e' },
-  { id: 'studio_4', nome: '⚽ Studio 4', slug: 'evolution/football-studio', gameId: 'TopCard000000004', provedor: 'Evolution', cor: '#22c55e' },
-  { id: 'studio_5', nome: '⚽ Studio 5', slug: 'evolution/football-studio', gameId: 'TopCard000000005', provedor: 'Evolution', cor: '#22c55e' },
+  { id: 'studio_1', nome: 'Studio 1', slug: 'evolution/football-studio', gameId: 'TopCard000000001', provedor: 'Evolution', cor: '#22c55e' },
+  { id: 'studio_4', nome: 'Studio 4', slug: 'evolution/football-studio', gameId: 'TopCard000000004', provedor: 'Evolution', cor: '#22c55e' },
+  { id: 'studio_5', nome: 'Studio 5', slug: 'evolution/football-studio', gameId: 'TopCard000000005', provedor: 'Evolution', cor: '#22c55e' },
 ];
 
 class FootballStudioService {
@@ -32,7 +32,7 @@ class FootballStudioService {
       this.lastUpdate = new Date();
       return this.history;
     } catch (error) {
-      console.error('Erro ao buscar histórico do Football Studio:', error);
+      console.error('Erro ao buscar historico do Football Studio:', error);
       return [];
     }
   }
@@ -73,7 +73,6 @@ class FootballStudioService {
     return this.lastUpdate;
   }
 
-  // Analisa padrões para gerar sinais
   getSignals() {
     if (this.history.length < 10) return null;
 
@@ -82,13 +81,11 @@ class FootballStudioService {
     const losses = last10.filter(r => r.resultado === 'A').length;
     const draws = last10.filter(r => r.resultado === 'D').length;
 
-    // Calcula probabilidades
     const total = last10.length;
     const probCasa = ((wins / total) * 100).toFixed(1);
     const probEmpate = ((draws / total) * 100).toFixed(1);
     const probVisitante = ((losses / total) * 100).toFixed(1);
 
-    // Detecta streaks
     let streak = 0;
     let streakType = '';
     if (last10.length > 0) {
@@ -103,7 +100,6 @@ class FootballStudioService {
       streakType = last.resultado === 'H' ? 'CASA' : last.resultado === 'A' ? 'VISITANTE' : 'EMPATE';
     }
 
-    // Predição para próxima rodada
     let prediction = 'CASA';
     let confidence = 0;
     
