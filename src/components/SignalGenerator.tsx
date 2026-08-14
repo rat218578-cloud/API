@@ -97,7 +97,7 @@ export function SignalGenerator({ history }: SignalGeneratorProps) {
                 </span>
               </div>
               <div className="flex items-center gap-1.5 mb-2">
-                {signal.numbers.map((n) => (
+                {signal.numbers.map((n: number) => (
                   <div
                     key={n}
                     className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${

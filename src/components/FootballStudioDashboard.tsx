@@ -1,5 +1,5 @@
 // src/components/FootballStudioDashboard.tsx
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { footballStudioService, FootballStudioRound } from '../services/footballStudioService';
 import { Loader2, Clock } from 'lucide-react';
 
@@ -18,7 +18,6 @@ export function FootballStudioDashboard() {
       setLoading(false);
     };
 
-    // Polling a cada 2 segundos
     footballStudioService.startPolling(2000, onUpdate);
 
     return () => {
@@ -41,10 +40,9 @@ export function FootballStudioDashboard() {
 
   return (
     <div className="p-4 space-y-4">
-      {/* Cabeçalho com Estatísticas */}
       <div className="bg-bg-card border border-border-default rounded-2xl p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-text-primary">⚽ Football Studio - Ao Vivo</h2>
+          <h2 className="text-xl font-bold text-text-primary">Football Studio - Ao Vivo</h2>
           <div className="flex items-center gap-2 text-xs text-text-muted">
             <Clock className="w-3 h-3" />
             <span>Atualizado: {lastUpdate ? lastUpdate.toLocaleTimeString('pt-BR') : '--'}</span>
@@ -71,10 +69,9 @@ export function FootballStudioDashboard() {
         </div>
       </div>
 
-      {/* Histórico de Rodadas */}
       <div className="bg-bg-card border border-border-default rounded-2xl overflow-hidden">
         <div className="p-4 border-b border-border-default flex justify-between items-center">
-          <h3 className="font-bold text-text-primary">Últimas Rodadas</h3>
+          <h3 className="font-bold text-text-primary">Ultimas Rodadas</h3>
           <span className="text-xs text-text-muted flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Atualizado a cada 2s
@@ -84,7 +81,7 @@ export function FootballStudioDashboard() {
           <table className="w-full text-sm">
             <thead className="bg-bg-tertiary text-text-muted text-xs uppercase sticky top-0">
               <tr>
-                <th className="text-left p-3">Horário</th>
+                <th className="text-left p-3">Horario</th>
                 <th className="text-center p-3">Home</th>
                 <th className="text-center p-3">Resultado</th>
                 <th className="text-center p-3">Away</th>

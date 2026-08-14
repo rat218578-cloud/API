@@ -75,7 +75,7 @@ class RouletteApiService {
   async getRealtimeNumbers(roomId: string = "brasileira", count: number = 10): Promise<number[]> {
     try {
       const history = await this.getLiveRouletteHistory(roomId, count);
-      return history.spins.map(spin => spin.number);
+      return history.spins.map((spin: RouletteSpin) => spin.number);
     } catch (error) {
       console.error('Erro ao buscar números em tempo real:', error);
       return [];
