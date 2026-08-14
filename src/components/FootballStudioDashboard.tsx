@@ -15,11 +15,9 @@ export function FootballStudioDashboard() {
   const [signals, setSignals] = useState<any>(null);
   const [showCards, setShowCards] = useState(false);
 
-  // Busca a mesa atual
   const mesaAtual = MESAS_FOOTBALL.find(m => m.id === selectedMesa) || MESAS_FOOTBALL[0];
 
   useEffect(() => {
-    // Se a mesa tem histórico, busca dados
     if (mesaAtual.temHistorico) {
       setLoading(true);
       const onUpdate = (newHistory: FootballStudioRound[]) => {
@@ -29,20 +27,17 @@ export function FootballStudioDashboard() {
         setSignals(footballStudioService.getSignals());
         setLoading(false);
       };
-
       footballStudioService.startPolling(2000, onUpdate);
     } else {
-      // Mesa sem histórico - só mostra video
       setHistory([]);
       setStats({ total: 0, wins: 0, losses: 0, draws: 0 });
       setSignals(null);
       setLoading(false);
     }
-
     return () => {
       footballStudioService.stopPolling();
     };
-  }, [selectedMesa]); // Reage quando troca de mesa
+  }, [selectedMesa]);
 
   const openGame = (slug: string) => {
     setSelectedSlug(slug);
@@ -123,7 +118,7 @@ export function FootballStudioDashboard() {
 
       {/* GRID PRINCIPAL */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        {/* COLUNA ESQUERDA - ANALISE (só se tiver histórico) */}
+        {/* COLUNA ESQUERDA - ANALISE */}
         <div className="xl:col-span-3 space-y-4">
           {temHistorico ? (
             <>
@@ -148,14 +143,12 @@ export function FootballStudioDashboard() {
               {signals && (
                 <div className="bg-bg-card border border-border-default rounded-2xl p-4">
                   <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">🎯 Sinal de Entrada</h3>
-                  
                   <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30 text-center mb-3">
                     <div className="text-xs text-text-muted">NOVO SINAL</div>
                     <div className="text-xl font-bold text-emerald-400">
                       {signals.predicao} — {signals.confianca}%
                     </div>
                   </div>
-
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-text-secondary">CASA</span>
@@ -164,7 +157,6 @@ export function FootballStudioDashboard() {
                     <div className="h-1.5 rounded-full bg-bg-tertiary overflow-hidden">
                       <div className="h-full rounded-full bg-emerald-500" style={{ width: `${signals.probabilidades.casa}%` }} />
                     </div>
-
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-text-secondary">EMPATE</span>
                       <span className="font-bold text-yellow-400">{signals.probabilidades.empate}%</span>
@@ -172,7 +164,6 @@ export function FootballStudioDashboard() {
                     <div className="h-1.5 rounded-full bg-bg-tertiary overflow-hidden">
                       <div className="h-full rounded-full bg-yellow-500" style={{ width: `${signals.probabilidades.empate}%` }} />
                     </div>
-
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-text-secondary">VISITANTE</span>
                       <span className="font-bold text-red-400">{signals.probabilidades.visitante}%</span>
@@ -181,7 +172,6 @@ export function FootballStudioDashboard() {
                       <div className="h-full rounded-full bg-red-500" style={{ width: `${signals.probabilidades.visitante}%` }} />
                     </div>
                   </div>
-
                   {signals.streak.tamanho > 1 && (
                     <div className="mt-3 p-2 rounded-lg bg-bg-tertiary border border-border-default text-center">
                       <div className="text-[10px] text-text-muted">STREAK</div>
@@ -229,7 +219,7 @@ export function FootballStudioDashboard() {
           )}
         </div>
 
-        {/* COLUNA DIREITA - ULTIMAS (só se tiver histórico) */}
+        {/* COLUNA DIREITA - ULTIMAS */}
         <div className="xl:col-span-3 space-y-4">
           {temHistorico ? (
             <div className="bg-bg-card border border-border-default rounded-2xl p-4">
@@ -246,7 +236,6 @@ export function FootballStudioDashboard() {
                   const awayCard = getCardInfo(round.away);
                   const isWin = round.resultado === 'H';
                   const isLoss = round.resultado === 'A';
-
                   return (
                     <div key={index} className="flex items-center gap-2 p-2 rounded-lg bg-bg-tertiary/50 border border-border-default/30">
                       <div className="flex-1">
@@ -280,7 +269,7 @@ export function FootballStudioDashboard() {
         </div>
       </div>
 
-      {/* HISTORICO COMPLETO (só se tiver histórico) */}
+      {/* HISTORICO COMPLETO */}
       {temHistorico && (
         <div className="bg-bg-card border border-border-default rounded-2xl overflow-hidden">
           <div className="p-4 border-b border-border-default flex justify-between items-center">
