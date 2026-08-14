@@ -5,10 +5,10 @@ import { Header } from "./components/Header";
 import { RouletteDashboard } from "./components/RouletteDashboard";
 import { BankrollManager } from "./components/BankrollManager";
 import { GamePlaceholder } from "./components/GamePlaceholder";
-import { FootballStudioDashboard } from "./components/FootballStudioDashboard";
 import { SettingsModal } from "./components/SettingsModal";
 import { Login } from "./components/Login";
 import { GameLauncher } from "./components/GameLauncher";
+import { FootballStudioDashboard } from "./components/FootballStudioDashboard";
 import { useAuth } from "./hooks/useAuth";
 import type { GameCategory } from "./types";
 
@@ -31,7 +31,6 @@ export default function App() {
   const [gameLauncherOpen, setGameLauncherOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // 🔥 Salva nome e plano no localStorage quando o usuário loga
   useEffect(() => {
     if (user) {
       localStorage.setItem('user_name', user.name || 'Usuário');
@@ -74,6 +73,7 @@ export default function App() {
         />
         {currentView === "bankroll" ? <BankrollManager onBack={() => setCurrentView("game")} /> :
          activeGame === "roleta" ? <RouletteDashboard /> :
+         activeGame === "football-studio" ? <FootballStudioDashboard /> :
          <GamePlaceholder title={gameInfo.title} status={gameInfo.status === "active" ? "beta" : gameInfo.status} />}
       </main>
       <button onClick={() => setCurrentView(currentView === "bankroll" ? "game" : "bankroll")}

@@ -1,6 +1,7 @@
-import { RouletteHistoryResponse } from "../types";
+import { RouletteHistoryResponse, RouletteSpin } from "../types";
+import { apiClient } from './api';
 
-class RouletteApiService {
+export class RouletteApiService {
   private accessToken: string | null = null;
 
   constructor() {

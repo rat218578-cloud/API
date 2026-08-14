@@ -33,7 +33,7 @@ export function SignalGenerator({ history }: SignalGeneratorProps) {
           </div>
           <div>
             <h3 className="font-bold text-text-primary text-sm">IA de Sinais</h3>
-            <p className="text-[10px] text-text-muted">Geração inteligente de entradas</p>
+            <p className="text-[10px] text-text-muted">Geracao inteligente de entradas</p>
           </div>
         </div>
         <button
@@ -74,7 +74,7 @@ export function SignalGenerator({ history }: SignalGeneratorProps) {
           <div className="col-span-full text-center py-8 text-text-muted border border-dashed border-border-default rounded-xl">
             <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-50" />
             <p className="text-sm">Nenhum sinal gerado ainda</p>
-            <p className="text-[10px]">Clique em "Gerar sinais" para começar</p>
+            <p className="text-[10px]">Clique em "Gerar sinais" para comecar</p>
           </div>
         ) : (
           signals.map((signal) => (
