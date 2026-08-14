@@ -1,7 +1,7 @@
 // src/components/FootballStudioDashboard.tsx
 import { useState, useEffect } from 'react';
 import { footballStudioService, FootballStudioRound, MESAS_FOOTBALL } from '../services/footballStudioService';
-import { Loader2, Clock, Play, Info, TrendingUp, Target, Zap } from 'lucide-react';
+import { Loader2, Clock, Info } from 'lucide-react';
 import { LiveGameView } from './LiveGameView';
 
 export function FootballStudioDashboard() {
@@ -55,7 +55,7 @@ export function FootballStudioDashboard() {
 
   const lastTen = history.slice(-10).reverse();
 
-  // Extrai número e naipe das cartas
+  // Extrai numero e naipe das cartas
   const getCardInfo = (card: string) => {
     if (!card) return { number: '?', suit: '?' };
     const number = card.slice(0, -1);
@@ -68,7 +68,7 @@ export function FootballStudioDashboard() {
 
   return (
     <div className="p-4 space-y-4">
-      {/* CABEÇALHO COM MESAS */}
+      {/* CABECALHO COM MESAS */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 flex-wrap">
         {MESAS_FOOTBALL.map((mesa) => (
           <button
@@ -104,9 +104,9 @@ export function FootballStudioDashboard() {
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
         {/* COLUNA ESQUERDA - ANALISE */}
         <div className="xl:col-span-3 space-y-4">
-          {/* Estatísticas */}
+          {/* Estatisticas */}
           <div className="bg-bg-card border border-border-default rounded-2xl p-4">
-            <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">📊 Estatísticas</h3>
+            <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">📊 Estatisticas</h3>
             <div className="grid grid-cols-3 gap-2">
               <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center">
                 <div className="text-[10px] text-text-muted uppercase">Casa</div>
@@ -172,7 +172,7 @@ export function FootballStudioDashboard() {
             </div>
           )}
 
-          {/* BOTÃO PARA VER CARTAS */}
+          {/* BOTAO PARA VER CARTAS */}
           <button
             onClick={() => setShowCards(!showCards)}
             className="w-full btn-primary py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
@@ -201,11 +201,11 @@ export function FootballStudioDashboard() {
           )}
         </div>
 
-        {/* COLUNA DIREITA - HISTÓRICO RÁPIDO */}
+        {/* COLUNA DIREITA - HISTORICO RAPIDO */}
         <div className="xl:col-span-3 space-y-4">
           <div className="bg-bg-card border border-border-default rounded-2xl p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider">📋 Últimas</h3>
+              <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider">📋 Ultimas</h3>
               <span className="text-[10px] text-text-muted flex items-center gap-1">
                 <Clock className="w-3 h-3" />
                 {lastUpdate ? lastUpdate.toLocaleTimeString('pt-BR') : '--'}
@@ -246,10 +246,10 @@ export function FootballStudioDashboard() {
         </div>
       </div>
 
-      {/* HISTÓRICO COMPLETO EM BAIXO */}
+      {/* HISTORICO COMPLETO EM BAIXO */}
       <div className="bg-bg-card border border-border-default rounded-2xl overflow-hidden">
         <div className="p-4 border-b border-border-default flex justify-between items-center">
-          <h3 className="font-bold text-text-primary">📊 Histórico Completo</h3>
+          <h3 className="font-bold text-text-primary">📊 Historico Completo</h3>
           <span className="text-xs text-text-muted flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Atualizado a cada 2s • {stats.total} rodadas
@@ -259,7 +259,7 @@ export function FootballStudioDashboard() {
           <table className="w-full text-sm">
             <thead className="bg-bg-tertiary text-text-muted text-xs uppercase sticky top-0">
               <tr>
-                <th className="text-left p-3">Horário</th>
+                <th className="text-left p-3">Horario</th>
                 <th className="text-center p-3">Casa</th>
                 <th className="text-center p-3">Resultado</th>
                 <th className="text-center p-3">Visitante</th>
