@@ -10,6 +10,12 @@ export interface FootballStudioRound {
   troca_de_baralho: boolean;
 }
 
+export const MESAS_FOOTBALL = [
+  { id: 'studio_1', nome: '⚽ Studio 1', slug: 'evolution/football-studio', gameId: 'TopCard000000001', provedor: 'Evolution', cor: '#22c55e' },
+  { id: 'studio_4', nome: '⚽ Studio 4', slug: 'evolution/football-studio', gameId: 'TopCard000000004', provedor: 'Evolution', cor: '#22c55e' },
+  { id: 'studio_5', nome: '⚽ Studio 5', slug: 'evolution/football-studio', gameId: 'TopCard000000005', provedor: 'Evolution', cor: '#22c55e' },
+];
+
 class FootballStudioService {
   private history: FootballStudioRound[] = [];
   private pollingInterval: NodeJS.Timeout | null = null;
@@ -36,10 +42,8 @@ class FootballStudioService {
       clearInterval(this.pollingInterval);
     }
 
-    // Busca inicial
     this.fetchHistory().then(onUpdate);
 
-    // Polling a cada 2 segundos
     this.pollingInterval = setInterval(async () => {
       const newData = await this.fetchHistory();
       onUpdate(newData);
@@ -67,6 +71,60 @@ class FootballStudioService {
 
   getLastUpdate(): Date | null {
     return this.lastUpdate;
+  }
+
+  // Analisa padrões para gerar sinais
+  getSignals() {
+    if (this.history.length < 10) return null;
+
+    const last10 = this.history.slice(-10);
+    const wins = last10.filter(r => r.resultado === 'H').length;
+    const losses = last10.filter(r => r.resultado === 'A').length;
+    const draws = last10.filter(r => r.resultado === 'D').length;
+
+    // Calcula probabilidades
+    const total = last10.length;
+    const probCasa = ((wins / total) * 100).toFixed(1);
+    const probEmpate = ((draws / total) * 100).toFixed(1);
+    const probVisitante = ((losses / total) * 100).toFixed(1);
+
+    // Detecta streaks
+    let streak = 0;
+    let streakType = '';
+    if (last10.length > 0) {
+      const last = last10[last10.length - 1];
+      for (let i = last10.length - 1; i >= 0; i--) {
+        if (last10[i].resultado === last.resultado) {
+          streak++;
+        } else {
+          break;
+        }
+      }
+      streakType = last.resultado === 'H' ? 'CASA' : last.resultado === 'A' ? 'VISITANTE' : 'EMPATE';
+    }
+
+    // Predição para próxima rodada
+    let prediction = 'CASA';
+    let confidence = 0;
+    
+    if (parseFloat(probCasa) > parseFloat(probVisitante) && parseFloat(probCasa) > parseFloat(probEmpate)) {
+      prediction = 'CASA';
+      confidence = parseFloat(probCasa);
+    } else if (parseFloat(probVisitante) > parseFloat(probCasa) && parseFloat(probVisitante) > parseFloat(probEmpate)) {
+      prediction = 'VISITANTE';
+      confidence = parseFloat(probVisitante);
+    } else {
+      prediction = 'EMPATE';
+      confidence = parseFloat(probEmpate);
+    }
+
+    return {
+      probabilidades: { casa: probCasa, empate: probEmpate, visitante: probVisitante },
+      streak: { tipo: streakType, tamanho: streak },
+      predicao: prediction,
+      confianca: Math.round(confidence),
+      ultimos10: last10
+    };
   }
 }
 
