@@ -1,5 +1,4 @@
 import { RouletteHistoryResponse, RouletteSpin } from "../types";
-import { apiClient } from './api';
 
 export class RouletteApiService {
   private accessToken: string | null = null;
