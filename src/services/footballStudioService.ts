@@ -1,6 +1,5 @@
 // src/services/footballStudioService.ts
 
-// API para histórico (Mesa 1)
 const API_URL = 'https://app.domcroupier.com/inc/historico.php';
 
 export interface FootballStudioRound {
@@ -11,25 +10,24 @@ export interface FootballStudioRound {
   troca_de_baralho: boolean;
 }
 
-// ✅ 2 MESAS
 export const MESAS_FOOTBALL = [
   { 
     id: 'studio_1', 
-    nome: '⚽ Football Studio', 
+    nome: 'Football Studio', 
     slug: 'evolution/football-studio', 
     gameId: 'TopCard000000001', 
     provedor: 'Evolution', 
     cor: '#22c55e',
-    temHistorico: true  // ✅ COM HISTORICO
+    temHistorico: true
   },
   { 
     id: 'studio_4', 
-    nome: '⚽ Football Studio Ao Vivo', 
+    nome: 'Football Studio Ao Vivo', 
     slug: 'evolution/football-studio', 
     gameId: 'TopCard000000004', 
     provedor: 'Evolution', 
     cor: '#22c55e',
-    temHistorico: false // ❌ SEM HISTORICO (só video)
+    temHistorico: false
   }
 ];
 
@@ -45,7 +43,6 @@ class FootballStudioService {
         throw new Error(`Erro na API: ${response.status}`);
       }
       const data: FootballStudioRound[] = await response.json();
-      // Mantém ordem cronológica (mais antigo primeiro)
       this.history = data.reverse();
       this.lastUpdate = new Date();
       return this.history;
@@ -59,9 +56,7 @@ class FootballStudioService {
     if (this.pollingInterval) {
       clearInterval(this.pollingInterval);
     }
-
     this.fetchHistory().then(onUpdate);
-
     this.pollingInterval = setInterval(async () => {
       const newData = await this.fetchHistory();
       onUpdate(newData);

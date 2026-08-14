@@ -75,7 +75,6 @@ export function FootballStudioDashboard() {
 
   return (
     <div className="p-4 space-y-4">
-      {/* CABECALHO COM MESAS */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 flex-wrap">
         {MESAS_FOOTBALL.map((mesa) => (
           <button
@@ -102,7 +101,6 @@ export function FootballStudioDashboard() {
         ))}
       </div>
 
-      {/* STATUS */}
       <div className="flex items-center gap-2 text-xs">
         <span className={`w-2 h-2 rounded-full ${temHistorico ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
         <span className={temHistorico ? 'text-emerald-400' : 'text-yellow-400'}>
@@ -111,14 +109,9 @@ export function FootballStudioDashboard() {
         {temHistorico && (
           <span className="text-emerald-400">✅ {stats.total} rodadas</span>
         )}
-        {mesaAtual.id === 'studio_1' && temHistorico && (
-          <span className="text-[10px] text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-full">API DomCroupier</span>
-        )}
       </div>
 
-      {/* GRID PRINCIPAL */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        {/* COLUNA ESQUERDA - ANALISE */}
         <div className="xl:col-span-3 space-y-4">
           {temHistorico ? (
             <>
@@ -200,7 +193,6 @@ export function FootballStudioDashboard() {
           )}
         </div>
 
-        {/* COLUNA CENTRAL - VIDEO */}
         <div className="xl:col-span-6">
           {showVideo && selectedSlug ? (
             <LiveGameView
@@ -219,7 +211,6 @@ export function FootballStudioDashboard() {
           )}
         </div>
 
-        {/* COLUNA DIREITA - ULTIMAS */}
         <div className="xl:col-span-3 space-y-4">
           {temHistorico ? (
             <div className="bg-bg-card border border-border-default rounded-2xl p-4">
@@ -269,7 +260,6 @@ export function FootballStudioDashboard() {
         </div>
       </div>
 
-      {/* HISTORICO COMPLETO */}
       {temHistorico && (
         <div className="bg-bg-card border border-border-default rounded-2xl overflow-hidden">
           <div className="p-4 border-b border-border-default flex justify-between items-center">
