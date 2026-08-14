@@ -2,7 +2,7 @@
 export const ROLETAS = [
   { 
     id: 'lightning', 
-    nome: '⚡ Lightning', 
+    nome: 'Lightning', 
     slug: 'evolution/lightning-roulette',
     gameId: 'LightningTable01',
     provedor: 'Evolution',
@@ -10,7 +10,7 @@ export const ROLETAS = [
   },
   { 
     id: 'immersive', 
-    nome: '🎥 Imersiva', 
+    nome: 'Imersiva', 
     slug: 'evolution/immersive-roulette',
     gameId: 'ImmerRoulette0001',
     provedor: 'Evolution',
@@ -18,16 +18,16 @@ export const ROLETAS = [
   },
   { 
     id: 'brasileira_playtech', 
-    nome: '🇧🇷 Brasileira', 
+    nome: 'Brasileira', 
     slug: 'playtech/roulette',
-    gameCodeName: 'rol;rol_brazilianrol',  // 🔥 CORRETO!
+    gameCodeName: 'rol;rol_brazilianrol',
     gameId: 'rol;rol_loungerol',
     provedor: 'Playtech',
     cor: '#10b981'
   },
   { 
     id: 'xxxtreme', 
-    nome: '⚡ XXXtreme', 
+    nome: 'XXXtreme', 
     slug: 'evolution/xxxtreme-lightning-roulette',
     gameId: 'XxxtremeLigh0001',
     provedor: 'Evolution',
@@ -47,23 +47,23 @@ class GameLinkService {
   }
 
   async getGameUrl(slug: string): Promise<string | null> {
-    console.log(`🎮 Gerando NOVO token para: ${slug}`);
+    console.log(`Gerando NOVO token para: ${slug}`);
 
     try {
       const token = localStorage.getItem('access_token');
       
       if (!token) {
-        console.error('❌ Token não encontrado');
+        console.error('Token nao encontrado');
         return null;
       }
 
-      // 🔥 CORREÇÃO: Verifica se é Playtech e usa gameCodeName
+      // Playtech usa gameCodeName
       const roleta = ROLETAS.find(r => r.slug === slug);
       let urlSlug = slug;
       
       if (roleta?.provedor === 'Playtech' && roleta.gameCodeName) {
         urlSlug = roleta.gameCodeName;
-        console.log(`   🔄 Playtech detectado! Usando gameCodeName: ${urlSlug}`);
+        console.log(`   Playtech detectado! Usando gameCodeName: ${urlSlug}`);
       }
 
       const response = await fetch(`/api/start-game-v2?slug=${urlSlug}&_=${Date.now()}`, {
@@ -77,14 +77,14 @@ class GameLinkService {
         }
       });
 
-      console.log(`📥 Status: ${response.status}`);
+      console.log(`Status: ${response.status}`);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`❌ HTTP ${response.status}: ${errorText}`);
+        console.error(`HTTP ${response.status}: ${errorText}`);
         
         if (response.status === 401) {
-          console.log('🔄 Token expirado, tentando renovar...');
+          console.log('Token expirado, tentando renovar...');
           const refreshToken = localStorage.getItem('refresh_token');
           
           if (refreshToken) {
@@ -97,7 +97,7 @@ class GameLinkService {
             if (refreshResponse.ok) {
               const data = await refreshResponse.json();
               localStorage.setItem('access_token', data.access_token);
-              console.log('✅ Token renovado!');
+              console.log('Token renovado!');
               return this.getGameUrl(slug);
             }
           }
@@ -107,29 +107,29 @@ class GameLinkService {
       }
 
       const data = await response.json();
-      console.log('📦 Resposta:', data);
+      console.log('Resposta:', data);
 
       const gameUrl = data.iframe_url || data.gameURL;
       if (gameUrl) {
-        console.log(`✅ NOVO link gerado para ${slug}`);
+        console.log(`NOVO link gerado para ${slug}`);
         return gameUrl;
       }
 
       return null;
     } catch (error) {
-      console.error(`❌ Erro:`, error);
+      console.error(`Erro:`, error);
       return null;
     }
   }
 
   forceRefresh(slug: string): void {
-    console.log(`🔄 Forçando refresh do token para ${slug}`);
+    console.log(`Forcando refresh do token para ${slug}`);
     delete this.gameUrls[slug];
   }
 
   clearAllCache(): void {
     this.gameUrls = {};
-    console.log('🗑️ Todos os caches limpos');
+    console.log('Todos os caches limpos');
   }
 }
 

@@ -3,7 +3,7 @@ from flask_cors import CORS
 import requests
 import logging
 import os
-import re
+import urllib.parse
 import time
 from datetime import datetime
 from db import db
@@ -49,7 +49,11 @@ SLUG_SOURCE_MAP = {
     'evolution/lightning-roulette': 'lightning',
     'evolution/xxxtreme-lightning-roulette': 'xxxtreme',
     'playtech/roulette': 'brasilPlay',
-    'rol;rol_brazilianrol': 'brasilPlay'
+    'rol;rol_brazilianrol': 'brasilPlay',
+}
+
+PLAYTECH_MAP = {
+    'rol;rol_brazilianrol': 'playtech/roulette',
 }
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -136,15 +140,54 @@ def api_start_game():
         
         if not payload:
             return jsonify({'error': 'Token invalido'}), 401
-        
+
+        # ======================================================
+        # 🔥 1. SE FOR PLAYTECH, GERA O LINK DE VIDEO MANUALMENTE
+        # ======================================================
+        if slug == 'playtech/roulette' or slug == 'rol;rol_brazilianrol':
+            print(f"   Playtech detectado. Gerando link de video...")
+            
+            base_url = "https://cachedownload-cactusbr.onegameslink.com/livedistributed/26.6.3.10/"
+            redirect_time = int(time.time() * 1000)
+            
+            params = {
+                "game": "rol",
+                "launch_alias": "rol_brazilianrol", 
+                "lobby": "https://sortenabet.bet.br",
+                "deposit": "https://sortenabet.bet.br/user/wallet",
+                "language": "PT-BR",
+                "redirect_time": redirect_time,
+                "backUrl": "https://login-bramega2.onegameslink.com/",
+                "_entry": "live"
+            }
+            
+            query_string = "&".join([f"{k}={urllib.parse.quote(str(v))}" for k, v in params.items()])
+            game_url = f"{base_url}?{query_string}"
+            
+            print(f"   Link de video gerado com sucesso!")
+            return jsonify({
+                'success': True,
+                'slug': slug,
+                'gameURL': game_url,
+                'iframe_url': game_url
+            }), 200
+
+        # ======================================================
+        # 🔥 2. SE FOR EVOLUTION, USA A API NORMAL
+        # ======================================================
         auth_header_externo = session.headers.get('Authorization')
         if not auth_header_externo:
             return jsonify({'error': 'Token externo nao encontrado'}), 401
         
+        api_slug = slug
+        if slug in PLAYTECH_MAP:
+            api_slug = PLAYTECH_MAP[slug]
+            print(f"   Evolution/Slots: {slug} -> {api_slug}")
+        
         response = session.get(
             f'{API_BASE}/api/start-game-v2',
             params={
-                'slug': slug,
+                'slug': api_slug,
                 'platform': 'WEB',
                 'use_demo': 0,
                 'source': 'watchIsAuthenticated'
@@ -159,7 +202,7 @@ def api_start_game():
             game_url = data.get('iframe_url') or data.get('gameURL')
             
             if game_url:
-                print(f"Link gerado para {slug}")
+                print(f"Link gerado para {api_slug}")
                 return jsonify({
                     'success': True,
                     'slug': slug,
@@ -263,8 +306,12 @@ if __name__ == '__main__':
     print("API PROXY - PLAYTECH FIX")
     print("=" * 70)
     print(f"API Base: {API_BASE}")
-    print("Polling: 2 segundos")
-    print("Rodando em: http://localhost:5000")
+    print(f"Polling: 2 segundos")
+    print(f"Rodando em: http://localhost:5000")
+    print("=" * 70)
+    print("Mapeamento Playtech:")
+    for gamecode, slug in PLAYTECH_MAP.items():
+        print(f"   {gamecode} -> {slug}")
     print("=" * 70)
     
     try:
