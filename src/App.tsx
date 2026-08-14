@@ -5,6 +5,7 @@ import { Header } from "./components/Header";
 import { RouletteDashboard } from "./components/RouletteDashboard";
 import { BankrollManager } from "./components/BankrollManager";
 import { GamePlaceholder } from "./components/GamePlaceholder";
+import { FootballStudioDashboard } from "./components/FootballStudioDashboard";
 import { SettingsModal } from "./components/SettingsModal";
 import { Login } from "./components/Login";
 import { GameLauncher } from "./components/GameLauncher";
@@ -14,7 +15,7 @@ import type { GameCategory } from "./types";
 const GAME_INFO: Record<GameCategory, { title: string; subtitle: string; status: "active" | "beta" | "soon" }> = {
   roleta: { title: "Roleta", subtitle: "Brasileira: análise ao vivo", status: "active" },
   bacbo: { title: "Bac Bo", subtitle: "Análise de dados", status: "beta" },
-  "football-studio": { title: "Football Studio", subtitle: "Análise de cartas", status: "beta" },
+  "football-studio": { title: "Football Studio", subtitle: "Análise de cartas ao vivo", status: "active" },
   aviator: { title: "Aviator", subtitle: "Previsão de multiplicadores", status: "beta" },
   "crazy-time": { title: "Crazy Time", subtitle: "Roda da fortuna", status: "soon" },
   mines: { title: "Mines", subtitle: "Campo minado", status: "soon" },
