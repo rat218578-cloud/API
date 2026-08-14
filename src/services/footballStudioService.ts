@@ -37,7 +37,6 @@ class FootballStudioService {
   private history: FootballStudioRound[] = [];
   private pollingInterval: NodeJS.Timeout | null = null;
   private lastUpdate: Date | null = null;
-  private mesaAtual: string = 'studio_1';
 
   async fetchHistory(): Promise<FootballStudioRound[]> {
     try {
@@ -139,12 +138,6 @@ class FootballStudioService {
       confianca: Math.round(confidence),
       ultimos10: last10
     };
-  }
-
-  // Limpa historico ao trocar de mesa
-  clearHistory() {
-    this.history = [];
-    this.lastUpdate = null;
   }
 }
 
