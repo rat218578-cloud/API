@@ -9,14 +9,10 @@ interface RouletteVideoProps {
   onClose: () => void;
 }
 
-// 🔥 CORREÇÃO AQUI: Mapeamento dinâmico dos slugs
 const ROOM_SLUGS: Record<string, string> = {
-  // Evolution
-  'lightning': 'evolution/lightning-roulette',
+  'brasileira': 'evolution/brasileira',
   'immersive': 'evolution/immersive-roulette',
-  
-  // 🔥 Playtech (O que faltava!)
-  'brasileira': 'playtech/roulette',
+  'lightning': 'evolution/lightning-roulette',
 };
 
 const ROOM_NAMES: Record<string, string> = {
@@ -45,7 +41,7 @@ export function RouletteVideo({ isOpen, roomId, onClose }: RouletteVideoProps) {
     try {
       const slug = ROOM_SLUGS[roomId];
       if (!slug) {
-        setError(`Slug não encontrado para a sala: ${roomId}`);
+        setError(`Slug não encontrado`);
         setLoading(false);
         return;
       }
@@ -107,9 +103,8 @@ export function RouletteVideo({ isOpen, roomId, onClose }: RouletteVideoProps) {
             <iframe
               src={gameData.gameURL}
               className="w-full h-full border-0"
-              allow="autoplay; fullscreen; camera; microphone; encrypted-media; accelerometer"
+              allow="autoplay; fullscreen; camera; microphone"
               loading="lazy"
-              // 🔥 Mantenha o sandbox aberto o suficiente para a Playtech
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
             />
           ) : (
