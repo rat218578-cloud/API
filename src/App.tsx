@@ -71,10 +71,15 @@ export default function App() {
           user={user} 
           onLogout={logout} 
         />
-        {currentView === "bankroll" ? <BankrollManager onBack={() => setCurrentView("game")} /> :
-         activeGame === "roleta" ? <RouletteDashboard /> :
-         activeGame === "football-studio" ? <FootballStudioDashboard /> :
-         <GamePlaceholder title={gameInfo.title} status={gameInfo.status === "active" ? "beta" : gameInfo.status} />}
+        {currentView === "bankroll" ? (
+          <BankrollManager onBack={() => setCurrentView("game")} />
+        ) : activeGame === "roleta" ? (
+          <RouletteDashboard />
+        ) : activeGame === "football-studio" ? (
+          <FootballStudioDashboard />
+        ) : (
+          <GamePlaceholder title={gameInfo.title} status={gameInfo.status === "active" ? "beta" : gameInfo.status} />
+        )}
       </main>
       <button onClick={() => setCurrentView(currentView === "bankroll" ? "game" : "bankroll")}
         className="fixed bottom-6 right-6 z-50 btn-primary px-5 py-3 rounded-full shadow-lg flex items-center gap-2">

@@ -26,7 +26,7 @@ interface SidebarProps {
 const menuItems = [
   { id: "roleta" as GameCategory, name: "Roleta", icon: CircleDot, status: "active" },
   { id: "bacbo" as GameCategory, name: "Bac Bo", icon: Dice5, status: "beta" },
-  { id: "football-studio" as GameCategory, name: "Football Studio", icon: Trophy, status: "beta" },
+  { id: "football-studio" as GameCategory, name: "Football Studio", icon: Trophy, status: "active" },
   { id: "aviator" as GameCategory, name: "Aviator", icon: Plane, status: "beta" },
   { id: "crazy-time" as GameCategory, name: "Crazy Time", icon: Clock, status: "soon" },
   { id: "mines" as GameCategory, name: "Mines", icon: Bomb, status: "soon" },
