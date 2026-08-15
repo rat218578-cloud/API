@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { footballStudioService, ROLETAS_FOOTBALL } from '../services/footballStudioService';
 import { LiveGameView } from './LiveGameView';
-import { Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Loader2, ChevronDown, ChevronUp, Sparkles, Brain } from 'lucide-react';
 
 export function FootballStudioDashboard() {
   const [activeRoom, setActiveRoom] = useState(ROLETAS_FOOTBALL[0].id);
@@ -45,7 +45,6 @@ export function FootballStudioDashboard() {
     setSelectedSlug(null);
   };
 
-  // Top números (resultados mais frequentes)
   const topNumbers = useMemo(() => {
     if (!history || history.length === 0) return [];
     
@@ -61,7 +60,6 @@ export function FootballStudioDashboard() {
       .slice(0, 3);
   }, [history]);
 
-  // Últimos 3 resultados
   const getLastThree = () => {
     if (!history || history.length === 0) return ['--', '--', '--'];
     return history.slice(0, 3).map((item: any) => 
@@ -85,7 +83,6 @@ export function FootballStudioDashboard() {
 
   return (
     <div className="p-4 space-y-4">
-      {/* Status */}
       <div className="flex items-center gap-2 text-xs">
         <span className={`w-2 h-2 rounded-full ${isConnected && isRealData ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
         <span className={isConnected && isRealData ? 'text-emerald-400' : 'text-yellow-400'}>
@@ -98,7 +95,6 @@ export function FootballStudioDashboard() {
         )}
       </div>
 
-      {/* Menu de Mesas */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 flex-wrap">
         {ROLETAS_FOOTBALL.map((r) => (
           <button
@@ -122,9 +118,7 @@ export function FootballStudioDashboard() {
         ))}
       </div>
 
-      {/* Grid Principal */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        {/* Coluna Esquerda - Catálogo */}
         <div className={`xl:col-span-2 transition-all duration-300 ${showCatalog ? 'block' : 'hidden xl:block'}`}>
           <div className="bg-bg-card border border-border-default rounded-2xl p-3">
             <div className="flex items-center justify-between mb-3">
@@ -168,7 +162,6 @@ export function FootballStudioDashboard() {
           </div>
         </div>
 
-        {/* Coluna Central - Vídeo */}
         <div className="xl:col-span-7">
           {showVideo && selectedSlug ? (
             <LiveGameView
@@ -187,7 +180,6 @@ export function FootballStudioDashboard() {
           )}
         </div>
 
-        {/* Coluna Direita - Grupos */}
         <div className="xl:col-span-3 space-y-4">
           <div className="bg-bg-card border border-border-default rounded-2xl p-4">
             <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">📈 Grupos</h3>
@@ -239,7 +231,6 @@ export function FootballStudioDashboard() {
             </div>
           </div>
 
-          {/* Assertividade */}
           <div className="bg-bg-card border border-border-default rounded-2xl p-4">
             <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">🎯 Assertividade</h3>
             <div className="space-y-3">
@@ -268,7 +259,6 @@ export function FootballStudioDashboard() {
         </div>
       </div>
 
-      {/* Signal Generator - Igual a Roleta */}
       <div className="grid grid-cols-1 gap-4">
         <div className="bg-bg-card border border-border-default rounded-2xl p-4">
           <div className="flex items-center justify-between mb-4">
@@ -284,7 +274,6 @@ export function FootballStudioDashboard() {
             <button
               onClick={() => {
                 if (signals) {
-                  // Mostra sinal gerado
                   alert(`🎯 Sinal: ${signals.predicao}\nConfiança: ${signals.confianca}%\nStreak: ${signals.streak.tipo} ${signals.streak.tamanho}x`);
                 }
               }}
@@ -315,7 +304,6 @@ export function FootballStudioDashboard() {
         </div>
       </div>
 
-      {/* Histórico Completo em Baixo */}
       <div className="bg-bg-card border border-border-default rounded-2xl overflow-hidden">
         <div className="p-4 border-b border-border-default flex justify-between items-center">
           <h3 className="font-bold text-text-primary">📊 Histórico Completo</h3>
@@ -364,6 +352,3 @@ export function FootballStudioDashboard() {
     </div>
   );
 }
-
-// Importações necessárias
-import { Sparkles, Brain } from 'lucide-react';

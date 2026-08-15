@@ -33,7 +33,7 @@ class FootballStudioService {
   private history: FootballStudioRound[] = [];
   private pollingInterval: NodeJS.Timeout | null = null;
   private lastUpdate: Date | null = null;
-  private isConnected: boolean = false;
+  private connected: boolean = false;
 
   async fetchHistory(): Promise<FootballStudioRound[]> {
     try {
@@ -44,11 +44,11 @@ class FootballStudioService {
       const data: FootballStudioRound[] = await response.json();
       this.history = data.reverse();
       this.lastUpdate = new Date();
-      this.isConnected = true;
+      this.connected = true;
       return this.history;
     } catch (error) {
       console.error('Erro ao buscar historico:', error);
-      this.isConnected = false;
+      this.connected = false;
       return [];
     }
   }
@@ -79,7 +79,6 @@ class FootballStudioService {
 
   getLastNumbers(count: number = 10): number[] {
     return this.history.slice(-count).reverse().map(r => {
-      // Converte resultado para número: H=1, D=0, A=-1
       if (r.resultado === 'H') return 1;
       if (r.resultado === 'D') return 0;
       return -1;
@@ -153,7 +152,7 @@ class FootballStudioService {
   }
 
   isConnected(): boolean {
-    return this.isConnected;
+    return this.connected;
   }
 }
 
