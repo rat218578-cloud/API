@@ -122,6 +122,7 @@ def api_login():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 @app.route('/api/start-game-v2', methods=['GET'])
 def api_start_game():
     try:
@@ -219,6 +220,7 @@ def api_start_game():
         print(f"Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
+
 @app.route('/api/roulette/live', methods=['GET'])
 def get_live_numbers():
     try:
@@ -254,78 +256,16 @@ def get_live_numbers():
         print(f"Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/auth/validate', methods=['GET'])
-def api_validate():
-    try:
-        auth_header = request.headers.get('Authorization')
-        if auth_header:
-            return jsonify({'valid': True}), 200
-        return jsonify({'valid': False}), 200
-    except:
-        return jsonify({'valid': False}), 200
 
-@app.route('/api/auth/logout', methods=['POST'])
-def api_logout():
-    apigames.stop_polling()
-    try:
-        auth_header = request.headers.get('Authorization')
-        if auth_header:
-            token = auth_header.replace('Bearer ', '')
-            payload = jwt_manager.verify_token(token)
-            if payload:
-                session_service.deactivate_session(payload.get('user_id'))
-    except:
-        pass
-    return jsonify({'success': True}), 200
-
-@app.route('/api/auth/refresh', methods=['POST'])
-def api_refresh():
-    try:
-        data = request.json
-        refresh_token = data.get('refresh_token')
-        if not refresh_token:
-            return jsonify({'error': 'Refresh token nao fornecido'}), 400
-        result = session_service.refresh_access_token(refresh_token)
-        if not result:
-            return jsonify({'error': 'Refresh token invalido'}), 401
-        return jsonify(result), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
-def serve_frontend(path):
-    if path.startswith('api/'):
-        return jsonify({'error': 'Not found'}), 404
-    if path and os.path.exists(os.path.join('dist', path)):
-        return send_from_directory('dist', path)
-    return send_from_directory('dist', 'index.html')
-
-if __name__ == '__main__':
-    print("=" * 70)
-    print("API PROXY - PLAYTECH FIX")
-    print("=" * 70)
-    print(f"API Base: {API_BASE}")
-    print(f"Polling: 2 segundos")
-    print(f"Rodando em: http://localhost:5000")
-    print("=" * 70)
-    print("Mapeamento Playtech:")
-    for gamecode, slug in PLAYTECH_MAP.items():
-        print(f"   {gamecode} -> {slug}")
-    print("=" * 70)
-    
-    try:
-        session_service.cleanup_expired()
-    except:
-        pass
-    
-    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
-
+# ============================================================
+# 🎯 ROTA DO FOOTBALL STUDIO - HISTORICO
+# ============================================================
 @app.route('/api/football-studio/history', methods=['GET'])
 def get_football_studio_history():
     try:
         logger.info("📊 Buscando historico do Football Studio...")
         response = requests.get('https://app.domcroupier.com/inc/historico.php', timeout=10)
+        
         if response.status_code == 200:
             data = response.json()
             logger.info(f"✅ {len(data)} registros encontrados")
@@ -341,3 +281,84 @@ def get_football_studio_history():
     except Exception as e:
         logger.error(f"❌ Erro no Football Studio: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/auth/validate', methods=['GET'])
+def api_validate():
+    try:
+        auth_header = request.headers.get('Authorization')
+        if auth_header:
+            return jsonify({'valid': True}), 200
+        return jsonify({'valid': False}), 200
+    except:
+        return jsonify({'valid': False}), 200
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+def api_logout():
+    apigames.stop_polling()
+    try:
+        auth_header = request.headers.get('Authorization')
+        if auth_header:
+            token = auth_header.replace('Bearer ', '')
+            payload = jwt_manager.verify_token(token)
+            if payload:
+                session_service.deactivate_session(payload.get('user_id'))
+    except:
+        pass
+    return jsonify({'success': True}), 200
+
+
+@app.route('/api/auth/refresh', methods=['POST'])
+def api_refresh():
+    try:
+        data = request.json
+        refresh_token = data.get('refresh_token')
+        if not refresh_token:
+            return jsonify({'error': 'Refresh token nao fornecido'}), 400
+        result = session_service.refresh_access_token(refresh_token)
+        if not result:
+            return jsonify({'error': 'Refresh token invalido'}), 401
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_frontend(path):
+    if path.startswith('api/'):
+        return jsonify({'error': 'Not found'}), 404
+    if path and os.path.exists(os.path.join('dist', path)):
+        return send_from_directory('dist', path)
+    return send_from_directory('dist', 'index.html')
+
+
+if __name__ == '__main__':
+    print("=" * 70)
+    print("API PROXY - PLAYTECH FIX + FOOTBALL STUDIO")
+    print("=" * 70)
+    print(f"API Base: {API_BASE}")
+    print(f"Polling: 2 segundos")
+    print(f"Rodando em: http://localhost:5000")
+    print("=" * 70)
+    print("Mapeamento Playtech:")
+    for gamecode, slug in PLAYTECH_MAP.items():
+        print(f"   {gamecode} -> {slug}")
+    print("=" * 70)
+    print("Rotas disponiveis:")
+    print("   /api/auth/login")
+    print("   /api/start-game-v2")
+    print("   /api/roulette/live")
+    print("   /api/football-studio/history  🆕")
+    print("   /api/auth/validate")
+    print("   /api/auth/logout")
+    print("   /api/auth/refresh")
+    print("=" * 70)
+    
+    try:
+        session_service.cleanup_expired()
+    except:
+        pass
+    
+    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
