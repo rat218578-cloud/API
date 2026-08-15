@@ -6,30 +6,42 @@ interface LiveGameViewProps {
   slug: string;
   isOpen: boolean;
   onClose: () => void;
+  gameId?: string; // ✅ NOVO: gameId específico da mesa
 }
 
-export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
+export function LiveGameView({ slug, isOpen, onClose, gameId }: LiveGameViewProps) {
   const [loading, setLoading] = useState(false);
   const [gameUrl, setGameUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const loadAttempts = useRef(0);
+  const lastGameId = useRef<string | null>(null);
 
-  const roleta = ROLETAS.find(r => r.slug === slug);
+  // ✅ Encontra a roleta com o gameId específico
+  const roleta = ROLETAS.find(r => 
+    (gameId && r.gameId === gameId) || r.slug === slug
+  );
   const cor = roleta?.cor || '#6C3CE1';
 
   useEffect(() => {
     if (isOpen && slug) {
-      gameLinkService.forceRefresh(slug);
-      loadAttempts.current = 0;
-      loadGame();
+      // ✅ FORÇA RECARREGAR QUANDO gameId MUDA
+      if (lastGameId.current !== gameId) {
+        console.log('🔄 GameId mudou, recarregando:', gameId);
+        lastGameId.current = gameId || null;
+        gameLinkService.forceRefresh(slug);
+        loadAttempts.current = 0;
+        setGameUrl(null); // ✅ LIMPA A URL ANTIGA
+        loadGame();
+      } else if (!gameUrl) {
+        loadGame();
+      }
     }
-  }, [isOpen, slug]);
+  }, [isOpen, slug, gameId]);
 
   const loadGame = async () => {
     setLoading(true);
     setError(null);
-    setGameUrl(null);
 
     try {
       const token = localStorage.getItem('access_token');
@@ -39,8 +51,20 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
         return;
       }
 
-      const url = await gameLinkService.getGameUrl(slug);
+      // ✅ USA O gameId SE FOR FORNECIDO
+      let urlSlug = slug;
+      if (gameId) {
+        // Procura a roleta com o gameId
+        const roletaComGameId = ROLETAS.find(r => r.gameId === gameId);
+        if (roletaComGameId) {
+          urlSlug = roletaComGameId.slug;
+          console.log(`🎮 Usando gameId: ${gameId} -> slug: ${urlSlug}`);
+        }
+      }
+
+      const url = await gameLinkService.getGameUrl(urlSlug);
       if (url) {
+        console.log(`✅ URL carregada para gameId: ${gameId || 'default'}`);
         setGameUrl(url);
       } else {
         setError('Não foi possível gerar o link. Tente novamente.');
@@ -87,6 +111,11 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
           />
           <span className="text-sm font-bold text-text-primary">
             {roleta?.nome || slug}
+            {gameId && (
+              <span className="text-[10px] text-text-muted ml-2">
+                ({gameId})
+              </span>
+            )}
           </span>
           {gameUrl && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 animate-pulse">
@@ -107,6 +136,8 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
           <button
             onClick={() => {
               gameLinkService.forceRefresh(slug);
+              loadAttempts.current = 0;
+              setGameUrl(null);
               loadGame();
             }}
             disabled={loading}
@@ -135,7 +166,7 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
               <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4" style={{ color: cor }} />
-              <p className="text-text-muted text-sm">Gerando novo token...</p>
+              <p className="text-text-muted text-sm">Gerando novo token para {gameId || slug}...</p>
             </div>
           </div>
         ) : error ? (
@@ -157,6 +188,7 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
           </div>
         ) : gameUrl ? (
           <iframe
+            key={gameUrl + gameId} // ✅ FORÇA RECARREGAR QUANDO gameId OU URL MUDAM
             src={gameUrl}
             className="w-full h-full border-0"
             allow="autoplay; fullscreen; camera; microphone; accelerometer; gyroscope"
@@ -190,7 +222,7 @@ export function LiveGameView({ slug, isOpen, onClose }: LiveGameViewProps) {
 
       <div className="p-2 bg-bg-secondary/50 border-t border-border-default">
         <div className="flex items-center justify-between text-[10px] text-text-muted">
-          <span>{roleta?.nome || slug}</span>
+          <span>{roleta?.nome || slug} {gameId && `(${gameId})`}</span>
           <div className="flex items-center gap-3">
             <span className="text-[8px] text-amber-400">Token único por sessão</span>
             <button
