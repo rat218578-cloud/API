@@ -17,7 +17,7 @@ interface FootballStudioHistoryProps {
 
 export function FootballStudioHistory({ history, shoeChanges }: FootballStudioHistoryProps) {
   const [showAll, setShowAll] = useState(false);
-  const [viewMode, setViewMode] = useState<'numero' | 'letra'>('letra');
+  const [viewMode, setViewMode] = useState<'letras' | 'numeros'>('letras');
   
   // Filtra apenas rodadas válidas (ignora trocas de baralho)
   const validRounds = history.filter((item: any) => !item.troca_de_baralho);
@@ -47,14 +47,11 @@ export function FootballStudioHistory({ history, shoeChanges }: FootballStudioHi
     return 'bg-bg-tertiary text-text-muted border-border-default';
   };
 
-  // Extrai o número da carta (ex: K, Q, J, 10, 9, A)
-  const getCardNumber = (card: string) => {
+  // Extrai o número/valor da carta (ex: K, Q, J, 10, 9, A, 5, 3, 2)
+  const getCardValue = (card: string) => {
     if (!card) return '?';
     const num = card.slice(0, -1);
-    if (num === 'A') return 'A';
-    if (num === 'K') return 'K';
-    if (num === 'Q') return 'Q';
-    if (num === 'J') return 'J';
+    // Mantém o valor exato: A, K, Q, J, 10, 9, 8, 7, 6, 5, 4, 3, 2
     return num;
   };
 
@@ -69,13 +66,29 @@ export function FootballStudioHistory({ history, shoeChanges }: FootballStudioHi
           </span>
         </div>
         <div className="flex items-center gap-3 text-xs flex-wrap">
-          {/* Botão Número / Letra */}
-          <button
-            onClick={() => setViewMode(viewMode === 'numero' ? 'letra' : 'numero')}
-            className="px-3 py-1 rounded-lg bg-bg-tertiary border border-border-default hover:border-accent-pink transition-colors text-xs font-medium flex items-center gap-1"
-          >
-            {viewMode === 'numero' ? '🔢 Número' : '🔤 Letra'}
-          </button>
+          {/* ✅ Botões Letras / Números */}
+          <div className="flex rounded-lg overflow-hidden border border-border-default">
+            <button
+              onClick={() => setViewMode('letras')}
+              className={`px-3 py-1 text-xs font-medium transition-colors ${
+                viewMode === 'letras' 
+                  ? 'bg-accent-pink text-white' 
+                  : 'bg-bg-tertiary text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              Letras
+            </button>
+            <button
+              onClick={() => setViewMode('numeros')}
+              className={`px-3 py-1 text-xs font-medium transition-colors ${
+                viewMode === 'numeros' 
+                  ? 'bg-accent-pink text-white' 
+                  : 'bg-bg-tertiary text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              Números
+            </button>
+          </div>
           
           <span className="text-text-muted flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -103,7 +116,7 @@ export function FootballStudioHistory({ history, shoeChanges }: FootballStudioHi
         <div className="flex gap-6 min-w-max">
           {columns.map((column, colIndex) => (
             <div key={colIndex} className="flex flex-col gap-1">
-              {/* Cabeçalho da coluna */}
+              {/* Cabeçalho da coluna - apenas CASA na primeira */}
               <div className="text-[8px] text-text-muted text-center mb-1 font-mono">
                 {colIndex === 0 ? 'CASA' : ''}
               </div>
@@ -113,12 +126,14 @@ export function FootballStudioHistory({ history, shoeChanges }: FootballStudioHi
                 const letra = getResultadoLetra(round.resultado);
                 const color = getResultadoColor(round.resultado);
                 
+                // ✅ Define o que mostrar baseado no modo
                 let displayText = '';
-                if (viewMode === 'letra') {
+                if (viewMode === 'letras') {
                   displayText = letra; // C, V, E
                 } else {
-                  const cardNum = getCardNumber(round.home);
-                  displayText = cardNum; // 5, K, A, 10, etc
+                  // Modo números: mostra o valor da carta da casa
+                  const cardValue = getCardValue(round.home);
+                  displayText = cardValue; // 5, K, A, 10, etc
                 }
                 
                 return (
@@ -141,20 +156,20 @@ export function FootballStudioHistory({ history, shoeChanges }: FootballStudioHi
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1">
             <span className="w-3 h-3 rounded-full bg-emerald-500/20 border border-emerald-500/30" />
-            CASA
+            CASA (C)
           </span>
           <span className="flex items-center gap-1">
             <span className="w-3 h-3 rounded-full bg-red-500/20 border border-red-500/30" />
-            VISITANTE
+            VISITANTE (V)
           </span>
           <span className="flex items-center gap-1">
             <span className="w-3 h-3 rounded-full bg-yellow-500/20 border border-yellow-500/30" />
-            EMPATE
+            EMPATE (E)
           </span>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-[10px] bg-bg-tertiary px-2 py-0.5 rounded-full">
-            {viewMode === 'numero' ? '🔢 Mostrando números' : '🔤 Mostrando letras (C/V/E)'}
+            {viewMode === 'letras' ? '🔤 Mostrando letras' : '🔢 Mostrando números'}
           </span>
           <span>
             Total: {validRounds.length} rodadas
