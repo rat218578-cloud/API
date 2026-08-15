@@ -27,7 +27,7 @@ export const ROLETAS_FOOTBALL = [
   {
     id: 'studio_4',
     nome: '⚽ Football Studio Ao Vivo',
-    slug: 'evolution/football-studio Ao Vivo',
+    slug: 'evolution/football-studioAoVivo',
     gameId: 'TopCard000000004',
     provedor: 'Evolution',
     cor: '#22c55e'
