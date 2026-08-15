@@ -4,7 +4,7 @@ export interface FootballStudioRound {
   horario: string;
   home: string;
   away: string;
-  resultado: 'H' | 'A' | 'D';  // ✅ D = Draw (Empate)
+  resultado: 'H' | 'A' | 'D';
   troca_de_baralho: boolean;
 }
 
@@ -52,8 +52,9 @@ class FootballStudioService {
       const data: FootballStudioResponse = await response.json();
       console.log(`✅ ${data.total} registros recebidos da API.`);
       
-      // Mantém ordem cronológica (mais antigo primeiro)
-      this.history = data.history.reverse();
+      // ✅ CORRETO: Mantém a ordem original (mais recente primeiro)
+      // A API já retorna do mais recente para o mais antigo
+      this.history = data.history;
       this.lastUpdate = new Date();
       this.connected = data.success;
       return this.history;
@@ -85,14 +86,15 @@ class FootballStudioService {
   }
 
   getHistory(limit: number = 500): FootballStudioRound[] {
-    return this.history.slice(-limit).reverse();
+    // ✅ Retorna os primeiros 'limit' registros (mais recentes)
+    return this.history.slice(0, limit);
   }
 
   getStatistics() {
     const total = this.history.length;
     const wins = this.history.filter(r => r.resultado === 'H').length;
     const losses = this.history.filter(r => r.resultado === 'A').length;
-    const draws = this.history.filter(r => r.resultado === 'D').length;  // ✅ AGORA CONTA EMPATES
+    const draws = this.history.filter(r => r.resultado === 'D').length;
     return { total, wins, losses, draws };
   }
 
@@ -103,10 +105,11 @@ class FootballStudioService {
   getSignals() {
     if (this.history.length < 10) return null;
 
-    const last10 = this.history.slice(-10);
+    // ✅ Pega os 10 mais recentes (primeiros da lista)
+    const last10 = this.history.slice(0, 10);
     const wins = last10.filter(r => r.resultado === 'H').length;
     const losses = last10.filter(r => r.resultado === 'A').length;
-    const draws = last10.filter(r => r.resultado === 'D').length;  // ✅ EMPATES INCLUÍDOS
+    const draws = last10.filter(r => r.resultado === 'D').length;
 
     const total = last10.length;
     const probCasa = (wins / total) * 100;
@@ -116,8 +119,8 @@ class FootballStudioService {
     let streak = 0;
     let streakType = '';
     if (last10.length > 0) {
-      const last = last10[last10.length - 1];
-      for (let i = last10.length - 1; i >= 0; i--) {
+      const last = last10[0]; // ✅ Primeiro = mais recente
+      for (let i = 0; i < last10.length; i++) {
         if (last10[i].resultado === last.resultado) {
           streak++;
         } else {
