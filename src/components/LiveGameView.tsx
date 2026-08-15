@@ -6,10 +6,11 @@ interface LiveGameViewProps {
   slug: string;
   isOpen: boolean;
   onClose: () => void;
-  gameId?: string; // ✅ NOVO: gameId específico da mesa
+  gameId?: string;
+  urlDireta?: string; // ✅ NOVO: URL direta para Football Studio
 }
 
-export function LiveGameView({ slug, isOpen, onClose, gameId }: LiveGameViewProps) {
+export function LiveGameView({ slug, isOpen, onClose, gameId, urlDireta }: LiveGameViewProps) {
   const [loading, setLoading] = useState(false);
   const [gameUrl, setGameUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -17,21 +18,25 @@ export function LiveGameView({ slug, isOpen, onClose, gameId }: LiveGameViewProp
   const loadAttempts = useRef(0);
   const lastGameId = useRef<string | null>(null);
 
-  // ✅ Encontra a roleta com o gameId específico
   const roleta = ROLETAS.find(r => 
     (gameId && r.gameId === gameId) || r.slug === slug
   );
   const cor = roleta?.cor || '#6C3CE1';
 
+  // ✅ GERA URL DIRETA PARA FOOTBALL STUDIO
+  const gerarUrlDireta = (gameId: string): string => {
+    const lobbyId = crypto.randomUUID().replace(/-/g, '');
+    return `https://sortenabet.evo-games.com/frontend/evo/r2/#category=all_games&game=topcard&table_id=${gameId}&lobby_launch_id=${lobbyId}`;
+  };
+
   useEffect(() => {
     if (isOpen && slug) {
-      // ✅ FORÇA RECARREGAR QUANDO gameId MUDA
       if (lastGameId.current !== gameId) {
         console.log('🔄 GameId mudou, recarregando:', gameId);
         lastGameId.current = gameId || null;
         gameLinkService.forceRefresh(slug);
         loadAttempts.current = 0;
-        setGameUrl(null); // ✅ LIMPA A URL ANTIGA
+        setGameUrl(null);
         loadGame();
       } else if (!gameUrl) {
         loadGame();
@@ -51,18 +56,17 @@ export function LiveGameView({ slug, isOpen, onClose, gameId }: LiveGameViewProp
         return;
       }
 
-      // ✅ USA O gameId SE FOR FORNECIDO
-      let urlSlug = slug;
-      if (gameId) {
-        // Procura a roleta com o gameId
-        const roletaComGameId = ROLETAS.find(r => r.gameId === gameId);
-        if (roletaComGameId) {
-          urlSlug = roletaComGameId.slug;
-          console.log(`🎮 Usando gameId: ${gameId} -> slug: ${urlSlug}`);
-        }
+      let url = null;
+
+      // ✅ SE FOR FOOTBALL STUDIO (gameId TopCard), USA URL DIRETA
+      if (gameId && gameId.startsWith('TopCard')) {
+        url = gerarUrlDireta(gameId);
+        console.log(`🎯 Football Studio - URL direta gerada para gameId: ${gameId}`);
+      } else {
+        // ✅ PARA OUTROS JOGOS, USA A API NORMAL
+        url = await gameLinkService.getGameUrl(slug);
       }
 
-      const url = await gameLinkService.getGameUrl(urlSlug);
       if (url) {
         console.log(`✅ URL carregada para gameId: ${gameId || 'default'}`);
         setGameUrl(url);
@@ -166,7 +170,7 @@ export function LiveGameView({ slug, isOpen, onClose, gameId }: LiveGameViewProp
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
               <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4" style={{ color: cor }} />
-              <p className="text-text-muted text-sm">Gerando novo token para {gameId || slug}...</p>
+              <p className="text-text-muted text-sm">Carregando {gameId || slug}...</p>
             </div>
           </div>
         ) : error ? (
@@ -188,7 +192,7 @@ export function LiveGameView({ slug, isOpen, onClose, gameId }: LiveGameViewProp
           </div>
         ) : gameUrl ? (
           <iframe
-            key={gameUrl + gameId} // ✅ FORÇA RECARREGAR QUANDO gameId OU URL MUDAM
+            key={gameUrl + gameId}
             src={gameUrl}
             className="w-full h-full border-0"
             allow="autoplay; fullscreen; camera; microphone; accelerometer; gyroscope"
