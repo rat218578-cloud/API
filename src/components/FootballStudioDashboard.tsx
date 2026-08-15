@@ -2,12 +2,11 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { footballStudioService, ROLETAS_FOOTBALL } from '../services/footballStudioService';
 import { LiveGameView } from './LiveGameView';
-import { Loader2, ChevronDown, ChevronUp, Sparkles, Brain } from 'lucide-react';
+import { ChevronDown, ChevronUp, Sparkles, Brain } from 'lucide-react';
 
 export function FootballStudioDashboard() {
   const [activeRoom, setActiveRoom] = useState(ROLETAS_FOOTBALL[0].id);
   const [history, setHistory] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [showVideo, setShowVideo] = useState(false);
   const [showCatalog, setShowCatalog] = useState(true);
@@ -19,14 +18,23 @@ export function FootballStudioDashboard() {
   const [shoeChanges, setShoeChanges] = useState<any[]>([]);
   
   const isMounted = useRef(true);
+  const isFirstLoad = useRef(true);
 
-  // ✅ PEGA A MESA ATUAL
   const mesaAtual = ROLETAS_FOOTBALL.find(m => m.id === activeRoom) || ROLETAS_FOOTBALL[0];
   const temHistorico = mesaAtual.temHistorico || false;
 
+  // ✅ ABRE O VÍDEO AUTOMATICAMENTE NA PRIMEIRA MESA
+  useEffect(() => {
+    if (isFirstLoad.current && !showVideo) {
+      isFirstLoad.current = false;
+      const primeiraMesa = ROLETAS_FOOTBALL[0];
+      setSelectedSlug(primeiraMesa.slug);
+      setShowVideo(true);
+    }
+  }, []);
+
   useEffect(() => {
     isMounted.current = true;
-    setLoading(true);
     
     const onUpdate = (newHistory: any[]) => {
       if (!isMounted.current) return;
@@ -40,21 +48,17 @@ export function FootballStudioDashboard() {
       setIsConnected(footballStudioService.isConnected());
       setTotalNumbers(newHistory.length);
       setLastUpdate(footballStudioService.getLastUpdate());
-      setLoading(false);
     };
 
-    // ✅ SÓ BUSCA HISTORICO SE A MESA TIVER
     if (temHistorico) {
       footballStudioService.startPolling(2000, onUpdate);
     } else {
-      // ✅ MESA SEM HISTORICO - LIMPA OS DADOS
       setHistory([]);
       setStats({ total: 0, wins: 0, losses: 0, draws: 0 });
       setSignals(null);
       setIsConnected(false);
       setTotalNumbers(0);
       setShoeChanges([]);
-      setLoading(false);
     }
 
     return () => {
@@ -132,17 +136,6 @@ export function FootballStudioDashboard() {
     if (!last) return 'Aguardando...';
     return getResultadoDisplay(last.resultado);
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-accent-pink mx-auto mb-4" />
-          <p className="text-text-muted">Carregando Football Studio...</p>
-        </div>
-      </div>
-    );
-  }
 
   const lastThree = getLastThree();
   const lastResult = getLastResult();
