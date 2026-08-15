@@ -45,21 +45,45 @@ export function FootballStudioDashboard() {
     setSelectedSlug(null);
   };
 
-  const topNumbers = useMemo(() => {
+  // Função para extrair número e naipe da carta
+  const getCardInfo = (card: string) => {
+    if (!card) return { number: '?', suit: '?' };
+    const number = card.slice(0, -1);
+    const suit = card.slice(-1);
+    const suitEmoji: Record<string, string> = {
+      '♥': '♥️', '♦': '♦️', '♠': '♠️', '♣': '♣️'
+    };
+    const suitColors: Record<string, string> = {
+      '♥': 'text-red-400',
+      '♦': 'text-red-400',
+      '♠': 'text-text-primary',
+      '♣': 'text-text-primary'
+    };
+    return { number, suit: suitEmoji[suit] || suit, color: suitColors[suit] || 'text-text-primary' };
+  };
+
+  // Top cartas (mais frequentes)
+  const topCards = useMemo(() => {
     if (!history || history.length === 0) return [];
     
+    // Conta todas as cartas (Casa + Visitante)
     const counts: Record<string, number> = {};
     history.forEach((item: any) => {
-      const key = item.resultado === 'H' ? 'CASA' : item.resultado === 'A' ? 'VISITANTE' : 'EMPATE';
-      counts[key] = (counts[key] || 0) + 1;
+      const cards = [item.home, item.away];
+      cards.forEach((card: string) => {
+        if (card) {
+          counts[card] = (counts[card] || 0) + 1;
+        }
+      });
     });
     
     return Object.entries(counts)
-      .map(([name, count]) => ({ name, count }))
+      .map(([card, count]) => ({ card, count }))
       .sort((a, b) => b.count - a.count)
-      .slice(0, 3);
+      .slice(0, 8);
   }, [history]);
 
+  // Últimos 3 resultados
   const getLastThree = () => {
     if (!history || history.length === 0) return ['--', '--', '--'];
     return history.slice(0, 3).map((item: any) => 
@@ -83,6 +107,7 @@ export function FootballStudioDashboard() {
 
   return (
     <div className="p-4 space-y-4">
+      {/* Status */}
       <div className="flex items-center gap-2 text-xs">
         <span className={`w-2 h-2 rounded-full ${isConnected && isRealData ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
         <span className={isConnected && isRealData ? 'text-emerald-400' : 'text-yellow-400'}>
@@ -95,6 +120,7 @@ export function FootballStudioDashboard() {
         )}
       </div>
 
+      {/* Menu de Mesas */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 flex-wrap">
         {ROLETAS_FOOTBALL.map((r) => (
           <button
@@ -118,7 +144,9 @@ export function FootballStudioDashboard() {
         ))}
       </div>
 
+      {/* Grid Principal */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+        {/* Coluna Esquerda - Catálogo com Cartas */}
         <div className={`xl:col-span-2 transition-all duration-300 ${showCatalog ? 'block' : 'hidden xl:block'}`}>
           <div className="bg-bg-card border border-border-default rounded-2xl p-3">
             <div className="flex items-center justify-between mb-3">
@@ -135,33 +163,33 @@ export function FootballStudioDashboard() {
 
             <div className="space-y-1 max-h-[200px] overflow-y-auto">
               <div className="grid grid-cols-3 text-[8px] text-text-muted uppercase py-1 border-b border-border-default text-center">
-                <span>Resultado</span><span>Total</span><span>%</span>
+                <span>Carta</span><span>Total</span><span>%</span>
               </div>
-              {topNumbers.length > 0 ? (
-                topNumbers.map((item) => (
-                  <div key={item.name} className="grid grid-cols-3 items-center py-1 text-[10px] border-b border-border-default/30 text-center">
-                    <span className={`font-bold ${
-                      item.name === 'CASA' ? 'text-emerald-400' : 
-                      item.name === 'VISITANTE' ? 'text-red-400' : 
-                      'text-yellow-400'
-                    }`}>
-                      {item.name}
-                    </span>
-                    <span className="text-text-secondary">{item.count}</span>
-                    <span className="text-text-secondary">
-                      {((item.count / totalNumbers) * 100).toFixed(1)}%
-                    </span>
-                  </div>
-                ))
+              {topCards.length > 0 ? (
+                topCards.map((item) => {
+                  const cardInfo = getCardInfo(item.card);
+                  return (
+                    <div key={item.card} className="grid grid-cols-3 items-center py-1 text-[10px] border-b border-border-default/30 text-center">
+                      <span className={`font-bold ${cardInfo.color}`}>
+                        {cardInfo.number}{cardInfo.suit}
+                      </span>
+                      <span className="text-text-secondary">{item.count}</span>
+                      <span className="text-text-secondary">
+                        {((item.count / (totalNumbers * 2)) * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                  );
+                })
               ) : (
                 <div className="text-center py-4 text-text-muted text-xs">
-                  ⏳ Aguardando dados...
+                  ⏳ Aguardando cartas...
                 </div>
               )}
             </div>
           </div>
         </div>
 
+        {/* Coluna Central - Vídeo */}
         <div className="xl:col-span-7">
           {showVideo && selectedSlug ? (
             <LiveGameView
@@ -180,6 +208,7 @@ export function FootballStudioDashboard() {
           )}
         </div>
 
+        {/* Coluna Direita - Grupos */}
         <div className="xl:col-span-3 space-y-4">
           <div className="bg-bg-card border border-border-default rounded-2xl p-4">
             <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">📈 Grupos</h3>
@@ -231,6 +260,7 @@ export function FootballStudioDashboard() {
             </div>
           </div>
 
+          {/* Assertividade */}
           <div className="bg-bg-card border border-border-default rounded-2xl p-4">
             <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">🎯 Assertividade</h3>
             <div className="space-y-3">
@@ -259,6 +289,7 @@ export function FootballStudioDashboard() {
         </div>
       </div>
 
+      {/* IA de Sinais */}
       <div className="grid grid-cols-1 gap-4">
         <div className="bg-bg-card border border-border-default rounded-2xl p-4">
           <div className="flex items-center justify-between mb-4">
@@ -304,6 +335,7 @@ export function FootballStudioDashboard() {
         </div>
       </div>
 
+      {/* Histórico Completo com Cartas */}
       <div className="bg-bg-card border border-border-default rounded-2xl overflow-hidden">
         <div className="p-4 border-b border-border-default flex justify-between items-center">
           <h3 className="font-bold text-text-primary">📊 Histórico Completo</h3>
@@ -323,28 +355,36 @@ export function FootballStudioDashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border-default">
-              {history.slice(0, 50).map((round: any, index: number) => (
-                <tr key={index} className="hover:bg-bg-tertiary/50 transition-colors">
-                  <td className="p-3 text-text-secondary text-xs">
-                    {new Date(round.horario).toLocaleTimeString('pt-BR')}
-                  </td>
-                  <td className="p-3 text-center font-medium text-emerald-400">
-                    {round.home}
-                  </td>
-                  <td className="p-3 text-center">
-                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                      round.resultado === 'H' ? 'bg-emerald-500/20 text-emerald-400' :
-                      round.resultado === 'A' ? 'bg-red-500/20 text-red-400' :
-                      'bg-yellow-500/20 text-yellow-400'
-                    }`}>
-                      {round.resultado === 'H' ? 'CASA' : round.resultado === 'A' ? 'VISITANTE' : 'EMPATE'}
-                    </span>
-                  </td>
-                  <td className="p-3 text-center font-medium text-red-400">
-                    {round.away}
-                  </td>
-                </tr>
-              ))}
+              {history.slice(0, 50).map((round: any, index: number) => {
+                const homeCard = getCardInfo(round.home);
+                const awayCard = getCardInfo(round.away);
+                return (
+                  <tr key={index} className="hover:bg-bg-tertiary/50 transition-colors">
+                    <td className="p-3 text-text-secondary text-xs">
+                      {new Date(round.horario).toLocaleTimeString('pt-BR')}
+                    </td>
+                    <td className="p-3 text-center font-medium">
+                      <span className={`${homeCard.color}`}>
+                        {homeCard.number}{homeCard.suit}
+                      </span>
+                    </td>
+                    <td className="p-3 text-center">
+                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                        round.resultado === 'H' ? 'bg-emerald-500/20 text-emerald-400' :
+                        round.resultado === 'A' ? 'bg-red-500/20 text-red-400' :
+                        'bg-yellow-500/20 text-yellow-400'
+                      }`}>
+                        {round.resultado === 'H' ? 'CASA' : round.resultado === 'A' ? 'VISITANTE' : 'EMPATE'}
+                      </span>
+                    </td>
+                    <td className="p-3 text-center font-medium">
+                      <span className={`${awayCard.color}`}>
+                        {awayCard.number}{awayCard.suit}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
