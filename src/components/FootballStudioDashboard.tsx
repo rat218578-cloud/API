@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { footballStudioService, ROLETAS_FOOTBALL } from '../services/footballStudioService';
 import { LiveGameView } from './LiveGameView';
-import { Loader2, ChevronDown, ChevronUp, Sparkles, Brain } from 'lucide-react';
+import { Loader2, ChevronDown, ChevronUp, Sparkles, Brain, RefreshCw, Eye, EyeOff } from 'lucide-react';
 
 export function FootballStudioDashboard() {
   const [activeRoom, setActiveRoom] = useState(ROLETAS_FOOTBALL[0].id);
@@ -16,8 +16,9 @@ export function FootballStudioDashboard() {
   const [signals, setSignals] = useState<any>(null);
   const [stats, setStats] = useState({ total: 0, wins: 0, losses: 0, draws: 0 });
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [showCards, setShowCards] = useState(true); // ✅ Alterna entre cartas e letras
+  const [shoeChanges, setShoeChanges] = useState<any[]>([]); // ✅ Registra trocas de baralho
   
-  // ✅ Referência para controle de montagem
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -27,7 +28,10 @@ export function FootballStudioDashboard() {
     const onUpdate = (newHistory: any[]) => {
       if (!isMounted.current) return;
       
-      console.log('📊 Atualizando dashboard com', newHistory.length, 'registros');
+      // ✅ Detecta trocas de baralho
+      const changes = newHistory.filter((item: any) => item.troca_de_baralho === true);
+      setShoeChanges(changes);
+      
       setHistory(newHistory);
       setStats(footballStudioService.getStatistics());
       setSignals(footballStudioService.getSignals());
@@ -37,7 +41,6 @@ export function FootballStudioDashboard() {
       setLoading(false);
     };
 
-    // ✅ Inicia polling com intervalo de 2 segundos
     footballStudioService.startPolling(2000, onUpdate);
 
     return () => {
@@ -70,12 +73,36 @@ export function FootballStudioDashboard() {
     return { number, suit: suitEmoji[suit] || suit, color: suitColors[suit] || 'text-text-primary' };
   };
 
+  // ✅ Formata o resultado para exibição
+  const getResultadoDisplay = (resultado: string) => {
+    if (resultado === 'H') return 'CASA';
+    if (resultado === 'A') return 'VISITANTE';
+    if (resultado === 'D') return 'EMPATE';
+    return '--';
+  };
+
+  // ✅ Formata o resultado em letra única (C/V/E)
+  const getResultadoLetra = (resultado: string) => {
+    if (resultado === 'H') return 'C';
+    if (resultado === 'A') return 'V';
+    if (resultado === 'D') return 'E';
+    return '--';
+  };
+
+  // ✅ Obtém a cor do resultado
+  const getResultadoColor = (resultado: string) => {
+    if (resultado === 'H') return 'bg-emerald-500/20 text-emerald-400';
+    if (resultado === 'A') return 'bg-red-500/20 text-red-400';
+    if (resultado === 'D') return 'bg-yellow-500/20 text-yellow-400';
+    return 'bg-bg-tertiary text-text-muted';
+  };
+
   const topCards = useMemo(() => {
     if (!history || history.length === 0) return [];
     const counts: Record<string, number> = {};
     history.forEach((item: any) => {
-      if (item.home) counts[item.home] = (counts[item.home] || 0) + 1;
-      if (item.away) counts[item.away] = (counts[item.away] || 0) + 1;
+      if (item.home && !item.troca_de_baralho) counts[item.home] = (counts[item.home] || 0) + 1;
+      if (item.away && !item.troca_de_baralho) counts[item.away] = (counts[item.away] || 0) + 1;
     });
     return Object.entries(counts)
       .map(([card, count]) => ({ card, count }))
@@ -85,22 +112,15 @@ export function FootballStudioDashboard() {
 
   const getLastThree = () => {
     if (!history || history.length === 0) return ['--', '--', '--'];
-    const recentes = history.slice(0, 3);
-    return recentes.map((item: any) => {
-      if (item.resultado === 'H') return 'C';
-      if (item.resultado === 'A') return 'V';
-      if (item.resultado === 'D') return 'E';
-      return '--';
-    });
+    const recentes = history.filter((item: any) => !item.troca_de_baralho).slice(0, 3);
+    return recentes.map((item: any) => getResultadoLetra(item.resultado));
   };
 
   const getLastResult = () => {
     if (!history || history.length === 0) return 'Aguardando...';
-    const last = history[0];
-    if (last.resultado === 'H') return 'CASA';
-    if (last.resultado === 'A') return 'VISITANTE';
-    if (last.resultado === 'D') return 'EMPATE';
-    return '--';
+    const last = history.find((item: any) => !item.troca_de_baralho);
+    if (!last) return 'Aguardando...';
+    return getResultadoDisplay(last.resultado);
   };
 
   if (loading) {
@@ -120,20 +140,31 @@ export function FootballStudioDashboard() {
 
   return (
     <div className="p-4 space-y-4">
-      {/* Status com tempo de atualização */}
-      <div className="flex items-center gap-2 text-xs">
-        <span className={`w-2 h-2 rounded-full ${isConnected && isRealData ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
-        <span className={isConnected && isRealData ? 'text-emerald-400' : 'text-yellow-400'}>
-          {isConnected && isRealData
-            ? `📡 Conectado (${totalNumbers} rodadas)`
-            : isConnected ? '⏳ Aguardando dados...' : '🔌 Falha na conexão'}
-        </span>
-        {isRealData && <span className="text-emerald-400">✅ Dados REAIS</span>}
-        {lastUpdate && (
-          <span className="text-[10px] text-text-muted">
-            ⏱ {lastUpdate.toLocaleTimeString('pt-BR')}
+      {/* Status com botão de alternância */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs">
+          <span className={`w-2 h-2 rounded-full ${isConnected && isRealData ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
+          <span className={isConnected && isRealData ? 'text-emerald-400' : 'text-yellow-400'}>
+            {isConnected && isRealData
+              ? `📡 Conectado (${totalNumbers} rodadas)`
+              : isConnected ? '⏳ Aguardando dados...' : '🔌 Falha na conexão'}
           </span>
-        )}
+          {isRealData && <span className="text-emerald-400">✅ Dados REAIS</span>}
+          {lastUpdate && (
+            <span className="text-[10px] text-text-muted">
+              ⏱ {lastUpdate.toLocaleTimeString('pt-BR')}
+            </span>
+          )}
+        </div>
+        
+        {/* ✅ Botão para alternar entre Cartas e Letras */}
+        <button
+          onClick={() => setShowCards(!showCards)}
+          className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium bg-bg-tertiary border border-border-default hover:border-accent-pink transition-colors"
+        >
+          {showCards ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+          {showCards ? 'Ver Cartas' : 'Ver Letras'}
+        </button>
       </div>
 
       {/* Menu de Mesas */}
@@ -160,7 +191,7 @@ export function FootballStudioDashboard() {
         ))}
       </div>
 
-      {/* Grid Principal - IGUAL A ROLETA */}
+      {/* Grid Principal */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
         {/* Catálogo */}
         <div className={`xl:col-span-2 transition-all duration-300 ${showCatalog ? 'block' : 'hidden xl:block'}`}>
@@ -178,7 +209,7 @@ export function FootballStudioDashboard() {
               {topCards.length > 0 ? (
                 topCards.map((item) => {
                   const cardInfo = getCardInfo(item.card);
-                  const totalRodadas = history.length || 1;
+                  const totalRodadas = history.filter((h: any) => !h.troca_de_baralho).length || 1;
                   const percentual = ((item.count / totalRodadas) * 100).toFixed(1);
                   return (
                     <div key={item.card} className="grid grid-cols-3 items-center py-1 text-[10px] border-b border-border-default/30 text-center">
@@ -217,11 +248,7 @@ export function FootballStudioDashboard() {
               <div className="text-xs font-bold text-text-primary">
                 {isRealData && history.length > 0 ? (
                   <span className="flex items-center justify-center gap-2">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                      history[0]?.resultado === 'H' ? 'bg-emerald-500/20 text-emerald-400' :
-                      history[0]?.resultado === 'A' ? 'bg-red-500/20 text-red-400' :
-                      'bg-yellow-500/20 text-yellow-400'
-                    }`}>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getResultadoColor(history.find((h: any) => !h.troca_de_baralho)?.resultado || '')}`}>
                       {lastResult}
                     </span>
                     <span className="text-[8px] text-emerald-400">● REAL</span>
@@ -317,38 +344,74 @@ export function FootballStudioDashboard() {
         )}
       </div>
 
-      {/* Histórico Completo */}
+      {/* Histórico Completo com Troca de Baralho */}
       <div className="bg-bg-card border border-border-default rounded-2xl overflow-hidden">
         <div className="p-4 border-b border-border-default flex justify-between items-center">
           <h3 className="font-bold text-text-primary">📊 Histórico Completo</h3>
           <span className="text-xs text-text-muted flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Atualizado a cada 2s • {totalNumbers} rodadas
+            {shoeChanges.length > 0 && (
+              <span className="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">
+                🔄 {shoeChanges.length} trocas de baralho
+              </span>
+            )}
           </span>
         </div>
-        <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
+        <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
           <table className="w-full text-sm">
             <thead className="bg-bg-tertiary text-text-muted text-xs uppercase sticky top-0">
-              <tr><th className="text-left p-3">Horário</th><th className="text-center p-3">Casa</th><th className="text-center p-3">Resultado</th><th className="text-center p-3">Visitante</th></tr>
+              <tr>
+                <th className="text-left p-3">Horário</th>
+                <th className="text-center p-3">Casa</th>
+                <th className="text-center p-3">Resultado</th>
+                <th className="text-center p-3">Visitante</th>
+              </tr>
             </thead>
             <tbody className="divide-y divide-border-default">
-              {history.slice(0, 50).map((round: any, index: number) => {
+              {history.slice(0, 100).map((round: any, index: number) => {
+                // ✅ Se for troca de baralho, mostra uma linha especial
+                if (round.troca_de_baralho) {
+                  return (
+                    <tr key={index} className="bg-blue-500/5 border-l-4 border-blue-500">
+                      <td className="p-3 text-text-secondary text-xs" colSpan={4}>
+                        <div className="flex items-center gap-2 text-blue-400">
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span className="font-bold">🔄 TROCA DE BARALHO</span>
+                          <span className="text-[10px] text-text-muted">
+                            {new Date(round.horario).toLocaleTimeString('pt-BR')}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+
                 const homeCard = getCardInfo(round.home);
                 const awayCard = getCardInfo(round.away);
+                
+                // ✅ Se showCards for false, mostra apenas letras (C/V/E)
+                const homeDisplay = showCards ? `${homeCard.number}${homeCard.suit}` : getResultadoLetra(round.resultado);
+                const awayDisplay = showCards ? `${awayCard.number}${awayCard.suit}` : getResultadoLetra(round.resultado);
+                const homeColor = showCards ? homeCard.color : 'text-text-primary';
+                const awayColor = showCards ? awayCard.color : 'text-text-primary';
+
                 return (
                   <tr key={index} className="hover:bg-bg-tertiary/50 transition-colors">
-                    <td className="p-3 text-text-secondary text-xs">{new Date(round.horario).toLocaleTimeString('pt-BR')}</td>
-                    <td className="p-3 text-center font-medium"><span className={homeCard.color}>{homeCard.number}{homeCard.suit}</span></td>
+                    <td className="p-3 text-text-secondary text-xs">
+                      {new Date(round.horario).toLocaleTimeString('pt-BR')}
+                    </td>
+                    <td className="p-3 text-center font-medium">
+                      <span className={homeColor}>{homeDisplay}</span>
+                    </td>
                     <td className="p-3 text-center">
-                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                        round.resultado === 'H' ? 'bg-emerald-500/20 text-emerald-400' :
-                        round.resultado === 'A' ? 'bg-red-500/20 text-red-400' :
-                        'bg-yellow-500/20 text-yellow-400'
-                      }`}>
-                        {round.resultado === 'H' ? 'CASA' : round.resultado === 'A' ? 'VISITANTE' : 'EMPATE'}
+                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${getResultadoColor(round.resultado)}`}>
+                        {getResultadoDisplay(round.resultado)}
                       </span>
                     </td>
-                    <td className="p-3 text-center font-medium"><span className={awayCard.color}>{awayCard.number}{awayCard.suit}</span></td>
+                    <td className="p-3 text-center font-medium">
+                      <span className={awayColor}>{awayDisplay}</span>
+                    </td>
                   </tr>
                 );
               })}

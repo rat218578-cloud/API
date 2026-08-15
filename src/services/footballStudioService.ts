@@ -42,7 +42,6 @@ class FootballStudioService {
   private isFetching: boolean = false;
 
   async fetchHistory(): Promise<FootballStudioRound[]> {
-    // Evita múltiplas requisições simultâneas
     if (this.isFetching) {
       console.log('⏳ Busca em andamento, aguardando...');
       return this.history;
@@ -61,7 +60,6 @@ class FootballStudioService {
       const data: FootballStudioResponse = await response.json();
       console.log(`✅ ${data.total} registros recebidos da API.`);
       
-      // ✅ Mantém a ordem original (mais recente primeiro)
       this.history = data.history;
       this.lastUpdate = new Date();
       this.connected = data.success;
@@ -80,10 +78,8 @@ class FootballStudioService {
       clearInterval(this.pollingInterval);
     }
 
-    // Busca inicial imediata
     this.fetchHistory().then(onUpdate);
 
-    // ✅ Polling a cada 2 segundos (sem delay)
     this.pollingInterval = setInterval(async () => {
       const newData = await this.fetchHistory();
       onUpdate(newData);
