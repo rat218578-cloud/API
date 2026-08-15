@@ -320,3 +320,24 @@ if __name__ == '__main__':
         pass
     
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+
+@app.route('/api/football-studio/history', methods=['GET'])
+def get_football_studio_history():
+    try:
+        logger.info("📊 Buscando historico do Football Studio...")
+        response = requests.get('https://app.domcroupier.com/inc/historico.php', timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            logger.info(f"✅ {len(data)} registros encontrados")
+            return jsonify({
+                'success': True,
+                'total': len(data),
+                'history': data,
+                'timestamp': datetime.now().isoformat()
+            }), 200
+        else:
+            logger.error(f"❌ Erro na API externa: {response.status_code}")
+            return jsonify({'error': 'Falha ao buscar dados'}), 500
+    except Exception as e:
+        logger.error(f"❌ Erro no Football Studio: {e}")
+        return jsonify({'error': str(e)}), 500
