@@ -12,13 +12,12 @@ interface FootballStudioRound {
 
 interface FootballStudioHistoryProps {
   history: FootballStudioRound[];
-  totalNumbers: number;
   shoeChanges: any[];
 }
 
-export function FootballStudioHistory({ history, totalNumbers, shoeChanges }: FootballStudioHistoryProps) {
+export function FootballStudioHistory({ history, shoeChanges }: FootballStudioHistoryProps) {
   const [showAll, setShowAll] = useState(false);
-  const [viewMode, setViewMode] = useState<'numero' | 'letra'>('letra'); // ✅ Número ou Letra
+  const [viewMode, setViewMode] = useState<'numero' | 'letra'>('letra');
   
   // Filtra apenas rodadas válidas (ignora trocas de baralho)
   const validRounds = history.filter((item: any) => !item.troca_de_baralho);
@@ -52,7 +51,6 @@ export function FootballStudioHistory({ history, totalNumbers, shoeChanges }: Fo
   const getCardNumber = (card: string) => {
     if (!card) return '?';
     const num = card.slice(0, -1);
-    // Mapeia para letras se for Naipe
     if (num === 'A') return 'A';
     if (num === 'K') return 'K';
     if (num === 'Q') return 'Q';
@@ -71,7 +69,7 @@ export function FootballStudioHistory({ history, totalNumbers, shoeChanges }: Fo
           </span>
         </div>
         <div className="flex items-center gap-3 text-xs flex-wrap">
-          {/* ✅ Botão Número / Letra */}
+          {/* Botão Número / Letra */}
           <button
             onClick={() => setViewMode(viewMode === 'numero' ? 'letra' : 'numero')}
             className="px-3 py-1 rounded-lg bg-bg-tertiary border border-border-default hover:border-accent-pink transition-colors text-xs font-medium flex items-center gap-1"
@@ -115,12 +113,10 @@ export function FootballStudioHistory({ history, totalNumbers, shoeChanges }: Fo
                 const letra = getResultadoLetra(round.resultado);
                 const color = getResultadoColor(round.resultado);
                 
-                // ✅ Define o que mostrar baseado no modo
                 let displayText = '';
                 if (viewMode === 'letra') {
                   displayText = letra; // C, V, E
                 } else {
-                  // Modo número: mostra o número da carta da casa
                   const cardNum = getCardNumber(round.home);
                   displayText = cardNum; // 5, K, A, 10, etc
                 }

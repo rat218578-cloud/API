@@ -343,7 +343,7 @@ export function FootballStudioDashboard() {
       {/* ✅ Histórico Horizontal (TÁBOLA BOLSA) */}
       <FootballStudioHistory
         history={history}
-        totalNumbers={totalNumbers}
+        
         shoeChanges={shoeChanges}
         
       />
