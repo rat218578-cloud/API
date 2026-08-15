@@ -345,7 +345,7 @@ export function FootballStudioDashboard() {
         history={history}
         totalNumbers={totalNumbers}
         shoeChanges={shoeChanges}
-        showCards={showCards}
+        
       />
     </div>
   );

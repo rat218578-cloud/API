@@ -14,25 +14,25 @@ interface FootballStudioHistoryProps {
   history: FootballStudioRound[];
   totalNumbers: number;
   shoeChanges: any[];
-  showCards: boolean;
 }
 
-export function FootballStudioHistory({ history, totalNumbers, shoeChanges, showCards }: FootballStudioHistoryProps) {
+export function FootballStudioHistory({ history, totalNumbers, shoeChanges }: FootballStudioHistoryProps) {
   const [showAll, setShowAll] = useState(false);
+  const [viewMode, setViewMode] = useState<'numero' | 'letra'>('letra'); // ✅ Número ou Letra
   
-  // ✅ Filtra apenas rodadas válidas (ignora trocas de baralho)
+  // Filtra apenas rodadas válidas (ignora trocas de baralho)
   const validRounds = history.filter((item: any) => !item.troca_de_baralho);
   
-  // ✅ Pega as últimas rodadas (100 ou todas)
+  // Pega as últimas rodadas (100 ou todas)
   const displayRounds = showAll ? validRounds : validRounds.slice(0, 100);
   
-  // ✅ Organiza em colunas de 10 (igual TÁBOLA BOLSA)
+  // Organiza em colunas de 10 (igual TÁBOLA BOLSA)
   const columns = [];
   for (let i = 0; i < displayRounds.length; i += 10) {
     columns.push(displayRounds.slice(i, i + 10));
   }
 
-  // ✅ Formata o resultado em letra única (C/V/E)
+  // Formata o resultado em letra única (C/V/E)
   const getResultadoLetra = (resultado: string) => {
     if (resultado === 'H') return 'C';
     if (resultado === 'A') return 'V';
@@ -40,7 +40,7 @@ export function FootballStudioHistory({ history, totalNumbers, shoeChanges, show
     return '--';
   };
 
-  // ✅ Obtém a cor do resultado
+  // Obtém a cor do resultado
   const getResultadoColor = (resultado: string) => {
     if (resultado === 'H') return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
     if (resultado === 'A') return 'bg-red-500/20 text-red-400 border-red-500/30';
@@ -48,19 +48,16 @@ export function FootballStudioHistory({ history, totalNumbers, shoeChanges, show
     return 'bg-bg-tertiary text-text-muted border-border-default';
   };
 
-  // ✅ Formata a carta para exibição
-  const formatCard = (card: string) => {
-    if (!card) return '??';
-    const number = card.slice(0, -1);
-    const suit = card.slice(-1);
-    const suitEmoji: Record<string, string> = { '♥': '♥️', '♦': '♦️', '♠': '♠️', '♣': '♣️' };
-    return `${number}${suitEmoji[suit] || suit}`;
-  };
-
-  // ✅ Extrai o número da carta
+  // Extrai o número da carta (ex: K, Q, J, 10, 9, A)
   const getCardNumber = (card: string) => {
     if (!card) return '?';
-    return card.slice(0, -1);
+    const num = card.slice(0, -1);
+    // Mapeia para letras se for Naipe
+    if (num === 'A') return 'A';
+    if (num === 'K') return 'K';
+    if (num === 'Q') return 'Q';
+    if (num === 'J') return 'J';
+    return num;
   };
 
   return (
@@ -73,17 +70,27 @@ export function FootballStudioHistory({ history, totalNumbers, shoeChanges, show
             ÚLTIMAS RODADAS • AMOSTRA {displayRounds.length} ENTRADAS
           </span>
         </div>
-        <div className="flex items-center gap-3 text-xs">
+        <div className="flex items-center gap-3 text-xs flex-wrap">
+          {/* ✅ Botão Número / Letra */}
+          <button
+            onClick={() => setViewMode(viewMode === 'numero' ? 'letra' : 'numero')}
+            className="px-3 py-1 rounded-lg bg-bg-tertiary border border-border-default hover:border-accent-pink transition-colors text-xs font-medium flex items-center gap-1"
+          >
+            {viewMode === 'numero' ? '🔢 Número' : '🔤 Letra'}
+          </button>
+          
           <span className="text-text-muted flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Atualizado a cada 2s
           </span>
+          
           {shoeChanges.length > 0 && (
             <span className="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full flex items-center gap-1">
               <RefreshCw className="w-3 h-3" />
-              {shoeChanges.length} trocas de baralho
+              {shoeChanges.length} trocas
             </span>
           )}
+          
           <button
             onClick={() => setShowAll(!showAll)}
             className="px-2 py-1 rounded-lg bg-bg-tertiary border border-border-default text-xs hover:border-accent-pink transition-colors"
@@ -107,14 +114,16 @@ export function FootballStudioHistory({ history, totalNumbers, shoeChanges, show
               {column.map((round: any, rowIndex: number) => {
                 const letra = getResultadoLetra(round.resultado);
                 const color = getResultadoColor(round.resultado);
-                const cardNumber = showCards ? getCardNumber(round.home) : '';
-                const awayNumber = showCards ? getCardNumber(round.away) : '';
-                const homeFormatted = showCards ? formatCard(round.home) : '';
-                const awayFormatted = showCards ? formatCard(round.away) : '';
                 
-                // ✅ Se showCards for true, mostra a carta; senão mostra apenas a letra
-                const displayText = showCards ? homeFormatted : letra;
-                const isCard = showCards && round.home && round.home.length > 1;
+                // ✅ Define o que mostrar baseado no modo
+                let displayText = '';
+                if (viewMode === 'letra') {
+                  displayText = letra; // C, V, E
+                } else {
+                  // Modo número: mostra o número da carta da casa
+                  const cardNum = getCardNumber(round.home);
+                  displayText = cardNum; // 5, K, A, 10, etc
+                }
                 
                 return (
                   <div
@@ -147,9 +156,14 @@ export function FootballStudioHistory({ history, totalNumbers, shoeChanges, show
             EMPATE
           </span>
         </div>
-        <span>
-          Total: {validRounds.length} rodadas • {shoeChanges.length} trocas de baralho
-        </span>
+        <div className="flex items-center gap-4">
+          <span className="text-[10px] bg-bg-tertiary px-2 py-0.5 rounded-full">
+            {viewMode === 'numero' ? '🔢 Mostrando números' : '🔤 Mostrando letras (C/V/E)'}
+          </span>
+          <span>
+            Total: {validRounds.length} rodadas
+          </span>
+        </div>
       </div>
     </div>
   );
