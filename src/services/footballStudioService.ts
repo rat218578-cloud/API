@@ -1,13 +1,18 @@
 // src/services/footballStudioService.ts
 
-const API_URL = 'https://app.domcroupier.com/inc/historico.php';
-
 export interface FootballStudioRound {
   horario: string;
   home: string;
   away: string;
   resultado: 'H' | 'A' | 'D';
   troca_de_baralho: boolean;
+}
+
+export interface FootballStudioResponse {
+  success: boolean;
+  total: number;
+  history: FootballStudioRound[];
+  timestamp: string;
 }
 
 export const ROLETAS_FOOTBALL = [
@@ -37,16 +42,19 @@ class FootballStudioService {
 
   async fetchHistory(): Promise<FootballStudioRound[]> {
     try {
-      console.log('🔄 Buscando dados da API:', API_URL);
-      const response = await fetch(API_URL);
+      console.log('🔄 Buscando dados da API via backend...');
+      const response = await fetch('/api/football-studio/history');
+      
       if (!response.ok) {
         throw new Error(`Erro na API: ${response.status}`);
       }
-      const data: FootballStudioRound[] = await response.json();
-      console.log(`✅ ${data.length} registros recebidos da API.`);
-      this.history = data.reverse(); // Mantém ordem cronológica
+      
+      const data: FootballStudioResponse = await response.json();
+      console.log(`✅ ${data.total} registros recebidos da API.`);
+      
+      this.history = data.history.reverse(); // Mantém ordem cronológica
       this.lastUpdate = new Date();
-      this.connected = true;
+      this.connected = data.success;
       return this.history;
     } catch (error) {
       console.error('❌ Erro ao buscar histórico:', error);
@@ -59,10 +67,9 @@ class FootballStudioService {
     if (this.pollingInterval) {
       clearInterval(this.pollingInterval);
     }
-    // Busca inicial
+
     this.fetchHistory().then(onUpdate);
 
-    // Polling a cada 'interval' ms
     this.pollingInterval = setInterval(async () => {
       const newData = await this.fetchHistory();
       onUpdate(newData);

@@ -132,9 +132,9 @@ export function FootballStudioDashboard() {
         ))}
       </div>
 
-      {/* Grid Principal (Catálogo + Vídeo + Grupos) */}
+      {/* Grid Principal */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        {/* Catálogo com Cartas */}
+        {/* Catálogo */}
         <div className={`xl:col-span-2 transition-all duration-300 ${showCatalog ? 'block' : 'hidden xl:block'}`}>
           <div className="bg-bg-card border border-border-default rounded-2xl p-3">
             <div className="flex items-center justify-between mb-3">
@@ -178,7 +178,7 @@ export function FootballStudioDashboard() {
           )}
         </div>
 
-        {/* Grupos e Assertividade */}
+        {/* Grupos */}
         <div className="xl:col-span-3 space-y-4">
           <div className="bg-bg-card border border-border-default rounded-2xl p-4">
             <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">📈 Grupos</h3>
@@ -221,6 +221,7 @@ export function FootballStudioDashboard() {
             </div>
           </div>
 
+          {/* Assertividade */}
           <div className="bg-bg-card border border-border-default rounded-2xl p-4">
             <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">🎯 Assertividade</h3>
             <div className="space-y-3">
