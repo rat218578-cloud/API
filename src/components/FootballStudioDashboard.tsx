@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { footballStudioService, ROLETAS_FOOTBALL } from '../services/footballStudioService';
 import { LiveGameView } from './LiveGameView';
 import { FootballStudioHistory } from './FootballStudioHistory';
-import { Loader2, ChevronDown, ChevronUp, Sparkles, Brain, Eye, EyeOff } from 'lucide-react';
+import { Loader2, ChevronDown, ChevronUp, Sparkles, Brain } from 'lucide-react';
 
 export function FootballStudioDashboard() {
   const [activeRoom, setActiveRoom] = useState(ROLETAS_FOOTBALL[0].id);
