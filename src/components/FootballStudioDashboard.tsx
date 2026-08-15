@@ -2,7 +2,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { footballStudioService, ROLETAS_FOOTBALL } from '../services/footballStudioService';
 import { LiveGameView } from './LiveGameView';
-import { FootballStudioHistory } from './FootballStudioHistory';
 import { Loader2, ChevronDown, ChevronUp, Sparkles, Brain } from 'lucide-react';
 
 export function FootballStudioDashboard() {
@@ -79,13 +78,6 @@ export function FootballStudioDashboard() {
     return '--';
   };
 
-  const getResultadoLetra = (resultado: string) => {
-    if (resultado === 'H') return 'C';
-    if (resultado === 'A') return 'V';
-    if (resultado === 'D') return 'E';
-    return '--';
-  };
-
   const getResultadoColor = (resultado: string) => {
     if (resultado === 'H') return 'bg-emerald-500/20 text-emerald-400';
     if (resultado === 'A') return 'bg-red-500/20 text-red-400';
@@ -109,7 +101,12 @@ export function FootballStudioDashboard() {
   const getLastThree = () => {
     if (!history || history.length === 0) return ['--', '--', '--'];
     const recentes = history.filter((item: any) => !item.troca_de_baralho).slice(0, 3);
-    return recentes.map((item: any) => getResultadoLetra(item.resultado));
+    return recentes.map((item: any) => {
+      if (item.resultado === 'H') return 'C';
+      if (item.resultado === 'A') return 'V';
+      if (item.resultado === 'D') return 'E';
+      return '--';
+    });
   };
 
   const getLastResult = () => {
@@ -152,11 +149,6 @@ export function FootballStudioDashboard() {
             </span>
           )}
         </div>
-        
-        <button
-          className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium bg-bg-tertiary border border-border-default hover:border-accent-pink transition-colors"
-        >
-        </button>
       </div>
 
       {/* Menu de Mesas */}
@@ -336,13 +328,75 @@ export function FootballStudioDashboard() {
         )}
       </div>
 
-      {/* ✅ Histórico Horizontal (TÁBOLA BOLSA) */}
-      <FootballStudioHistory
-        history={history}
-        
-        shoeChanges={shoeChanges}
-        
-      />
+      {/* ✅ HISTÓRICO VERTICAL (LISTA) */}
+      <div className="bg-bg-card border border-border-default rounded-2xl overflow-hidden">
+        <div className="p-4 border-b border-border-default flex justify-between items-center">
+          <h3 className="font-bold text-text-primary">📊 Histórico Completo</h3>
+          <span className="text-xs text-text-muted flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Atualizado a cada 2s • {totalNumbers} rodadas
+            {shoeChanges.length > 0 && (
+              <span className="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">
+                🔄 {shoeChanges.length} trocas
+              </span>
+            )}
+          </span>
+        </div>
+        <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-bg-tertiary text-text-muted text-xs uppercase sticky top-0">
+              <tr>
+                <th className="text-left p-3">Horário</th>
+                <th className="text-center p-3">Casa</th>
+                <th className="text-center p-3">Resultado</th>
+                <th className="text-center p-3">Visitante</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border-default">
+              {history.slice(0, 100).map((round: any, index: number) => {
+                // Troca de baralho
+                if (round.troca_de_baralho) {
+                  return (
+                    <tr key={index} className="bg-blue-500/5">
+                      <td colSpan={4} className="p-3 text-center text-blue-400">
+                        <span className="flex items-center justify-center gap-2">
+                          <span className="text-xs">🔄</span>
+                          <span className="font-bold">TROCA DE BARALHO</span>
+                          <span className="text-[10px] text-text-muted">
+                            {new Date(round.horario).toLocaleTimeString('pt-BR')}
+                          </span>
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                }
+
+                const homeCard = getCardInfo(round.home);
+                const awayCard = getCardInfo(round.away);
+
+                return (
+                  <tr key={index} className="hover:bg-bg-tertiary/50 transition-colors">
+                    <td className="p-3 text-text-secondary text-xs">
+                      {new Date(round.horario).toLocaleTimeString('pt-BR')}
+                    </td>
+                    <td className="p-3 text-center font-medium">
+                      <span className={homeCard.color}>{homeCard.number}{homeCard.suit}</span>
+                    </td>
+                    <td className="p-3 text-center">
+                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${getResultadoColor(round.resultado)}`}>
+                        {getResultadoDisplay(round.resultado)}
+                      </span>
+                    </td>
+                    <td className="p-3 text-center font-medium">
+                      <span className={awayCard.color}>{awayCard.number}{awayCard.suit}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
