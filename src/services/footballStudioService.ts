@@ -15,6 +15,7 @@ export interface FootballStudioResponse {
   timestamp: string;
 }
 
+// ✅ CADA MESA COM SEU PROPRIO GAME ID
 export const ROLETAS_FOOTBALL = [
   {
     id: 'studio_1',
@@ -22,7 +23,8 @@ export const ROLETAS_FOOTBALL = [
     slug: 'evolution/football-studio',
     gameId: 'TopCard000000001',
     provedor: 'Evolution',
-    cor: '#22c55e'
+    cor: '#22c55e',
+    temHistorico: true
   },
   {
     id: 'studio_4',
@@ -30,7 +32,8 @@ export const ROLETAS_FOOTBALL = [
     slug: 'evolution/football-studio',
     gameId: 'TopCard000000004',
     provedor: 'Evolution',
-    cor: '#22c55e'
+    cor: '#22c55e',
+    temHistorico: false  // ✅ SEM HISTORICO
   }
 ];
 
@@ -40,6 +43,7 @@ class FootballStudioService {
   private lastUpdate: Date | null = null;
   private connected: boolean = false;
   private isFetching: boolean = false;
+  private currentMesa: string = 'studio_1';
 
   async fetchHistory(): Promise<FootballStudioRound[]> {
     if (this.isFetching) {
@@ -165,6 +169,14 @@ class FootballStudioService {
 
   isConnected(): boolean {
     return this.connected;
+  }
+
+  setCurrentMesa(mesaId: string) {
+    this.currentMesa = mesaId;
+  }
+
+  getCurrentMesa(): string {
+    return this.currentMesa;
   }
 }
 

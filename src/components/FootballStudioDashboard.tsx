@@ -20,6 +20,10 @@ export function FootballStudioDashboard() {
   
   const isMounted = useRef(true);
 
+  // ✅ PEGA A MESA ATUAL
+  const mesaAtual = ROLETAS_FOOTBALL.find(m => m.id === activeRoom) || ROLETAS_FOOTBALL[0];
+  const temHistorico = mesaAtual.temHistorico || false;
+
   useEffect(() => {
     isMounted.current = true;
     setLoading(true);
@@ -39,15 +43,28 @@ export function FootballStudioDashboard() {
       setLoading(false);
     };
 
-    footballStudioService.startPolling(2000, onUpdate);
+    // ✅ SÓ BUSCA HISTORICO SE A MESA TIVER
+    if (temHistorico) {
+      footballStudioService.startPolling(2000, onUpdate);
+    } else {
+      // ✅ MESA SEM HISTORICO - LIMPA OS DADOS
+      setHistory([]);
+      setStats({ total: 0, wins: 0, losses: 0, draws: 0 });
+      setSignals(null);
+      setIsConnected(false);
+      setTotalNumbers(0);
+      setShoeChanges([]);
+      setLoading(false);
+    }
 
     return () => {
       isMounted.current = false;
       footballStudioService.stopPolling();
     };
-  }, []);
+  }, [activeRoom, temHistorico]); // ✅ RECARREGA QUANDO TROCA DE MESA
 
-  const openGame = (slug: string) => {
+  const openGame = (slug: string, gameId: string) => {
+    console.log('🎮 Abrindo jogo:', slug, 'gameId:', gameId);
     setSelectedSlug(slug);
     setShowVideo(true);
   };
@@ -86,7 +103,7 @@ export function FootballStudioDashboard() {
   };
 
   const topCards = useMemo(() => {
-    if (!history || history.length === 0) return [];
+    if (!history || history.length === 0 || !temHistorico) return [];
     const counts: Record<string, number> = {};
     history.forEach((item: any) => {
       if (item.home && !item.troca_de_baralho) counts[item.home] = (counts[item.home] || 0) + 1;
@@ -96,10 +113,10 @@ export function FootballStudioDashboard() {
       .map(([card, count]) => ({ card, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
-  }, [history]);
+  }, [history, temHistorico]);
 
   const getLastThree = () => {
-    if (!history || history.length === 0) return ['--', '--', '--'];
+    if (!history || history.length === 0 || !temHistorico) return ['--', '--', '--'];
     const recentes = history.filter((item: any) => !item.troca_de_baralho).slice(0, 3);
     return recentes.map((item: any) => {
       if (item.resultado === 'H') return 'C';
@@ -110,7 +127,7 @@ export function FootballStudioDashboard() {
   };
 
   const getLastResult = () => {
-    if (!history || history.length === 0) return 'Aguardando...';
+    if (!history || history.length === 0 || !temHistorico) return 'Aguardando...';
     const last = history.find((item: any) => !item.troca_de_baralho);
     if (!last) return 'Aguardando...';
     return getResultadoDisplay(last.resultado);
@@ -129,7 +146,7 @@ export function FootballStudioDashboard() {
 
   const lastThree = getLastThree();
   const lastResult = getLastResult();
-  const isRealData = history.length > 0;
+  const isRealData = history.length > 0 && temHistorico;
 
   return (
     <div className="p-4 space-y-4">
@@ -140,10 +157,10 @@ export function FootballStudioDashboard() {
           <span className={isConnected && isRealData ? 'text-emerald-400' : 'text-yellow-400'}>
             {isConnected && isRealData
               ? `📡 Conectado (${totalNumbers} rodadas)`
-              : isConnected ? '⏳ Aguardando dados...' : '🔌 Falha na conexão'}
+              : temHistorico ? '⏳ Aguardando dados...' : '🎥 Apenas vídeo'}
           </span>
           {isRealData && <span className="text-emerald-400">✅ Dados REAIS</span>}
-          {lastUpdate && (
+          {lastUpdate && isRealData && (
             <span className="text-[10px] text-text-muted">
               ⏱ {lastUpdate.toLocaleTimeString('pt-BR')}
             </span>
@@ -158,7 +175,7 @@ export function FootballStudioDashboard() {
             key={r.id}
             onClick={() => {
               setActiveRoom(r.id);
-              openGame(r.slug);
+              openGame(r.slug, r.gameId);
             }}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${
               activeRoom === r.id
@@ -168,8 +185,11 @@ export function FootballStudioDashboard() {
           >
             <span className={`w-2 h-2 rounded-full ${activeRoom === r.id ? 'bg-emerald-500 animate-pulse' : 'bg-text-muted'}`} />
             {r.nome}
-            {isRealData && activeRoom === r.id && (
-              <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">REAL</span>
+            {r.temHistorico && isRealData && activeRoom === r.id && (
+              <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">HIST</span>
+            )}
+            {!r.temHistorico && (
+              <span className="text-[8px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full">VIDEO</span>
             )}
           </button>
         ))}
@@ -177,7 +197,7 @@ export function FootballStudioDashboard() {
 
       {/* Grid Principal */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        {/* Catálogo */}
+        {/* Catálogo - SÓ SE TIVER HISTORICO */}
         <div className={`xl:col-span-2 transition-all duration-300 ${showCatalog ? 'block' : 'hidden xl:block'}`}>
           <div className="bg-bg-card border border-border-default rounded-2xl p-3">
             <div className="flex items-center justify-between mb-3">
@@ -190,7 +210,7 @@ export function FootballStudioDashboard() {
               <div className="grid grid-cols-3 text-[8px] text-text-muted uppercase py-1 border-b border-border-default text-center">
                 <span>Carta</span><span>Total</span><span>%</span>
               </div>
-              {topCards.length > 0 ? (
+              {topCards.length > 0 && isRealData ? (
                 topCards.map((item) => {
                   const cardInfo = getCardInfo(item.card);
                   const totalRodadas = history.filter((h: any) => !h.troca_de_baralho).length || 1;
@@ -204,7 +224,9 @@ export function FootballStudioDashboard() {
                   );
                 })
               ) : (
-                <div className="text-center py-4 text-text-muted text-xs">⏳ Aguardando cartas...</div>
+                <div className="text-center py-4 text-text-muted text-xs">
+                  {temHistorico ? '⏳ Aguardando cartas...' : '📊 Sem histórico'}
+                </div>
               )}
             </div>
           </div>
@@ -213,7 +235,12 @@ export function FootballStudioDashboard() {
         {/* Vídeo */}
         <div className="xl:col-span-7">
           {showVideo && selectedSlug ? (
-            <LiveGameView slug={selectedSlug} isOpen={showVideo} onClose={closeGame} />
+            <LiveGameView
+              key={selectedSlug + activeRoom} // ✅ FORÇA RECARREGAR QUANDO TROCA
+              slug={selectedSlug}
+              isOpen={showVideo}
+              onClose={closeGame}
+            />
           ) : (
             <div className="bg-bg-card border border-border-default rounded-2xl p-8 flex flex-col items-center justify-center min-h-[500px]">
               <div className="text-6xl mb-4">⚽</div>
@@ -223,180 +250,189 @@ export function FootballStudioDashboard() {
           )}
         </div>
 
-        {/* Grupos */}
+        {/* Grupos - SÓ SE TIVER HISTORICO */}
         <div className="xl:col-span-3 space-y-4">
-          <div className="bg-bg-card border border-border-default rounded-2xl p-4">
-            <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">📈 Grupos</h3>
-            <div className="text-[10px] text-text-muted uppercase mb-2">Sequência atual</div>
-            <div className="p-3 rounded-xl bg-gradient-to-r from-bg-tertiary to-bg-secondary border border-border-default text-center mb-3">
-              <div className="text-xs font-bold text-text-primary">
-                {isRealData && history.length > 0 ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getResultadoColor(history.find((h: any) => !h.troca_de_baralho)?.resultado || '')}`}>
-                      {lastResult}
+          {isRealData ? (
+            <>
+              <div className="bg-bg-card border border-border-default rounded-2xl p-4">
+                <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">📈 Grupos</h3>
+                <div className="text-[10px] text-text-muted uppercase mb-2">Sequência atual</div>
+                <div className="p-3 rounded-xl bg-gradient-to-r from-bg-tertiary to-bg-secondary border border-border-default text-center mb-3">
+                  <div className="text-xs font-bold text-text-primary">
+                    <span className="flex items-center justify-center gap-2">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getResultadoColor(history.find((h: any) => !h.troca_de_baralho)?.resultado || '')}`}>
+                        {lastResult}
+                      </span>
+                      <span className="text-[8px] text-emerald-400">● REAL</span>
                     </span>
-                    <span className="text-[8px] text-emerald-400">● REAL</span>
-                  </span>
-                ) : (
-                  <span className="text-yellow-400">⏳ Aguardando...</span>
-                )}
+                  </div>
+                </div>
+                <div className="flex items-center justify-center gap-3 text-center">
+                  {lastThree.map((num, idx) => (
+                    <div key={idx} className="text-center">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
+                        num !== '--' ? (
+                          num === 'C' ? 'bg-emerald-500/20 text-emerald-400' :
+                          num === 'V' ? 'bg-red-500/20 text-red-400' :
+                          'bg-yellow-500/20 text-yellow-400'
+                        ) : 'bg-bg-tertiary text-text-muted'
+                      }`}>{num}</div>
+                      <div className="text-[8px] text-text-muted mt-0.5">{idx === 0 ? 'Último' : idx === 1 ? 'Penúlt' : 'Antep'}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 p-2 rounded-lg bg-bg-tertiary border border-border-default text-center">
+                  <div className="text-[10px] text-text-muted">Tendência</div>
+                  <div className="text-sm font-bold text-emerald-400">⬆ Forte</div>
+                </div>
+              </div>
+
+              <div className="bg-bg-card border border-border-default rounded-2xl p-4">
+                <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">🎯 Assertividade</h3>
+                <div className="space-y-3">
+                  {[
+                    { id: 'casa', name: 'CASA', value: stats.total > 0 ? ((stats.wins / stats.total) * 100).toFixed(1) : 0, color: '#10b981' },
+                    { id: 'empate', name: 'EMPATE', value: stats.total > 0 ? ((stats.draws / stats.total) * 100).toFixed(1) : 0, color: '#f59e0b' },
+                    { id: 'visitante', name: 'VISITANTE', value: stats.total > 0 ? ((stats.losses / stats.total) * 100).toFixed(1) : 0, color: '#ef4444' }
+                  ].map((s) => (
+                    <div key={s.id}>
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="text-text-secondary">{s.name}</span>
+                        <span className="font-bold" style={{ color: s.color }}>{s.value}%</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-bg-tertiary overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${s.value}%`, backgroundColor: s.color }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="bg-bg-card border border-border-default rounded-2xl p-4 text-center">
+              <div className="text-4xl mb-2">🎥</div>
+              <h3 className="font-bold text-text-primary text-sm">Apenas Vídeo</h3>
+              <p className="text-xs text-text-muted">Esta mesa não tem histórico</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* IA de Sinais - SÓ SE TIVER HISTORICO */}
+      {isRealData && (
+        <div className="bg-bg-card border border-border-default rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center animate-pulse-glow">
+                <Brain className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h3 className="font-bold text-text-primary text-sm">IA de Sinais</h3>
+                <p className="text-[10px] text-text-muted">Geração inteligente de entradas</p>
               </div>
             </div>
-            <div className="flex items-center justify-center gap-3 text-center">
-              {lastThree.map((num, idx) => (
-                <div key={idx} className="text-center">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
-                    num !== '--' ? (
-                      num === 'C' ? 'bg-emerald-500/20 text-emerald-400' :
-                      num === 'V' ? 'bg-red-500/20 text-red-400' :
-                      'bg-yellow-500/20 text-yellow-400'
-                    ) : 'bg-bg-tertiary text-text-muted'
-                  }`}>{num}</div>
-                  <div className="text-[8px] text-text-muted mt-0.5">{idx === 0 ? 'Último' : idx === 1 ? 'Penúlt' : 'Antep'}</div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-3 p-2 rounded-lg bg-bg-tertiary border border-border-default text-center">
-              <div className="text-[10px] text-text-muted">Tendência</div>
-              <div className="text-sm font-bold text-emerald-400">{isRealData ? '⬆ Forte' : '⏳ Aguardando...'}</div>
-            </div>
+            <button
+              onClick={() => {
+                if (signals) {
+                  alert(`🎯 Sinal: ${signals.predicao}\nConfiança: ${signals.confianca}%\nStreak: ${signals.streak.tipo} ${signals.streak.tamanho}x`);
+                }
+              }}
+              disabled={!isRealData}
+              className="btn-primary flex items-center gap-2 px-4 py-2 rounded-xl text-xs disabled:opacity-50"
+            >
+              <Sparkles className="w-3 h-3" />
+              {signals ? 'Ver Sinal' : 'Aguardando dados'}
+            </button>
           </div>
-
-          <div className="bg-bg-card border border-border-default rounded-2xl p-4">
-            <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">🎯 Assertividade</h3>
-            <div className="space-y-3">
-              {[
-                { id: 'casa', name: 'CASA', value: stats.total > 0 ? ((stats.wins / stats.total) * 100).toFixed(1) : 0, color: '#10b981' },
-                { id: 'empate', name: 'EMPATE', value: stats.total > 0 ? ((stats.draws / stats.total) * 100).toFixed(1) : 0, color: '#f59e0b' },
-                { id: 'visitante', name: 'VISITANTE', value: stats.total > 0 ? ((stats.losses / stats.total) * 100).toFixed(1) : 0, color: '#ef4444' }
-              ].map((s) => (
-                <div key={s.id}>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-text-secondary">{s.name}</span>
-                    <span className="font-bold" style={{ color: s.color }}>{isRealData ? s.value : '--'}%</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-bg-tertiary overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-500" style={{ width: isRealData ? `${s.value}%` : '0%', backgroundColor: s.color }} />
-                  </div>
-                </div>
-              ))}
+          {signals && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3 rounded-xl bg-bg-tertiary border border-border-default text-center">
+                <div className="text-[10px] text-text-muted">CASA</div>
+                <div className="text-lg font-bold text-emerald-400">{signals.probabilidades.casa}%</div>
+              </div>
+              <div className="p-3 rounded-xl bg-bg-tertiary border border-border-default text-center">
+                <div className="text-[10px] text-text-muted">EMPATE</div>
+                <div className="text-lg font-bold text-yellow-400">{signals.probabilidades.empate}%</div>
+              </div>
+              <div className="p-3 rounded-xl bg-bg-tertiary border border-border-default text-center">
+                <div className="text-[10px] text-text-muted">VISITANTE</div>
+                <div className="text-lg font-bold text-red-400">{signals.probabilidades.visitante}%</div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
-      </div>
+      )}
 
-      {/* IA de Sinais */}
-      <div className="bg-bg-card border border-border-default rounded-2xl p-4">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center animate-pulse-glow">
-              <Brain className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <h3 className="font-bold text-text-primary text-sm">IA de Sinais</h3>
-              <p className="text-[10px] text-text-muted">Geração inteligente de entradas</p>
-            </div>
+      {/* Histórico Vertical - SÓ SE TIVER HISTORICO */}
+      {isRealData && (
+        <div className="bg-bg-card border border-border-default rounded-2xl overflow-hidden">
+          <div className="p-4 border-b border-border-default flex justify-between items-center">
+            <h3 className="font-bold text-text-primary">📊 Histórico Completo</h3>
+            <span className="text-xs text-text-muted flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Atualizado a cada 2s • {totalNumbers} rodadas
+              {shoeChanges.length > 0 && (
+                <span className="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">
+                  🔄 {shoeChanges.length} trocas
+                </span>
+              )}
+            </span>
           </div>
-          <button
-            onClick={() => {
-              if (signals) {
-                alert(`🎯 Sinal: ${signals.predicao}\nConfiança: ${signals.confianca}%\nStreak: ${signals.streak.tipo} ${signals.streak.tamanho}x`);
-              }
-            }}
-            disabled={!isRealData}
-            className="btn-primary flex items-center gap-2 px-4 py-2 rounded-xl text-xs disabled:opacity-50"
-          >
-            <Sparkles className="w-3 h-3" />
-            {signals ? 'Ver Sinal' : 'Aguardando dados'}
-          </button>
-        </div>
-        {signals && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="p-3 rounded-xl bg-bg-tertiary border border-border-default text-center">
-              <div className="text-[10px] text-text-muted">CASA</div>
-              <div className="text-lg font-bold text-emerald-400">{signals.probabilidades.casa}%</div>
-            </div>
-            <div className="p-3 rounded-xl bg-bg-tertiary border border-border-default text-center">
-              <div className="text-[10px] text-text-muted">EMPATE</div>
-              <div className="text-lg font-bold text-yellow-400">{signals.probabilidades.empate}%</div>
-            </div>
-            <div className="p-3 rounded-xl bg-bg-tertiary border border-border-default text-center">
-              <div className="text-[10px] text-text-muted">VISITANTE</div>
-              <div className="text-lg font-bold text-red-400">{signals.probabilidades.visitante}%</div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ✅ HISTÓRICO VERTICAL (LISTA) */}
-      <div className="bg-bg-card border border-border-default rounded-2xl overflow-hidden">
-        <div className="p-4 border-b border-border-default flex justify-between items-center">
-          <h3 className="font-bold text-text-primary">📊 Histórico Completo</h3>
-          <span className="text-xs text-text-muted flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            Atualizado a cada 2s • {totalNumbers} rodadas
-            {shoeChanges.length > 0 && (
-              <span className="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">
-                🔄 {shoeChanges.length} trocas
-              </span>
-            )}
-          </span>
-        </div>
-        <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-bg-tertiary text-text-muted text-xs uppercase sticky top-0">
-              <tr>
-                <th className="text-left p-3">Horário</th>
-                <th className="text-center p-3">Casa</th>
-                <th className="text-center p-3">Resultado</th>
-                <th className="text-center p-3">Visitante</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border-default">
-              {history.slice(0, 100).map((round: any, index: number) => {
-                // Troca de baralho
-                if (round.troca_de_baralho) {
-                  return (
-                    <tr key={index} className="bg-blue-500/5">
-                      <td colSpan={4} className="p-3 text-center text-blue-400">
-                        <span className="flex items-center justify-center gap-2">
-                          <span className="text-xs">🔄</span>
-                          <span className="font-bold">TROCA DE BARALHO</span>
-                          <span className="text-[10px] text-text-muted">
-                            {new Date(round.horario).toLocaleTimeString('pt-BR')}
+          <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-bg-tertiary text-text-muted text-xs uppercase sticky top-0">
+                <tr>
+                  <th className="text-left p-3">Horário</th>
+                  <th className="text-center p-3">Casa</th>
+                  <th className="text-center p-3">Resultado</th>
+                  <th className="text-center p-3">Visitante</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-default">
+                {history.slice(0, 100).map((round: any, index: number) => {
+                  if (round.troca_de_baralho) {
+                    return (
+                      <tr key={index} className="bg-blue-500/5">
+                        <td colSpan={4} className="p-3 text-center text-blue-400">
+                          <span className="flex items-center justify-center gap-2">
+                            <span className="text-xs">🔄</span>
+                            <span className="font-bold">TROCA DE BARALHO</span>
+                            <span className="text-[10px] text-text-muted">
+                              {new Date(round.horario).toLocaleTimeString('pt-BR')}
+                            </span>
                           </span>
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  const homeCard = getCardInfo(round.home);
+                  const awayCard = getCardInfo(round.away);
+
+                  return (
+                    <tr key={index} className="hover:bg-bg-tertiary/50 transition-colors">
+                      <td className="p-3 text-text-secondary text-xs">
+                        {new Date(round.horario).toLocaleTimeString('pt-BR')}
+                      </td>
+                      <td className="p-3 text-center font-medium">
+                        <span className={homeCard.color}>{homeCard.number}{homeCard.suit}</span>
+                      </td>
+                      <td className="p-3 text-center">
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${getResultadoColor(round.resultado)}`}>
+                          {getResultadoDisplay(round.resultado)}
                         </span>
+                      </td>
+                      <td className="p-3 text-center font-medium">
+                        <span className={awayCard.color}>{awayCard.number}{awayCard.suit}</span>
                       </td>
                     </tr>
                   );
-                }
-
-                const homeCard = getCardInfo(round.home);
-                const awayCard = getCardInfo(round.away);
-
-                return (
-                  <tr key={index} className="hover:bg-bg-tertiary/50 transition-colors">
-                    <td className="p-3 text-text-secondary text-xs">
-                      {new Date(round.horario).toLocaleTimeString('pt-BR')}
-                    </td>
-                    <td className="p-3 text-center font-medium">
-                      <span className={homeCard.color}>{homeCard.number}{homeCard.suit}</span>
-                    </td>
-                    <td className="p-3 text-center">
-                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${getResultadoColor(round.resultado)}`}>
-                        {getResultadoDisplay(round.resultado)}
-                      </span>
-                    </td>
-                    <td className="p-3 text-center font-medium">
-                      <span className={awayCard.color}>{awayCard.number}{awayCard.suit}</span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
