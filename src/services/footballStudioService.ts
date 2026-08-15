@@ -39,8 +39,17 @@ class FootballStudioService {
   private pollingInterval: NodeJS.Timeout | null = null;
   private lastUpdate: Date | null = null;
   private connected: boolean = false;
+  private isFetching: boolean = false;
 
   async fetchHistory(): Promise<FootballStudioRound[]> {
+    // Evita múltiplas requisições simultâneas
+    if (this.isFetching) {
+      console.log('⏳ Busca em andamento, aguardando...');
+      return this.history;
+    }
+
+    this.isFetching = true;
+    
     try {
       console.log('🔄 Buscando dados da API via backend...');
       const response = await fetch('/api/football-studio/history');
@@ -52,8 +61,7 @@ class FootballStudioService {
       const data: FootballStudioResponse = await response.json();
       console.log(`✅ ${data.total} registros recebidos da API.`);
       
-      // ✅ CORRETO: Mantém a ordem original (mais recente primeiro)
-      // A API já retorna do mais recente para o mais antigo
+      // ✅ Mantém a ordem original (mais recente primeiro)
       this.history = data.history;
       this.lastUpdate = new Date();
       this.connected = data.success;
@@ -61,7 +69,9 @@ class FootballStudioService {
     } catch (error) {
       console.error('❌ Erro ao buscar histórico:', error);
       this.connected = false;
-      return [];
+      return this.history;
+    } finally {
+      this.isFetching = false;
     }
   }
 
@@ -70,8 +80,10 @@ class FootballStudioService {
       clearInterval(this.pollingInterval);
     }
 
+    // Busca inicial imediata
     this.fetchHistory().then(onUpdate);
 
+    // ✅ Polling a cada 2 segundos (sem delay)
     this.pollingInterval = setInterval(async () => {
       const newData = await this.fetchHistory();
       onUpdate(newData);
@@ -83,10 +95,10 @@ class FootballStudioService {
       clearInterval(this.pollingInterval);
       this.pollingInterval = null;
     }
+    this.isFetching = false;
   }
 
   getHistory(limit: number = 500): FootballStudioRound[] {
-    // ✅ Retorna os primeiros 'limit' registros (mais recentes)
     return this.history.slice(0, limit);
   }
 
@@ -105,7 +117,6 @@ class FootballStudioService {
   getSignals() {
     if (this.history.length < 10) return null;
 
-    // ✅ Pega os 10 mais recentes (primeiros da lista)
     const last10 = this.history.slice(0, 10);
     const wins = last10.filter(r => r.resultado === 'H').length;
     const losses = last10.filter(r => r.resultado === 'A').length;
@@ -119,7 +130,7 @@ class FootballStudioService {
     let streak = 0;
     let streakType = '';
     if (last10.length > 0) {
-      const last = last10[0]; // ✅ Primeiro = mais recente
+      const last = last10[0];
       for (let i = 0; i < last10.length; i++) {
         if (last10[i].resultado === last.resultado) {
           streak++;

@@ -1,5 +1,5 @@
 // src/components/FootballStudioDashboard.tsx
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { footballStudioService, ROLETAS_FOOTBALL } from '../services/footballStudioService';
 import { LiveGameView } from './LiveGameView';
 import { Loader2, ChevronDown, ChevronUp, Sparkles, Brain } from 'lucide-react';
@@ -15,22 +15,33 @@ export function FootballStudioDashboard() {
   const [totalNumbers, setTotalNumbers] = useState(0);
   const [signals, setSignals] = useState<any>(null);
   const [stats, setStats] = useState({ total: 0, wins: 0, losses: 0, draws: 0 });
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  
+  // ✅ Referência para controle de montagem
+  const isMounted = useRef(true);
 
   useEffect(() => {
+    isMounted.current = true;
     setLoading(true);
+    
     const onUpdate = (newHistory: any[]) => {
+      if (!isMounted.current) return;
+      
       console.log('📊 Atualizando dashboard com', newHistory.length, 'registros');
       setHistory(newHistory);
       setStats(footballStudioService.getStatistics());
       setSignals(footballStudioService.getSignals());
       setIsConnected(footballStudioService.isConnected());
       setTotalNumbers(newHistory.length);
+      setLastUpdate(footballStudioService.getLastUpdate());
       setLoading(false);
     };
 
+    // ✅ Inicia polling com intervalo de 2 segundos
     footballStudioService.startPolling(2000, onUpdate);
 
     return () => {
+      isMounted.current = false;
       footballStudioService.stopPolling();
     };
   }, []);
@@ -59,18 +70,12 @@ export function FootballStudioDashboard() {
     return { number, suit: suitEmoji[suit] || suit, color: suitColors[suit] || 'text-text-primary' };
   };
 
-  // ✅ CORRIGIDO: Contagem de cartas por RODADA (Casa + Visitante = 1 rodada)
   const topCards = useMemo(() => {
     if (!history || history.length === 0) return [];
     const counts: Record<string, number> = {};
     history.forEach((item: any) => {
-      // Conta cada carta separadamente (Casa e Visitante)
-      if (item.home) {
-        counts[item.home] = (counts[item.home] || 0) + 1;
-      }
-      if (item.away) {
-        counts[item.away] = (counts[item.away] || 0) + 1;
-      }
+      if (item.home) counts[item.home] = (counts[item.home] || 0) + 1;
+      if (item.away) counts[item.away] = (counts[item.away] || 0) + 1;
     });
     return Object.entries(counts)
       .map(([card, count]) => ({ card, count }))
@@ -78,10 +83,8 @@ export function FootballStudioDashboard() {
       .slice(0, 8);
   }, [history]);
 
-  // ✅ CORRIGIDO: Pega os ÚLTIMOS 3 do histórico (mais recentes)
   const getLastThree = () => {
     if (!history || history.length === 0) return ['--', '--', '--'];
-    // Pega os 3 primeiros do histórico (mais recentes)
     const recentes = history.slice(0, 3);
     return recentes.map((item: any) => {
       if (item.resultado === 'H') return 'C';
@@ -91,7 +94,6 @@ export function FootballStudioDashboard() {
     });
   };
 
-  // ✅ CORRIGIDO: Último resultado com nome completo
   const getLastResult = () => {
     if (!history || history.length === 0) return 'Aguardando...';
     const last = history[0];
@@ -118,7 +120,7 @@ export function FootballStudioDashboard() {
 
   return (
     <div className="p-4 space-y-4">
-      {/* Status */}
+      {/* Status com tempo de atualização */}
       <div className="flex items-center gap-2 text-xs">
         <span className={`w-2 h-2 rounded-full ${isConnected && isRealData ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
         <span className={isConnected && isRealData ? 'text-emerald-400' : 'text-yellow-400'}>
@@ -127,6 +129,11 @@ export function FootballStudioDashboard() {
             : isConnected ? '⏳ Aguardando dados...' : '🔌 Falha na conexão'}
         </span>
         {isRealData && <span className="text-emerald-400">✅ Dados REAIS</span>}
+        {lastUpdate && (
+          <span className="text-[10px] text-text-muted">
+            ⏱ {lastUpdate.toLocaleTimeString('pt-BR')}
+          </span>
+        )}
       </div>
 
       {/* Menu de Mesas */}
@@ -153,7 +160,7 @@ export function FootballStudioDashboard() {
         ))}
       </div>
 
-      {/* Grid Principal */}
+      {/* Grid Principal - IGUAL A ROLETA */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
         {/* Catálogo */}
         <div className={`xl:col-span-2 transition-all duration-300 ${showCatalog ? 'block' : 'hidden xl:block'}`}>
@@ -171,7 +178,6 @@ export function FootballStudioDashboard() {
               {topCards.length > 0 ? (
                 topCards.map((item) => {
                   const cardInfo = getCardInfo(item.card);
-                  // ✅ Porcentagem correta: baseada no total de RODADAS (não cartas)
                   const totalRodadas = history.length || 1;
                   const percentual = ((item.count / totalRodadas) * 100).toFixed(1);
                   return (
@@ -245,7 +251,6 @@ export function FootballStudioDashboard() {
             </div>
           </div>
 
-          {/* Assertividade */}
           <div className="bg-bg-card border border-border-default rounded-2xl p-4">
             <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">🎯 Assertividade</h3>
             <div className="space-y-3">
