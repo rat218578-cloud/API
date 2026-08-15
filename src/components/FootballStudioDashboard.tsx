@@ -59,25 +59,26 @@ export function FootballStudioDashboard() {
     return { number, suit: suitEmoji[suit] || suit, color: suitColors[suit] || 'text-text-primary' };
   };
 
-  // ✅ CORRIGIDO: Top cards com ordenação correta
+  // ✅ CORRIGIDO: Contagem de cartas por RODADA (Casa + Visitante = 1 rodada)
   const topCards = useMemo(() => {
     if (!history || history.length === 0) return [];
     const counts: Record<string, number> = {};
     history.forEach((item: any) => {
-      const cards = [item.home, item.away];
-      cards.forEach((card: string) => {
-        if (card) {
-          counts[card] = (counts[card] || 0) + 1;
-        }
-      });
+      // Conta cada carta separadamente (Casa e Visitante)
+      if (item.home) {
+        counts[item.home] = (counts[item.home] || 0) + 1;
+      }
+      if (item.away) {
+        counts[item.away] = (counts[item.away] || 0) + 1;
+      }
     });
     return Object.entries(counts)
       .map(([card, count]) => ({ card, count }))
-      .sort((a, b) => b.count - a.count)  // ✅ Ordena por frequência
+      .sort((a, b) => b.count - a.count)
       .slice(0, 8);
   }, [history]);
 
-  // ✅ CORRIGIDO: Últimos 3 resultados PEGA DO HISTÓRICO
+  // ✅ CORRIGIDO: Pega os ÚLTIMOS 3 do histórico (mais recentes)
   const getLastThree = () => {
     if (!history || history.length === 0) return ['--', '--', '--'];
     // Pega os 3 primeiros do histórico (mais recentes)
@@ -170,11 +171,14 @@ export function FootballStudioDashboard() {
               {topCards.length > 0 ? (
                 topCards.map((item) => {
                   const cardInfo = getCardInfo(item.card);
+                  // ✅ Porcentagem correta: baseada no total de RODADAS (não cartas)
+                  const totalRodadas = history.length || 1;
+                  const percentual = ((item.count / totalRodadas) * 100).toFixed(1);
                   return (
                     <div key={item.card} className="grid grid-cols-3 items-center py-1 text-[10px] border-b border-border-default/30 text-center">
                       <span className={`font-bold ${cardInfo.color}`}>{cardInfo.number}{cardInfo.suit}</span>
                       <span className="text-text-secondary">{item.count}</span>
-                      <span className="text-text-secondary">{((item.count / (totalNumbers * 2)) * 100).toFixed(1)}%</span>
+                      <span className="text-text-secondary">{percentual}%</span>
                     </div>
                   );
                 })
