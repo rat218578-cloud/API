@@ -4,7 +4,7 @@ export interface FootballStudioRound {
   horario: string;
   home: string;
   away: string;
-  resultado: 'H' | 'A' | 'D';
+  resultado: 'H' | 'A' | 'D';  // ✅ D = Draw (Empate)
   troca_de_baralho: boolean;
 }
 
@@ -52,7 +52,8 @@ class FootballStudioService {
       const data: FootballStudioResponse = await response.json();
       console.log(`✅ ${data.total} registros recebidos da API.`);
       
-      this.history = data.history.reverse(); // Mantém ordem cronológica
+      // Mantém ordem cronológica (mais antigo primeiro)
+      this.history = data.history.reverse();
       this.lastUpdate = new Date();
       this.connected = data.success;
       return this.history;
@@ -91,7 +92,7 @@ class FootballStudioService {
     const total = this.history.length;
     const wins = this.history.filter(r => r.resultado === 'H').length;
     const losses = this.history.filter(r => r.resultado === 'A').length;
-    const draws = this.history.filter(r => r.resultado === 'D').length;
+    const draws = this.history.filter(r => r.resultado === 'D').length;  // ✅ AGORA CONTA EMPATES
     return { total, wins, losses, draws };
   }
 
@@ -105,7 +106,7 @@ class FootballStudioService {
     const last10 = this.history.slice(-10);
     const wins = last10.filter(r => r.resultado === 'H').length;
     const losses = last10.filter(r => r.resultado === 'A').length;
-    const draws = last10.filter(r => r.resultado === 'D').length;
+    const draws = last10.filter(r => r.resultado === 'D').length;  // ✅ EMPATES INCLUÍDOS
 
     const total = last10.length;
     const probCasa = (wins / total) * 100;
