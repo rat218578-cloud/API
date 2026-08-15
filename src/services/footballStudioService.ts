@@ -11,20 +11,20 @@ export interface FootballStudioRound {
 }
 
 export const ROLETAS_FOOTBALL = [
-  { 
-    id: 'studio_1', 
-    nome: '⚽ Football Studio', 
-    slug: 'evolution/football-studio', 
-    gameId: 'TopCard000000001', 
-    provedor: 'Evolution', 
+  {
+    id: 'studio_1',
+    nome: '⚽ Football Studio',
+    slug: 'evolution/football-studio',
+    gameId: 'TopCard000000001',
+    provedor: 'Evolution',
     cor: '#22c55e'
   },
-  { 
-    id: 'studio_4', 
-    nome: '⚽ Football Studio Ao Vivo', 
-    slug: 'evolution/football-studio', 
-    gameId: 'TopCard000000004', 
-    provedor: 'Evolution', 
+  {
+    id: 'studio_4',
+    nome: '⚽ Football Studio Ao Vivo',
+    slug: 'evolution/football-studio',
+    gameId: 'TopCard000000004',
+    provedor: 'Evolution',
     cor: '#22c55e'
   }
 ];
@@ -37,17 +37,19 @@ class FootballStudioService {
 
   async fetchHistory(): Promise<FootballStudioRound[]> {
     try {
+      console.log('🔄 Buscando dados da API:', API_URL);
       const response = await fetch(API_URL);
       if (!response.ok) {
         throw new Error(`Erro na API: ${response.status}`);
       }
       const data: FootballStudioRound[] = await response.json();
-      this.history = data.reverse();
+      console.log(`✅ ${data.length} registros recebidos da API.`);
+      this.history = data.reverse(); // Mantém ordem cronológica
       this.lastUpdate = new Date();
       this.connected = true;
       return this.history;
     } catch (error) {
-      console.error('Erro ao buscar historico:', error);
+      console.error('❌ Erro ao buscar histórico:', error);
       this.connected = false;
       return [];
     }
@@ -57,9 +59,10 @@ class FootballStudioService {
     if (this.pollingInterval) {
       clearInterval(this.pollingInterval);
     }
-
+    // Busca inicial
     this.fetchHistory().then(onUpdate);
 
+    // Polling a cada 'interval' ms
     this.pollingInterval = setInterval(async () => {
       const newData = await this.fetchHistory();
       onUpdate(newData);
@@ -75,14 +78,6 @@ class FootballStudioService {
 
   getHistory(limit: number = 500): FootballStudioRound[] {
     return this.history.slice(-limit).reverse();
-  }
-
-  getLastNumbers(count: number = 10): number[] {
-    return this.history.slice(-count).reverse().map(r => {
-      if (r.resultado === 'H') return 1;
-      if (r.resultado === 'D') return 0;
-      return -1;
-    });
   }
 
   getStatistics() {
@@ -106,9 +101,9 @@ class FootballStudioService {
     const draws = last10.filter(r => r.resultado === 'D').length;
 
     const total = last10.length;
-    const probCasa = ((wins / total) * 100);
-    const probEmpate = ((draws / total) * 100);
-    const probVisitante = ((losses / total) * 100);
+    const probCasa = (wins / total) * 100;
+    const probEmpate = (draws / total) * 100;
+    const probVisitante = (losses / total) * 100;
 
     let streak = 0;
     let streakType = '';
@@ -126,7 +121,6 @@ class FootballStudioService {
 
     let prediction = 'CASA';
     let confidence = 0;
-    
     if (probCasa > probVisitante && probCasa > probEmpate) {
       prediction = 'CASA';
       confidence = Math.round(probCasa);
@@ -139,10 +133,10 @@ class FootballStudioService {
     }
 
     return {
-      probabilidades: { 
-        casa: probCasa.toFixed(1), 
-        empate: probEmpate.toFixed(1), 
-        visitante: probVisitante.toFixed(1) 
+      probabilidades: {
+        casa: probCasa.toFixed(1),
+        empate: probEmpate.toFixed(1),
+        visitante: probVisitante.toFixed(1)
       },
       streak: { tipo: streakType, tamanho: streak },
       predicao: prediction,

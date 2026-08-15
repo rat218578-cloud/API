@@ -18,8 +18,8 @@ export function FootballStudioDashboard() {
 
   useEffect(() => {
     setLoading(true);
-    
     const onUpdate = (newHistory: any[]) => {
+      console.log('📊 Atualizando dashboard com', newHistory.length, 'registros');
       setHistory(newHistory);
       setStats(footballStudioService.getStatistics());
       setSignals(footballStudioService.getSignals());
@@ -45,14 +45,11 @@ export function FootballStudioDashboard() {
     setSelectedSlug(null);
   };
 
-  // Função para extrair número e naipe da carta
   const getCardInfo = (card: string) => {
-    if (!card) return { number: '?', suit: '?' };
+    if (!card) return { number: '?', suit: '?', color: 'text-text-muted' };
     const number = card.slice(0, -1);
     const suit = card.slice(-1);
-    const suitEmoji: Record<string, string> = {
-      '♥': '♥️', '♦': '♦️', '♠': '♠️', '♣': '♣️'
-    };
+    const suitEmoji: Record<string, string> = { '♥': '♥️', '♦': '♦️', '♠': '♠️', '♣': '♣️' };
     const suitColors: Record<string, string> = {
       '♥': 'text-red-400',
       '♦': 'text-red-400',
@@ -62,31 +59,24 @@ export function FootballStudioDashboard() {
     return { number, suit: suitEmoji[suit] || suit, color: suitColors[suit] || 'text-text-primary' };
   };
 
-  // Top cartas (mais frequentes)
   const topCards = useMemo(() => {
     if (!history || history.length === 0) return [];
-    
-    // Conta todas as cartas (Casa + Visitante)
     const counts: Record<string, number> = {};
     history.forEach((item: any) => {
       const cards = [item.home, item.away];
       cards.forEach((card: string) => {
-        if (card) {
-          counts[card] = (counts[card] || 0) + 1;
-        }
+        if (card) counts[card] = (counts[card] || 0) + 1;
       });
     });
-    
     return Object.entries(counts)
       .map(([card, count]) => ({ card, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 8);
   }, [history]);
 
-  // Últimos 3 resultados
   const getLastThree = () => {
     if (!history || history.length === 0) return ['--', '--', '--'];
-    return history.slice(0, 3).map((item: any) => 
+    return history.slice(0, 3).map((item: any) =>
       item.resultado === 'H' ? 'C' : item.resultado === 'A' ? 'V' : 'E'
     );
   };
@@ -111,13 +101,11 @@ export function FootballStudioDashboard() {
       <div className="flex items-center gap-2 text-xs">
         <span className={`w-2 h-2 rounded-full ${isConnected && isRealData ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
         <span className={isConnected && isRealData ? 'text-emerald-400' : 'text-yellow-400'}>
-          {isConnected && isRealData 
-            ? '📡 Dados REAIS' 
-            : '⏳ Aguardando dados...'}
+          {isConnected && isRealData
+            ? `📡 Conectado (${totalNumbers} rodadas)`
+            : isConnected ? '⏳ Aguardando dados...' : '🔌 Falha na conexão'}
         </span>
-        {isRealData && (
-          <span className="text-emerald-400">✅ {totalNumbers} rodadas</span>
-        )}
+        {isRealData && <span className="text-emerald-400">✅ Dados REAIS</span>}
       </div>
 
       {/* Menu de Mesas */}
@@ -144,23 +132,17 @@ export function FootballStudioDashboard() {
         ))}
       </div>
 
-      {/* Grid Principal */}
+      {/* Grid Principal (Catálogo + Vídeo + Grupos) */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        {/* Coluna Esquerda - Catálogo com Cartas */}
+        {/* Catálogo com Cartas */}
         <div className={`xl:col-span-2 transition-all duration-300 ${showCatalog ? 'block' : 'hidden xl:block'}`}>
           <div className="bg-bg-card border border-border-default rounded-2xl p-3">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider">
-                📊 Catalogo {isRealData ? '🔴' : '⏳'}
-              </h3>
-              <button 
-                onClick={() => setShowCatalog(!showCatalog)}
-                className="xl:hidden p-1 rounded-lg hover:bg-bg-tertiary"
-              >
+              <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider">📊 Catálogo {isRealData ? '🔴' : '⏳'}</h3>
+              <button onClick={() => setShowCatalog(!showCatalog)} className="xl:hidden p-1 rounded-lg hover:bg-bg-tertiary">
                 {showCatalog ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
             </div>
-
             <div className="space-y-1 max-h-[200px] overflow-y-auto">
               <div className="grid grid-cols-3 text-[8px] text-text-muted uppercase py-1 border-b border-border-default text-center">
                 <span>Carta</span><span>Total</span><span>%</span>
@@ -170,45 +152,33 @@ export function FootballStudioDashboard() {
                   const cardInfo = getCardInfo(item.card);
                   return (
                     <div key={item.card} className="grid grid-cols-3 items-center py-1 text-[10px] border-b border-border-default/30 text-center">
-                      <span className={`font-bold ${cardInfo.color}`}>
-                        {cardInfo.number}{cardInfo.suit}
-                      </span>
+                      <span className={`font-bold ${cardInfo.color}`}>{cardInfo.number}{cardInfo.suit}</span>
                       <span className="text-text-secondary">{item.count}</span>
-                      <span className="text-text-secondary">
-                        {((item.count / (totalNumbers * 2)) * 100).toFixed(1)}%
-                      </span>
+                      <span className="text-text-secondary">{((item.count / (totalNumbers * 2)) * 100).toFixed(1)}%</span>
                     </div>
                   );
                 })
               ) : (
-                <div className="text-center py-4 text-text-muted text-xs">
-                  ⏳ Aguardando cartas...
-                </div>
+                <div className="text-center py-4 text-text-muted text-xs">⏳ Aguardando cartas...</div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Coluna Central - Vídeo */}
+        {/* Vídeo */}
         <div className="xl:col-span-7">
           {showVideo && selectedSlug ? (
-            <LiveGameView
-              slug={selectedSlug}
-              isOpen={showVideo}
-              onClose={closeGame}
-            />
+            <LiveGameView slug={selectedSlug} isOpen={showVideo} onClose={closeGame} />
           ) : (
             <div className="bg-bg-card border border-border-default rounded-2xl p-8 flex flex-col items-center justify-center min-h-[500px]">
               <div className="text-6xl mb-4">⚽</div>
               <h3 className="text-lg font-bold text-text-primary mb-2">Escolha uma mesa</h3>
-              <p className="text-text-muted text-sm text-center max-w-md">
-                Selecione uma mesa no topo para ver o jogo ao vivo
-              </p>
+              <p className="text-text-muted text-sm text-center max-w-md">Selecione uma mesa no topo para ver o jogo ao vivo</p>
             </div>
           )}
         </div>
 
-        {/* Coluna Direita - Grupos */}
+        {/* Grupos e Assertividade */}
         <div className="xl:col-span-3 space-y-4">
           <div className="bg-bg-card border border-border-default rounded-2xl p-4">
             <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">📈 Grupos</h3>
@@ -222,8 +192,7 @@ export function FootballStudioDashboard() {
                       history[0]?.resultado === 'A' ? 'bg-red-500/20 text-red-400' :
                       'bg-yellow-500/20 text-yellow-400'
                     }`}>
-                      {history[0]?.resultado === 'H' ? 'CASA' : 
-                       history[0]?.resultado === 'A' ? 'VISITANTE' : 'EMPATE'}
+                      {history[0]?.resultado === 'H' ? 'CASA' : history[0]?.resultado === 'A' ? 'VISITANTE' : 'EMPATE'}
                     </span>
                     <span className="text-[8px] text-emerald-400">● REAL</span>
                   </span>
@@ -232,7 +201,6 @@ export function FootballStudioDashboard() {
                 )}
               </div>
             </div>
-            
             <div className="flex items-center justify-center gap-3 text-center">
               {lastThree.map((num, idx) => (
                 <div key={idx} className="text-center">
@@ -242,25 +210,17 @@ export function FootballStudioDashboard() {
                       num === 'V' ? 'bg-red-500/20 text-red-400' :
                       'bg-yellow-500/20 text-yellow-400'
                     ) : 'bg-bg-tertiary text-text-muted'
-                  }`}>
-                    {num}
-                  </div>
-                  <div className="text-[8px] text-text-muted mt-0.5">
-                    {idx === 0 ? 'Último' : idx === 1 ? 'Penúlt' : 'Antep'}
-                  </div>
+                  }`}>{num}</div>
+                  <div className="text-[8px] text-text-muted mt-0.5">{idx === 0 ? 'Último' : idx === 1 ? 'Penúlt' : 'Antep'}</div>
                 </div>
               ))}
             </div>
-            
             <div className="mt-3 p-2 rounded-lg bg-bg-tertiary border border-border-default text-center">
               <div className="text-[10px] text-text-muted">Tendência</div>
-              <div className="text-sm font-bold text-emerald-400">
-                {isRealData ? '⬆ Forte' : '⏳ Aguardando...'}
-              </div>
+              <div className="text-sm font-bold text-emerald-400">{isRealData ? '⬆ Forte' : '⏳ Aguardando...'}</div>
             </div>
           </div>
 
-          {/* Assertividade */}
           <div className="bg-bg-card border border-border-default rounded-2xl p-4">
             <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">🎯 Assertividade</h3>
             <div className="space-y-3">
@@ -272,15 +232,10 @@ export function FootballStudioDashboard() {
                 <div key={s.id}>
                   <div className="flex items-center justify-between text-xs mb-1">
                     <span className="text-text-secondary">{s.name}</span>
-                    <span className="font-bold" style={{ color: s.color }}>
-                      {isRealData ? s.value : '--'}%
-                    </span>
+                    <span className="font-bold" style={{ color: s.color }}>{isRealData ? s.value : '--'}%</span>
                   </div>
                   <div className="h-1.5 rounded-full bg-bg-tertiary overflow-hidden">
-                    <div 
-                      className="h-full rounded-full transition-all duration-500" 
-                      style={{ width: isRealData ? `${s.value}%` : '0%', backgroundColor: s.color }} 
-                    />
+                    <div className="h-full rounded-full transition-all duration-500" style={{ width: isRealData ? `${s.value}%` : '0%', backgroundColor: s.color }} />
                   </div>
                 </div>
               ))}
@@ -290,52 +245,49 @@ export function FootballStudioDashboard() {
       </div>
 
       {/* IA de Sinais */}
-      <div className="grid grid-cols-1 gap-4">
-        <div className="bg-bg-card border border-border-default rounded-2xl p-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center animate-pulse-glow">
-                <Brain className="w-4 h-4 text-white" />
-              </div>
-              <div>
-                <h3 className="font-bold text-text-primary text-sm">IA de Sinais</h3>
-                <p className="text-[10px] text-text-muted">Geração inteligente de entradas</p>
-              </div>
+      <div className="bg-bg-card border border-border-default rounded-2xl p-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center animate-pulse-glow">
+              <Brain className="w-4 h-4 text-white" />
             </div>
-            <button
-              onClick={() => {
-                if (signals) {
-                  alert(`🎯 Sinal: ${signals.predicao}\nConfiança: ${signals.confianca}%\nStreak: ${signals.streak.tipo} ${signals.streak.tamanho}x`);
-                }
-              }}
-              disabled={!isRealData}
-              className="btn-primary flex items-center gap-2 px-4 py-2 rounded-xl text-xs disabled:opacity-50"
-            >
-              <Sparkles className="w-3 h-3" />
-              {signals ? 'Ver Sinal' : 'Aguardando dados'}
-            </button>
+            <div>
+              <h3 className="font-bold text-text-primary text-sm">IA de Sinais</h3>
+              <p className="text-[10px] text-text-muted">Geração inteligente de entradas</p>
+            </div>
           </div>
-
-          {signals && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="p-3 rounded-xl bg-bg-tertiary border border-border-default text-center">
-                <div className="text-[10px] text-text-muted">CASA</div>
-                <div className="text-lg font-bold text-emerald-400">{signals.probabilidades.casa}%</div>
-              </div>
-              <div className="p-3 rounded-xl bg-bg-tertiary border border-border-default text-center">
-                <div className="text-[10px] text-text-muted">EMPATE</div>
-                <div className="text-lg font-bold text-yellow-400">{signals.probabilidades.empate}%</div>
-              </div>
-              <div className="p-3 rounded-xl bg-bg-tertiary border border-border-default text-center">
-                <div className="text-[10px] text-text-muted">VISITANTE</div>
-                <div className="text-lg font-bold text-red-400">{signals.probabilidades.visitante}%</div>
-              </div>
-            </div>
-          )}
+          <button
+            onClick={() => {
+              if (signals) {
+                alert(`🎯 Sinal: ${signals.predicao}\nConfiança: ${signals.confianca}%\nStreak: ${signals.streak.tipo} ${signals.streak.tamanho}x`);
+              }
+            }}
+            disabled={!isRealData}
+            className="btn-primary flex items-center gap-2 px-4 py-2 rounded-xl text-xs disabled:opacity-50"
+          >
+            <Sparkles className="w-3 h-3" />
+            {signals ? 'Ver Sinal' : 'Aguardando dados'}
+          </button>
         </div>
+        {signals && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="p-3 rounded-xl bg-bg-tertiary border border-border-default text-center">
+              <div className="text-[10px] text-text-muted">CASA</div>
+              <div className="text-lg font-bold text-emerald-400">{signals.probabilidades.casa}%</div>
+            </div>
+            <div className="p-3 rounded-xl bg-bg-tertiary border border-border-default text-center">
+              <div className="text-[10px] text-text-muted">EMPATE</div>
+              <div className="text-lg font-bold text-yellow-400">{signals.probabilidades.empate}%</div>
+            </div>
+            <div className="p-3 rounded-xl bg-bg-tertiary border border-border-default text-center">
+              <div className="text-[10px] text-text-muted">VISITANTE</div>
+              <div className="text-lg font-bold text-red-400">{signals.probabilidades.visitante}%</div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Histórico Completo com Cartas */}
+      {/* Histórico Completo */}
       <div className="bg-bg-card border border-border-default rounded-2xl overflow-hidden">
         <div className="p-4 border-b border-border-default flex justify-between items-center">
           <h3 className="font-bold text-text-primary">📊 Histórico Completo</h3>
@@ -347,12 +299,7 @@ export function FootballStudioDashboard() {
         <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
           <table className="w-full text-sm">
             <thead className="bg-bg-tertiary text-text-muted text-xs uppercase sticky top-0">
-              <tr>
-                <th className="text-left p-3">Horário</th>
-                <th className="text-center p-3">Casa</th>
-                <th className="text-center p-3">Resultado</th>
-                <th className="text-center p-3">Visitante</th>
-              </tr>
+              <tr><th className="text-left p-3">Horário</th><th className="text-center p-3">Casa</th><th className="text-center p-3">Resultado</th><th className="text-center p-3">Visitante</th></tr>
             </thead>
             <tbody className="divide-y divide-border-default">
               {history.slice(0, 50).map((round: any, index: number) => {
@@ -360,14 +307,8 @@ export function FootballStudioDashboard() {
                 const awayCard = getCardInfo(round.away);
                 return (
                   <tr key={index} className="hover:bg-bg-tertiary/50 transition-colors">
-                    <td className="p-3 text-text-secondary text-xs">
-                      {new Date(round.horario).toLocaleTimeString('pt-BR')}
-                    </td>
-                    <td className="p-3 text-center font-medium">
-                      <span className={`${homeCard.color}`}>
-                        {homeCard.number}{homeCard.suit}
-                      </span>
-                    </td>
+                    <td className="p-3 text-text-secondary text-xs">{new Date(round.horario).toLocaleTimeString('pt-BR')}</td>
+                    <td className="p-3 text-center font-medium"><span className={homeCard.color}>{homeCard.number}{homeCard.suit}</span></td>
                     <td className="p-3 text-center">
                       <span className={`px-2 py-1 rounded-full text-xs font-bold ${
                         round.resultado === 'H' ? 'bg-emerald-500/20 text-emerald-400' :
@@ -377,11 +318,7 @@ export function FootballStudioDashboard() {
                         {round.resultado === 'H' ? 'CASA' : round.resultado === 'A' ? 'VISITANTE' : 'EMPATE'}
                       </span>
                     </td>
-                    <td className="p-3 text-center font-medium">
-                      <span className={`${awayCard.color}`}>
-                        {awayCard.number}{awayCard.suit}
-                      </span>
-                    </td>
+                    <td className="p-3 text-center font-medium"><span className={awayCard.color}>{awayCard.number}{awayCard.suit}</span></td>
                   </tr>
                 );
               })}
