@@ -2,7 +2,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { footballStudioService, ROLETAS_FOOTBALL } from '../services/footballStudioService';
 import { LiveGameView } from './LiveGameView';
-import { Loader2, ChevronDown, ChevronUp, Sparkles, Brain, RefreshCw, Eye, EyeOff } from 'lucide-react';
+import { FootballStudioHistory } from './FootballStudioHistory';
+import { Loader2, ChevronDown, ChevronUp, Sparkles, Brain, Eye, EyeOff } from 'lucide-react';
 
 export function FootballStudioDashboard() {
   const [activeRoom, setActiveRoom] = useState(ROLETAS_FOOTBALL[0].id);
@@ -16,8 +17,8 @@ export function FootballStudioDashboard() {
   const [signals, setSignals] = useState<any>(null);
   const [stats, setStats] = useState({ total: 0, wins: 0, losses: 0, draws: 0 });
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [showCards, setShowCards] = useState(true); // ✅ Alterna entre cartas e letras
-  const [shoeChanges, setShoeChanges] = useState<any[]>([]); // ✅ Registra trocas de baralho
+  const [showCards, setShowCards] = useState(true);
+  const [shoeChanges, setShoeChanges] = useState<any[]>([]);
   
   const isMounted = useRef(true);
 
@@ -28,7 +29,6 @@ export function FootballStudioDashboard() {
     const onUpdate = (newHistory: any[]) => {
       if (!isMounted.current) return;
       
-      // ✅ Detecta trocas de baralho
       const changes = newHistory.filter((item: any) => item.troca_de_baralho === true);
       setShoeChanges(changes);
       
@@ -73,7 +73,6 @@ export function FootballStudioDashboard() {
     return { number, suit: suitEmoji[suit] || suit, color: suitColors[suit] || 'text-text-primary' };
   };
 
-  // ✅ Formata o resultado para exibição
   const getResultadoDisplay = (resultado: string) => {
     if (resultado === 'H') return 'CASA';
     if (resultado === 'A') return 'VISITANTE';
@@ -81,7 +80,6 @@ export function FootballStudioDashboard() {
     return '--';
   };
 
-  // ✅ Formata o resultado em letra única (C/V/E)
   const getResultadoLetra = (resultado: string) => {
     if (resultado === 'H') return 'C';
     if (resultado === 'A') return 'V';
@@ -89,7 +87,6 @@ export function FootballStudioDashboard() {
     return '--';
   };
 
-  // ✅ Obtém a cor do resultado
   const getResultadoColor = (resultado: string) => {
     if (resultado === 'H') return 'bg-emerald-500/20 text-emerald-400';
     if (resultado === 'A') return 'bg-red-500/20 text-red-400';
@@ -140,7 +137,7 @@ export function FootballStudioDashboard() {
 
   return (
     <div className="p-4 space-y-4">
-      {/* Status com botão de alternância */}
+      {/* Status */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs">
           <span className={`w-2 h-2 rounded-full ${isConnected && isRealData ? 'bg-emerald-500 animate-pulse' : 'bg-yellow-500'}`} />
@@ -157,7 +154,6 @@ export function FootballStudioDashboard() {
           )}
         </div>
         
-        {/* ✅ Botão para alternar entre Cartas e Letras */}
         <button
           onClick={() => setShowCards(!showCards)}
           className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium bg-bg-tertiary border border-border-default hover:border-accent-pink transition-colors"
@@ -344,81 +340,13 @@ export function FootballStudioDashboard() {
         )}
       </div>
 
-      {/* Histórico Completo com Troca de Baralho */}
-      <div className="bg-bg-card border border-border-default rounded-2xl overflow-hidden">
-        <div className="p-4 border-b border-border-default flex justify-between items-center">
-          <h3 className="font-bold text-text-primary">📊 Histórico Completo</h3>
-          <span className="text-xs text-text-muted flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            Atualizado a cada 2s • {totalNumbers} rodadas
-            {shoeChanges.length > 0 && (
-              <span className="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">
-                🔄 {shoeChanges.length} trocas de baralho
-              </span>
-            )}
-          </span>
-        </div>
-        <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-bg-tertiary text-text-muted text-xs uppercase sticky top-0">
-              <tr>
-                <th className="text-left p-3">Horário</th>
-                <th className="text-center p-3">Casa</th>
-                <th className="text-center p-3">Resultado</th>
-                <th className="text-center p-3">Visitante</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border-default">
-              {history.slice(0, 100).map((round: any, index: number) => {
-                // ✅ Se for troca de baralho, mostra uma linha especial
-                if (round.troca_de_baralho) {
-                  return (
-                    <tr key={index} className="bg-blue-500/5 border-l-4 border-blue-500">
-                      <td className="p-3 text-text-secondary text-xs" colSpan={4}>
-                        <div className="flex items-center gap-2 text-blue-400">
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span className="font-bold">🔄 TROCA DE BARALHO</span>
-                          <span className="text-[10px] text-text-muted">
-                            {new Date(round.horario).toLocaleTimeString('pt-BR')}
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                }
-
-                const homeCard = getCardInfo(round.home);
-                const awayCard = getCardInfo(round.away);
-                
-                // ✅ Se showCards for false, mostra apenas letras (C/V/E)
-                const homeDisplay = showCards ? `${homeCard.number}${homeCard.suit}` : getResultadoLetra(round.resultado);
-                const awayDisplay = showCards ? `${awayCard.number}${awayCard.suit}` : getResultadoLetra(round.resultado);
-                const homeColor = showCards ? homeCard.color : 'text-text-primary';
-                const awayColor = showCards ? awayCard.color : 'text-text-primary';
-
-                return (
-                  <tr key={index} className="hover:bg-bg-tertiary/50 transition-colors">
-                    <td className="p-3 text-text-secondary text-xs">
-                      {new Date(round.horario).toLocaleTimeString('pt-BR')}
-                    </td>
-                    <td className="p-3 text-center font-medium">
-                      <span className={homeColor}>{homeDisplay}</span>
-                    </td>
-                    <td className="p-3 text-center">
-                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${getResultadoColor(round.resultado)}`}>
-                        {getResultadoDisplay(round.resultado)}
-                      </span>
-                    </td>
-                    <td className="p-3 text-center font-medium">
-                      <span className={awayColor}>{awayDisplay}</span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* ✅ Histórico Horizontal (TÁBOLA BOLSA) */}
+      <FootballStudioHistory
+        history={history}
+        totalNumbers={totalNumbers}
+        shoeChanges={shoeChanges}
+        showCards={showCards}
+      />
     </div>
   );
 }
