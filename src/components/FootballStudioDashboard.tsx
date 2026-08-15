@@ -17,7 +17,6 @@ export function FootballStudioDashboard() {
   const [signals, setSignals] = useState<any>(null);
   const [stats, setStats] = useState({ total: 0, wins: 0, losses: 0, draws: 0 });
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [showCards, setShowCards] = useState(true);
   const [shoeChanges, setShoeChanges] = useState<any[]>([]);
   
   const isMounted = useRef(true);
@@ -155,11 +154,8 @@ export function FootballStudioDashboard() {
         </div>
         
         <button
-          onClick={() => setShowCards(!showCards)}
           className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium bg-bg-tertiary border border-border-default hover:border-accent-pink transition-colors"
         >
-          {showCards ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-          {showCards ? 'Ver Cartas' : 'Ver Letras'}
         </button>
       </div>
 
