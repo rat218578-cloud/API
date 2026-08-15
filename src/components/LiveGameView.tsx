@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Loader2, RefreshCw, X, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
+import { RefreshCw, X, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
 import { gameLinkService, ROLETAS } from '../services/gameLinkService';
 
 interface LiveGameViewProps {
@@ -10,19 +10,20 @@ interface LiveGameViewProps {
 }
 
 export function LiveGameView({ slug, isOpen, onClose, gameId }: LiveGameViewProps) {
-  const [loading, setLoading] = useState(false);
   const [gameUrl, setGameUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const loadAttempts = useRef(0);
   const lastGameId = useRef<string | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const roleta = ROLETAS.find(r => 
     (gameId && r.gameId === gameId) || r.slug === slug
   );
   const cor = roleta?.cor || '#6C3CE1';
 
-  // ✅ GERA URL DIRETA PARA FOOTBALL STUDIO
+  // GERA URL DIRETA PARA FOOTBALL STUDIO
   const gerarUrlDireta = (gameId: string): string => {
     const lobbyId = crypto.randomUUID().replace(/-/g, '');
     return `https://sortenabet.evo-games.com/frontend/evo/r2/#category=all_games&game=topcard&table_id=${gameId}&lobby_launch_id=${lobbyId}`;
@@ -37,39 +38,38 @@ export function LiveGameView({ slug, isOpen, onClose, gameId }: LiveGameViewProp
         lastGameId.current = gameId || null;
         loadAttempts.current = 0;
         setGameUrl(null);
+        setIsLoading(true);
         loadGame();
       } else if (!gameUrl) {
+        setIsLoading(true);
         loadGame();
       }
     }
   }, [isOpen, slug, gameId]);
 
   const loadGame = async () => {
-    setLoading(true);
-    setError(null);
-
     try {
       const token = localStorage.getItem('access_token');
       if (!token) {
         setError('Você precisa estar logado para jogar');
-        setLoading(false);
+        setIsLoading(false);
         return;
       }
 
       let url = null;
 
-      // ✅ SE FOR FOOTBALL STUDIO (gameId TopCard), USA URL DIRETA
+      // SE FOR FOOTBALL STUDIO (gameId TopCard), USA URL DIRETA
       if (gameId && gameId.startsWith('TopCard')) {
         url = gerarUrlDireta(gameId);
         console.log('🎯 Football Studio - URL direta gerada:', url);
       } else {
-        // ✅ PARA OUTROS JOGOS, USA A API NORMAL
         url = await gameLinkService.getGameUrl(slug);
       }
 
       if (url) {
         console.log('✅ URL carregada com sucesso!');
         setGameUrl(url);
+        setError(null);
       } else {
         setError('Não foi possível gerar o link. Tente novamente.');
       }
@@ -77,7 +77,7 @@ export function LiveGameView({ slug, isOpen, onClose, gameId }: LiveGameViewProp
       console.error('❌ Erro ao carregar jogo:', err);
       setError('Erro ao gerar link');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -98,6 +98,12 @@ export function LiveGameView({ slug, isOpen, onClose, gameId }: LiveGameViewProp
       document.exitFullscreen();
       setIsFullscreen(false);
     }
+  };
+
+  // ✅ QUANDO O IFRAME CARREGAR, ESCONDE O LOADING
+  const handleIframeLoad = () => {
+    console.log('✅ Iframe carregou!');
+    setIsLoading(false);
   };
 
   if (!isOpen) return null;
@@ -141,13 +147,13 @@ export function LiveGameView({ slug, isOpen, onClose, gameId }: LiveGameViewProp
             onClick={() => {
               loadAttempts.current = 0;
               setGameUrl(null);
+              setIsLoading(true);
               loadGame();
             }}
-            disabled={loading}
-            className="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors disabled:opacity-50"
+            className="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-muted hover:text-text-primary transition-colors"
             title="Gerar novo token"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
           <button
             onClick={toggleFullscreen}
@@ -165,20 +171,15 @@ export function LiveGameView({ slug, isOpen, onClose, gameId }: LiveGameViewProp
       </div>
 
       <div className="relative bg-black" style={{ minHeight: '500px', height: '65vh' }}>
-        {loading ? (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center">
-              <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4" style={{ color: cor }} />
-              <p className="text-text-muted text-sm">Carregando {gameId || slug}...</p>
-            </div>
-          </div>
-        ) : error ? (
+        {error ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center max-w-md px-4">
               <div className="text-6xl mb-4">🎰</div>
               <p className="text-red-400 text-sm mb-2">{error}</p>
               <button
                 onClick={() => {
+                  setGameUrl(null);
+                  setIsLoading(true);
                   loadGame();
                 }}
                 className="px-6 py-2 rounded-xl text-sm font-medium text-white"
@@ -189,25 +190,39 @@ export function LiveGameView({ slug, isOpen, onClose, gameId }: LiveGameViewProp
             </div>
           </div>
         ) : gameUrl ? (
-          <iframe
-            key={gameUrl + gameId}
-            src={gameUrl}
-            className="w-full h-full border-0"
-            allow="autoplay; fullscreen; camera; microphone; accelerometer; gyroscope"
-            loading="lazy"
-            onError={() => {
-              console.log('⚠️ Iframe error, gerando novo token...');
-              loadGame();
-            }}
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-orientation-lock"
-          />
+          <>
+            {/* ✅ SEM ANIMAÇÃO DE LOADING - IFRAME DIRETO */}
+            <iframe
+              ref={iframeRef}
+              key={gameUrl + gameId}
+              src={gameUrl}
+              className="w-full h-full border-0"
+              allow="autoplay; fullscreen; camera; microphone; accelerometer; gyroscope"
+              loading="eager"
+              onLoad={handleIframeLoad}
+              onError={() => {
+                console.log('⚠️ Iframe error, gerando novo token...');
+                setGameUrl(null);
+                setIsLoading(true);
+                loadGame();
+              }}
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-orientation-lock"
+            />
+            {/* ✅ INDICADOR MINIMALISTA DE CARREGAMENTO */}
+            {isLoading && (
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                <div className="w-8 h-8 border-2 border-accent-pink/30 border-t-accent-pink rounded-full animate-spin" />
+              </div>
+            )}
+          </>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
-              <div className="text-6xl mb-4">🎰</div>
+              <div className="text-6xl mb-4">⚽</div>
               <p className="text-text-muted">Clique em "Gerar novo token" para começar</p>
               <button
                 onClick={() => {
+                  setIsLoading(true);
                   loadGame();
                 }}
                 className="mt-4 px-6 py-2 rounded-xl text-sm font-medium text-white"
@@ -227,6 +242,8 @@ export function LiveGameView({ slug, isOpen, onClose, gameId }: LiveGameViewProp
             <span className="text-[8px] text-amber-400">Token único por sessão</span>
             <button
               onClick={() => {
+                setGameUrl(null);
+                setIsLoading(true);
                 loadGame();
               }}
               className="text-accent-cyan hover:text-accent-cyan/80 transition-colors flex items-center gap-1"
