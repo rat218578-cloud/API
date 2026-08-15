@@ -7,10 +7,9 @@ interface LiveGameViewProps {
   isOpen: boolean;
   onClose: () => void;
   gameId?: string;
-  urlDireta?: string; // ✅ NOVO: URL direta para Football Studio
 }
 
-export function LiveGameView({ slug, isOpen, onClose, gameId, urlDireta }: LiveGameViewProps) {
+export function LiveGameView({ slug, isOpen, onClose, gameId }: LiveGameViewProps) {
   const [loading, setLoading] = useState(false);
   const [gameUrl, setGameUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
