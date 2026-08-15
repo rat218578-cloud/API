@@ -59,26 +59,45 @@ export function FootballStudioDashboard() {
     return { number, suit: suitEmoji[suit] || suit, color: suitColors[suit] || 'text-text-primary' };
   };
 
+  // ✅ CORRIGIDO: Top cards com ordenação correta
   const topCards = useMemo(() => {
     if (!history || history.length === 0) return [];
     const counts: Record<string, number> = {};
     history.forEach((item: any) => {
       const cards = [item.home, item.away];
       cards.forEach((card: string) => {
-        if (card) counts[card] = (counts[card] || 0) + 1;
+        if (card) {
+          counts[card] = (counts[card] || 0) + 1;
+        }
       });
     });
     return Object.entries(counts)
       .map(([card, count]) => ({ card, count }))
-      .sort((a, b) => b.count - a.count)
+      .sort((a, b) => b.count - a.count)  // ✅ Ordena por frequência
       .slice(0, 8);
   }, [history]);
 
+  // ✅ CORRIGIDO: Últimos 3 resultados PEGA DO HISTÓRICO
   const getLastThree = () => {
     if (!history || history.length === 0) return ['--', '--', '--'];
-    return history.slice(0, 3).map((item: any) =>
-      item.resultado === 'H' ? 'C' : item.resultado === 'A' ? 'V' : 'E'
-    );
+    // Pega os 3 primeiros do histórico (mais recentes)
+    const recentes = history.slice(0, 3);
+    return recentes.map((item: any) => {
+      if (item.resultado === 'H') return 'C';
+      if (item.resultado === 'A') return 'V';
+      if (item.resultado === 'D') return 'E';
+      return '--';
+    });
+  };
+
+  // ✅ CORRIGIDO: Último resultado com nome completo
+  const getLastResult = () => {
+    if (!history || history.length === 0) return 'Aguardando...';
+    const last = history[0];
+    if (last.resultado === 'H') return 'CASA';
+    if (last.resultado === 'A') return 'VISITANTE';
+    if (last.resultado === 'D') return 'EMPATE';
+    return '--';
   };
 
   if (loading) {
@@ -93,6 +112,7 @@ export function FootballStudioDashboard() {
   }
 
   const lastThree = getLastThree();
+  const lastResult = getLastResult();
   const isRealData = history.length > 0;
 
   return (
@@ -192,7 +212,7 @@ export function FootballStudioDashboard() {
                       history[0]?.resultado === 'A' ? 'bg-red-500/20 text-red-400' :
                       'bg-yellow-500/20 text-yellow-400'
                     }`}>
-                      {history[0]?.resultado === 'H' ? 'CASA' : history[0]?.resultado === 'A' ? 'VISITANTE' : 'EMPATE'}
+                      {lastResult}
                     </span>
                     <span className="text-[8px] text-emerald-400">● REAL</span>
                   </span>
