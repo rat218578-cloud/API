@@ -30,10 +30,11 @@ export function LiveGameView({ slug, isOpen, onClose, gameId }: LiveGameViewProp
 
   useEffect(() => {
     if (isOpen && slug) {
+      console.log('🎮 LiveGameView - slug:', slug, 'gameId:', gameId);
+      
       if (lastGameId.current !== gameId) {
         console.log('🔄 GameId mudou, recarregando:', gameId);
         lastGameId.current = gameId || null;
-        gameLinkService.forceRefresh(slug);
         loadAttempts.current = 0;
         setGameUrl(null);
         loadGame();
@@ -60,21 +61,21 @@ export function LiveGameView({ slug, isOpen, onClose, gameId }: LiveGameViewProp
       // ✅ SE FOR FOOTBALL STUDIO (gameId TopCard), USA URL DIRETA
       if (gameId && gameId.startsWith('TopCard')) {
         url = gerarUrlDireta(gameId);
-        console.log(`🎯 Football Studio - URL direta gerada para gameId: ${gameId}`);
+        console.log('🎯 Football Studio - URL direta gerada:', url);
       } else {
         // ✅ PARA OUTROS JOGOS, USA A API NORMAL
         url = await gameLinkService.getGameUrl(slug);
       }
 
       if (url) {
-        console.log(`✅ URL carregada para gameId: ${gameId || 'default'}`);
+        console.log('✅ URL carregada com sucesso!');
         setGameUrl(url);
       } else {
         setError('Não foi possível gerar o link. Tente novamente.');
       }
     } catch (err) {
+      console.error('❌ Erro ao carregar jogo:', err);
       setError('Erro ao gerar link');
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -138,7 +139,6 @@ export function LiveGameView({ slug, isOpen, onClose, gameId }: LiveGameViewProp
           )}
           <button
             onClick={() => {
-              gameLinkService.forceRefresh(slug);
               loadAttempts.current = 0;
               setGameUrl(null);
               loadGame();
@@ -179,7 +179,6 @@ export function LiveGameView({ slug, isOpen, onClose, gameId }: LiveGameViewProp
               <p className="text-red-400 text-sm mb-2">{error}</p>
               <button
                 onClick={() => {
-                  gameLinkService.forceRefresh(slug);
                   loadGame();
                 }}
                 className="px-6 py-2 rounded-xl text-sm font-medium text-white"
@@ -198,7 +197,6 @@ export function LiveGameView({ slug, isOpen, onClose, gameId }: LiveGameViewProp
             loading="lazy"
             onError={() => {
               console.log('⚠️ Iframe error, gerando novo token...');
-              gameLinkService.forceRefresh(slug);
               loadGame();
             }}
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-orientation-lock"
@@ -210,7 +208,6 @@ export function LiveGameView({ slug, isOpen, onClose, gameId }: LiveGameViewProp
               <p className="text-text-muted">Clique em "Gerar novo token" para começar</p>
               <button
                 onClick={() => {
-                  gameLinkService.forceRefresh(slug);
                   loadGame();
                 }}
                 className="mt-4 px-6 py-2 rounded-xl text-sm font-medium text-white"
@@ -230,7 +227,6 @@ export function LiveGameView({ slug, isOpen, onClose, gameId }: LiveGameViewProp
             <span className="text-[8px] text-amber-400">Token único por sessão</span>
             <button
               onClick={() => {
-                gameLinkService.forceRefresh(slug);
                 loadGame();
               }}
               className="text-accent-cyan hover:text-accent-cyan/80 transition-colors flex items-center gap-1"

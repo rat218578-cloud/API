@@ -61,7 +61,7 @@ export function FootballStudioDashboard() {
       isMounted.current = false;
       footballStudioService.stopPolling();
     };
-  }, [activeRoom, temHistorico]); // ✅ RECARREGA QUANDO TROCA DE MESA
+  }, [activeRoom, temHistorico]);
 
   const openGame = (slug: string, gameId: string) => {
     console.log('🎮 Abrindo jogo:', slug, 'gameId:', gameId);
@@ -197,7 +197,7 @@ export function FootballStudioDashboard() {
 
       {/* Grid Principal */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        {/* Catálogo - SÓ SE TIVER HISTORICO */}
+        {/* Catálogo */}
         <div className={`xl:col-span-2 transition-all duration-300 ${showCatalog ? 'block' : 'hidden xl:block'}`}>
           <div className="bg-bg-card border border-border-default rounded-2xl p-3">
             <div className="flex items-center justify-between mb-3">
@@ -236,10 +236,11 @@ export function FootballStudioDashboard() {
         <div className="xl:col-span-7">
           {showVideo && selectedSlug ? (
             <LiveGameView
-              key={selectedSlug + activeRoom} // ✅ FORÇA RECARREGAR QUANDO TROCA
+              key={selectedSlug + activeRoom + mesaAtual.gameId}
               slug={selectedSlug}
               isOpen={showVideo}
               onClose={closeGame}
+              gameId={mesaAtual.gameId}
             />
           ) : (
             <div className="bg-bg-card border border-border-default rounded-2xl p-8 flex flex-col items-center justify-center min-h-[500px]">
@@ -250,7 +251,7 @@ export function FootballStudioDashboard() {
           )}
         </div>
 
-        {/* Grupos - SÓ SE TIVER HISTORICO */}
+        {/* Grupos */}
         <div className="xl:col-span-3 space-y-4">
           {isRealData ? (
             <>
@@ -318,7 +319,7 @@ export function FootballStudioDashboard() {
         </div>
       </div>
 
-      {/* IA de Sinais - SÓ SE TIVER HISTORICO */}
+      {/* IA de Sinais */}
       {isRealData && (
         <div className="bg-bg-card border border-border-default rounded-2xl p-4">
           <div className="flex items-center justify-between mb-4">
@@ -363,7 +364,7 @@ export function FootballStudioDashboard() {
         </div>
       )}
 
-      {/* Histórico Vertical - SÓ SE TIVER HISTORICO */}
+      {/* Histórico Vertical */}
       {isRealData && (
         <div className="bg-bg-card border border-border-default rounded-2xl overflow-hidden">
           <div className="p-4 border-b border-border-default flex justify-between items-center">
