@@ -37,7 +37,6 @@ class CatalogService {
   observeCard(cardFull: string): boolean {
     if (!cardFull) return false;
     
-    const rank = cardFull.slice(0, -1);
     const suit = cardFull.slice(-1);
     
     if (!this.suits.includes(suit)) return false;
@@ -72,13 +71,12 @@ class CatalogService {
     const topCards: CardCount[] = [];
     const totalRounds = this.totalRounds || 1;
     
-    // Ordena por contagem (maior primeiro)
     const sorted = Object.entries(this.cardCounts)
       .sort((a, b) => b[1] - a[1]);
     
     for (const [card, count] of sorted) {
       if (count > 0) {
-        const rank = card.slice(0, -1); // usado
+        const rank = card.slice(0, -1);
         const suit = card.slice(-1);
         topCards.push({
           card,

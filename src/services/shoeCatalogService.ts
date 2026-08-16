@@ -75,7 +75,6 @@ class ShoeCatalogService {
   observeCard(cardFull: string): boolean {
     if (!cardFull) return false;
     
-    const rank = cardFull.slice(0, -1);
     const suit = cardFull.slice(-1) as '♠️' | '♥️' | '♦️' | '♣️';
     
     if (!this.suits.includes(suit)) return false;
@@ -118,7 +117,6 @@ class ShoeCatalogService {
     
     const cardsRemaining = totalCards - cardsObserved;
     
-    // Por naipe
     const bySuit = {} as any;
     for (const suit of this.suits) {
       let observed = 0;
@@ -133,7 +131,6 @@ class ShoeCatalogService {
       };
     }
 
-    // Por rank
     const byRank = {} as any;
     for (const rank of this.ranks) {
       let observed = 0;
@@ -148,12 +145,11 @@ class ShoeCatalogService {
       };
     }
 
-    // Top cartas
     const topCards: CardData[] = [];
     for (const card of Object.keys(this.cardCounts)) {
       const count = this.cardCounts[card] || 0;
       if (count > 0) {
-        const rank = card.slice(0, -1); // usado
+        const rank = card.slice(0, -1);
         const suit = card.slice(-1) as '♠️' | '♥️' | '♦️' | '♣️';
         topCards.push({
           card,
