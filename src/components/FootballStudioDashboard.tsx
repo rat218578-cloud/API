@@ -2,8 +2,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { footballStudioService, ROLETAS_FOOTBALL } from '../services/footballStudioService';
 import { LiveGameView } from './LiveGameView';
-import { ShoeTracker } from "./ShoeTracker";
-import { Strategies } from "./Strategies";
+import { ShoeTracker } from './ShoeTracker';
+import { Strategies } from './Strategies';
 import { ChevronDown, ChevronUp, Sparkles, Brain } from 'lucide-react';
 
 export function FootballStudioDashboard() {
@@ -25,7 +25,7 @@ export function FootballStudioDashboard() {
   const mesaAtual = ROLETAS_FOOTBALL.find(m => m.id === activeRoom) || ROLETAS_FOOTBALL[0];
   const temHistorico = mesaAtual.temHistorico || false;
 
-  // ✅ ABRE O VÍDEO AUTOMATICAMENTE NA PRIMEIRA MESA
+  // Abre o vídeo automaticamente na primeira mesa
   useEffect(() => {
     if (isFirstLoad.current && !showVideo) {
       isFirstLoad.current = false;
@@ -303,6 +303,12 @@ export function FootballStudioDashboard() {
                   ))}
                 </div>
               </div>
+
+              {/* Shoe Tracker */}
+              <ShoeTracker history={history} />
+
+              {/* Estratégias G1 */}
+              <Strategies history={history} />
             </>
           ) : (
             <div className="bg-bg-card border border-border-default rounded-2xl p-4 text-center">
@@ -313,27 +319,6 @@ export function FootballStudioDashboard() {
           )}
         </div>
       </div>
-
-            </button>
-          </div>
-          {signals && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="p-3 rounded-xl bg-bg-tertiary border border-border-default text-center">
-                <div className="text-[10px] text-text-muted">CASA</div>
-                <div className="text-lg font-bold text-emerald-400">{signals.probabilidades.casa}%</div>
-              </div>
-              <div className="p-3 rounded-xl bg-bg-tertiary border border-border-default text-center">
-                <div className="text-[10px] text-text-muted">EMPATE</div>
-                <div className="text-lg font-bold text-yellow-400">{signals.probabilidades.empate}%</div>
-              </div>
-              <div className="p-3 rounded-xl bg-bg-tertiary border border-border-default text-center">
-                <div className="text-[10px] text-text-muted">VISITANTE</div>
-                <div className="text-lg font-bold text-red-400">{signals.probabilidades.visitante}%</div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Histórico Vertical */}
       {isRealData && (
