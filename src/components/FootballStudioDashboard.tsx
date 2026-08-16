@@ -2,6 +2,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { footballStudioService, ROLETAS_FOOTBALL } from '../services/footballStudioService';
 import { LiveGameView } from './LiveGameView';
+import { ShoeTracker } from "./ShoeTracker";
+import { Strategies } from "./Strategies";
 import { ChevronDown, ChevronUp, Sparkles, Brain } from 'lucide-react';
 
 export function FootballStudioDashboard() {
@@ -312,30 +314,6 @@ export function FootballStudioDashboard() {
         </div>
       </div>
 
-      {/* IA de Sinais */}
-      {isRealData && (
-        <div className="bg-bg-card border border-border-default rounded-2xl p-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center animate-pulse-glow">
-                <Brain className="w-4 h-4 text-white" />
-              </div>
-              <div>
-                <h3 className="font-bold text-text-primary text-sm">IA de Sinais</h3>
-                <p className="text-[10px] text-text-muted">Geração inteligente de entradas</p>
-              </div>
-            </div>
-            <button
-              onClick={() => {
-                if (signals) {
-                  alert(`🎯 Sinal: ${signals.predicao}\nConfiança: ${signals.confianca}%\nStreak: ${signals.streak.tipo} ${signals.streak.tamanho}x`);
-                }
-              }}
-              disabled={!isRealData}
-              className="btn-primary flex items-center gap-2 px-4 py-2 rounded-xl text-xs disabled:opacity-50"
-            >
-              <Sparkles className="w-3 h-3" />
-              {signals ? 'Ver Sinal' : 'Aguardando dados'}
             </button>
           </div>
           {signals && (
