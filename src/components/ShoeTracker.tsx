@@ -13,17 +13,14 @@ export function ShoeTracker({ history }: ShoeTrackerProps) {
   const [cardHistory, setCardHistory] = useState<any[]>([]);
 
   useEffect(() => {
-    // Verifica troca de baralho
     if (history.length > 0) {
       const changed = shoeTracker.checkShoeChange(history);
       if (changed) {
         setShoeNumber(shoeTracker.getShoeNumber());
       }
-      // Atualiza estatísticas
       const newStats = shoeTracker.getStats();
       setStats(newStats);
       
-      // Atualiza histórico da carta selecionada
       if (selectedCard) {
         const cardHistory = history
           .filter((h: any) => (h.home === selectedCard || h.away === selectedCard) && !h.troca_de_baralho)
@@ -33,7 +30,6 @@ export function ShoeTracker({ history }: ShoeTrackerProps) {
     }
   }, [history, selectedCard]);
 
-  // Inicializa o tracker
   useEffect(() => {
     shoeTracker.reset();
     setShoeNumber(shoeTracker.getShoeNumber());
@@ -46,11 +42,11 @@ export function ShoeTracker({ history }: ShoeTrackerProps) {
   const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
   const suits: ('♠️' | '♥️' | '♦️' | '♣️')[] = ['♠️', '♥️', '♦️', '♣️'];
 
-  const getCardCount = (rank: string, suit: string): number => {
+  const getCardCount = (rank: string): number => {
     return stats.byRank[rank]?.observed || 0;
   };
 
-  const getCardRemaining = (rank: string, suit: string): number => {
+  const getCardRemaining = (rank: string): number => {
     return stats.byRank[rank]?.remaining || 32;
   };
 
@@ -62,7 +58,6 @@ export function ShoeTracker({ history }: ShoeTrackerProps) {
 
   return (
     <div className="bg-bg-card border border-border-default rounded-2xl p-4 space-y-4">
-      {/* Cabeçalho */}
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-text-primary text-sm">🃏 SHOE #{shoeNumber}</h3>
         <div className="flex items-center gap-4 text-xs text-text-muted">
@@ -71,21 +66,18 @@ export function ShoeTracker({ history }: ShoeTrackerProps) {
         </div>
       </div>
 
-      {/* Mapa de Cartas */}
       <div className="space-y-1 max-h-[300px] overflow-y-auto">
-        {/* Cabeçalho dos naipes */}
         <div className="grid grid-cols-4 text-[10px] text-text-muted text-center font-bold border-b border-border-default pb-1">
           {suits.map(suit => (
             <span key={suit}>{suit}</span>
           ))}
         </div>
         
-        {/* Linhas das cartas */}
         {ranks.map(rank => (
           <div key={rank} className="grid grid-cols-4 gap-0.5">
             {suits.map(suit => {
-              const count = getCardCount(rank, suit);
-              const remaining = getCardRemaining(rank, suit);
+              const count = getCardCount(rank);
+              const remaining = getCardRemaining(rank);
               const barWidth = getBarWidth(count);
               const cardFull = `${rank}${suit}`;
               const isSelected = selectedCard === cardFull;
@@ -121,7 +113,6 @@ export function ShoeTracker({ history }: ShoeTrackerProps) {
         ))}
       </div>
 
-      {/* Detalhe da carta selecionada */}
       {selectedCard && cardHistory.length > 0 && (
         <div className="border-t border-border-default pt-3">
           <div className="flex items-center justify-between mb-2">

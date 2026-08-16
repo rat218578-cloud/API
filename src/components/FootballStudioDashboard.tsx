@@ -4,7 +4,7 @@ import { footballStudioService, ROLETAS_FOOTBALL } from '../services/footballStu
 import { LiveGameView } from './LiveGameView';
 import { ShoeTracker } from './ShoeTracker';
 import { Strategies } from './Strategies';
-import { ChevronDown, ChevronUp, Sparkles, Brain } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 
 export function FootballStudioDashboard() {
   const [activeRoom, setActiveRoom] = useState(ROLETAS_FOOTBALL[0].id);
@@ -14,7 +14,6 @@ export function FootballStudioDashboard() {
   const [showCatalog, setShowCatalog] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [totalNumbers, setTotalNumbers] = useState(0);
-  const [signals, setSignals] = useState<any>(null);
   const [stats, setStats] = useState({ total: 0, wins: 0, losses: 0, draws: 0 });
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [shoeChanges, setShoeChanges] = useState<any[]>([]);
@@ -46,7 +45,6 @@ export function FootballStudioDashboard() {
       
       setHistory(newHistory);
       setStats(footballStudioService.getStatistics());
-      setSignals(footballStudioService.getSignals());
       setIsConnected(footballStudioService.isConnected());
       setTotalNumbers(newHistory.length);
       setLastUpdate(footballStudioService.getLastUpdate());
@@ -57,7 +55,6 @@ export function FootballStudioDashboard() {
     } else {
       setHistory([]);
       setStats({ total: 0, wins: 0, losses: 0, draws: 0 });
-      setSignals(null);
       setIsConnected(false);
       setTotalNumbers(0);
       setShoeChanges([]);
