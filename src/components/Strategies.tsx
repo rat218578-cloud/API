@@ -1,19 +1,26 @@
 // src/components/Strategies.tsx
 import { useState, useEffect } from 'react';
-import { Volume2, VolumeX } from 'lucide-react';
+import { Volume2, VolumeX, Bell, BellOff } from 'lucide-react';
+import { notificationService } from '../services/notificationService';
 
 interface StrategiesProps {
   history: any[];
-  onNotify?: (message: string, type: 'casa' | 'visitante' | 'empate') => void;
 }
 
-export function Strategies({ history, onNotify }: StrategiesProps) {
+export function Strategies({ history }: StrategiesProps) {
   const [patterns, setPatterns] = useState<string[]>([]);
   const [nextBet, setNextBet] = useState<string>('Aguardando');
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [vibrationEnabled] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [activeStrategy, setActiveStrategy] = useState<'g1' | 'g2'>('g1');
   const [lastSignal, setLastSignal] = useState<string | null>(null);
+  const [signalHistory, setSignalHistory] = useState<string[]>([]);
+  const [debugInfo, setDebugInfo] = useState<string>('');
+
+  useEffect(() => {
+    notificationService.requestPermission();
+  }, []);
 
   // 🔵🔴 ESTRATÉGIAS G1
   const strategiesG1 = [
@@ -63,7 +70,6 @@ export function Strategies({ history, onNotify }: StrategiesProps) {
     return '';
   };
 
-  // Obtém a cor para o tipo de aposta
   const getBetColor = (bet: string): string => {
     if (bet === 'CASA') return 'text-emerald-400';
     if (bet === 'VISITANTE') return 'text-red-400';
@@ -71,30 +77,45 @@ export function Strategies({ history, onNotify }: StrategiesProps) {
     return 'text-text-muted';
   };
 
-  // Verifica padrões
+  const notifySignal = (signal: string, confidence: number, type: 'casa' | 'visitante' | 'empate') => {
+    const message = `${signal} - ${confidence}% de confiança`;
+    setSignalHistory(prev => [`${new Date().toLocaleTimeString()} - ${message}`, ...prev].slice(0, 20));
+
+    if (notificationsEnabled) {
+      notificationService.notify(message, type);
+      setLastSignal(`${signal} (${confidence}%)`);
+    }
+  };
+
   useEffect(() => {
-    if (!history || history.length === 0) return;
+    if (!history || history.length === 0) {
+      setDebugInfo('⏳ Aguardando histórico...');
+      return;
+    }
 
-    const recentes = history
-      .filter((h: any) => !h.troca_de_baralho)
-      .slice(0, 15)
-      .map((h: any) => getSymbol(h.resultado));
+    const validRounds = history.filter((h: any) => !h.troca_de_baralho);
+    if (validRounds.length < 3) {
+      setDebugInfo(`⏳ Aguardando mais rodadas... (${validRounds.length}/3)`);
+      return;
+    }
 
-    if (recentes.length < 3) return;
-
-    const foundPatterns: string[] = [];
+    // Pega os últimos 10 resultados
+    const recentes = validRounds.slice(0, 10).map((h: any) => getSymbol(h.resultado));
+    const currentStrategies = activeStrategy === 'g1' ? strategiesG1 : strategiesG2;
+    
+    let foundPatterns: string[] = [];
     let bestNext = 'Aguardando';
     let bestConfidence = 0;
-    const currentStrategies = activeStrategy === 'g1' ? strategiesG1 : strategiesG2;
+    let bestType: 'casa' | 'visitante' | 'empate' = 'info';
 
+    // Verifica cada estratégia
     for (const strategy of currentStrategies) {
       const pattern = strategy.pattern;
-      const lastN = recentes.slice(0, pattern.length);
       
-      // Verifica se o padrão bate
+      // Verifica se a sequência atual contém o padrão no início
       let match = true;
-      for (let i = 0; i < pattern.length && i < lastN.length; i++) {
-        if (lastN[i] !== pattern[i]) {
+      for (let i = 0; i < pattern.length && i < recentes.length; i++) {
+        if (recentes[i] !== pattern[i]) {
           match = false;
           break;
         }
@@ -103,43 +124,65 @@ export function Strategies({ history, onNotify }: StrategiesProps) {
       if (match) {
         const nextSymbol = strategy.next;
         let nextName = 'Aguardando';
-        if (nextSymbol === 'C') nextName = 'CASA';
-        else if (nextSymbol === 'V') nextName = 'VISITANTE';
-        else if (nextSymbol === 'E') nextName = 'EMPATE';
+        let type: 'casa' | 'visitante' | 'empate' = 'info';
         
-        const patternStr = pattern.join(' → ');
+        if (nextSymbol === 'C') { nextName = 'CASA'; type = 'casa'; }
+        else if (nextSymbol === 'V') { nextName = 'VISITANTE'; type = 'visitante'; }
+        else if (nextSymbol === 'E') { nextName = 'EMPATE'; type = 'empate'; }
+        
+        const patternStr = pattern.map(s => s === 'C' ? 'CASA' : s === 'V' ? 'VISIT' : 'EMP').join(' → ');
         foundPatterns.push(`↔️ ${patternStr} → ${nextName} (${strategy.name})`);
         
         if (nextName !== 'Aguardando') {
+          const confidence = Math.max(100 - (foundPatterns.length * 2), 65);
           bestNext = nextName;
-          bestConfidence = 100 - (foundPatterns.length * 3);
+          bestConfidence = confidence;
+          bestType = type;
           
-          // Notifica se encontrou padrão
-          if (onNotify && soundEnabled && bestConfidence > 70) {
-            const type = nextSymbol === 'C' ? 'casa' : nextSymbol === 'V' ? 'visitante' : 'empate';
-            onNotify(`🎯 Sinal: ${nextName} (${bestConfidence}%)`, type);
-            setLastSignal(`${nextName} (${bestConfidence}%)`);
-            
-            // Vibração
-            if (vibrationEnabled && navigator.vibrate) {
-              navigator.vibrate([200, 100, 200]);
-            }
+          if (confidence > 65 && notificationsEnabled) {
+            notifySignal(nextName, confidence, type);
           }
         }
         break;
       }
     }
 
+    // Se não encontrou padrão, tenta com padrões menores (3 rodadas)
+    if (foundPatterns.length === 0 && recentes.length >= 3) {
+      const last3 = recentes.slice(0, 3);
+      const last3Str = last3.join('');
+      
+      // Padrões simples de 3
+      if (last3Str === 'CVC' || last3Str === 'VCV') {
+        const next = last3Str === 'CVC' ? 'C' : 'V';
+        const nextName = next === 'C' ? 'CASA' : 'VISITANTE';
+        foundPatterns.push(`↔️ ${last3.join(' → ')} → ${nextName} (Alternância 3)`);
+        bestNext = nextName;
+        bestConfidence = 75;
+        bestType = next === 'C' ? 'casa' : 'visitante';
+        if (notificationsEnabled) notifySignal(nextName, 75, bestType);
+      }
+      
+      if (last3Str === 'EEE') {
+        foundPatterns.push(`↔️ ${last3.join(' → ')} → CASA (3 Empates)`);
+        bestNext = 'CASA';
+        bestConfidence = 70;
+        bestType = 'casa';
+        if (notificationsEnabled) notifySignal('CASA', 70, 'casa');
+      }
+    }
+
     setPatterns(foundPatterns);
     setNextBet(bestConfidence > 60 ? bestNext : 'Aguardando');
-  }, [history, activeStrategy, soundEnabled, vibrationEnabled, onNotify]);
+    setDebugInfo(`📊 ${validRounds.length} rodadas | Últimos: ${recentes.slice(0, 5).join(' ')}`);
+    
+  }, [history, activeStrategy, notificationsEnabled]);
 
   return (
     <div className="bg-bg-card border border-border-default rounded-2xl p-4 space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-text-primary text-sm">🎯 Estratégias</h3>
-        <div className="flex items-center gap-2">
-          {/* ✅ BOTÕES G1 / G2 */}
+        <div className="flex items-center gap-1">
           <div className="flex rounded-lg overflow-hidden border border-border-default">
             <button
               onClick={() => setActiveStrategy('g1')}
@@ -163,6 +206,14 @@ export function Strategies({ history, onNotify }: StrategiesProps) {
             </button>
           </div>
           <button
+            onClick={() => setNotificationsEnabled(!notificationsEnabled)}
+            className={`p-1.5 rounded-lg transition-colors ${
+              notificationsEnabled ? 'text-emerald-400 hover:bg-bg-tertiary' : 'text-text-muted'
+            }`}
+          >
+            {notificationsEnabled ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+          </button>
+          <button
             onClick={() => setSoundEnabled(!soundEnabled)}
             className={`p-1.5 rounded-lg transition-colors ${
               soundEnabled ? 'text-text-primary hover:bg-bg-tertiary' : 'text-text-muted'
@@ -173,21 +224,20 @@ export function Strategies({ history, onNotify }: StrategiesProps) {
         </div>
       </div>
 
-      {/* Próxima entrada */}
       <div className="p-3 rounded-xl bg-gradient-to-r from-accent-pink/10 to-violet-500/10 border border-accent-pink/20 text-center">
         <div className="text-[10px] text-text-muted">Próxima entrada</div>
         <div className={`text-xl font-bold ${getBetColor(nextBet)}`}>
           {nextBet}
         </div>
         {lastSignal && (
-          <div className="text-[8px] text-text-muted mt-1">
-            Último sinal: {lastSignal}
+          <div className="text-[8px] text-emerald-400 mt-1 animate-pulse">
+            🔔 Último sinal: {lastSignal}
           </div>
         )}
+        <div className="text-[6px] text-text-muted mt-1">{debugInfo}</div>
       </div>
 
-      {/* Padrões detectados */}
-      <div className="space-y-1 max-h-[150px] overflow-y-auto">
+      <div className="space-y-1 max-h-[120px] overflow-y-auto">
         {patterns.length > 0 ? (
           patterns.map((p, idx) => (
             <div key={idx} className="text-[10px] text-text-secondary py-1 px-2 rounded-lg bg-bg-tertiary/50">
@@ -195,25 +245,32 @@ export function Strategies({ history, onNotify }: StrategiesProps) {
             </div>
           ))
         ) : (
-          <div className="text-center text-[10px] text-text-muted py-4">
+          <div className="text-center text-[10px] text-text-muted py-3">
             ⏳ Aguardando padrões...
           </div>
         )}
       </div>
 
-      {/* Legenda */}
-      <div className="flex items-center justify-center gap-4 text-[8px] text-text-muted border-t border-border-default pt-2">
+      {signalHistory.length > 0 && (
+        <div className="border-t border-border-default pt-2">
+          <div className="text-[8px] text-text-muted mb-1">📋 Últimos sinais:</div>
+          <div className="space-y-0.5 max-h-[60px] overflow-y-auto">
+            {signalHistory.slice(0, 5).map((s, i) => (
+              <div key={i} className="text-[8px] text-text-secondary">{s}</div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center justify-center gap-3 text-[8px] text-text-muted border-t border-border-default pt-2">
         <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-emerald-500" />
-          C = Casa
+          <span className="w-2 h-2 rounded-full bg-emerald-500" /> C = Casa
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-red-500" />
-          V = Visitante
+          <span className="w-2 h-2 rounded-full bg-red-500" /> V = Visitante
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-yellow-500" />
-          E = Empate
+          <span className="w-2 h-2 rounded-full bg-yellow-500" /> E = Empate
         </span>
       </div>
     </div>
