@@ -2,8 +2,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { footballStudioService, ROLETAS_FOOTBALL } from '../services/footballStudioService';
 import { LiveGameView } from './LiveGameView';
-import { ShoeTracker } from './ShoeTracker';
 import { Strategies } from './Strategies';
+import { ShoeCatalog } from "./ShoeCatalog";
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
 export function FootballStudioDashboard() {
@@ -227,7 +227,6 @@ export function FootballStudioDashboard() {
           </div>
 
           {/* Shoe Tracker */}
-          {isRealData && <ShoeTracker history={history} />}
 
           {/* Estratégias G1/G2 */}
           {isRealData && <Strategies history={history} />}
