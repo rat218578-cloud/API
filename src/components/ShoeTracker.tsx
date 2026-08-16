@@ -1,5 +1,5 @@
 // src/components/ShoeTracker.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { shoeTracker, ShoeStats } from '../services/shoeTracker';
 
 interface ShoeTrackerProps {
@@ -11,30 +11,48 @@ export function ShoeTracker({ history }: ShoeTrackerProps) {
   const [shoeNumber, setShoeNumber] = useState(1);
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const [cardHistory, setCardHistory] = useState<any[]>([]);
+  const processedRef = useRef<number>(0);
 
   useEffect(() => {
-    if (history.length > 0) {
-      const changed = shoeTracker.checkShoeChange(history);
-      if (changed) {
-        setShoeNumber(shoeTracker.getShoeNumber());
-      }
+    if (!history || history.length === 0) return;
+
+    // ✅ PROCESSO O HISTÓRICO QUANDO ELE MUDA
+    const currentLength = history.length;
+    if (currentLength !== processedRef.current) {
+      processedRef.current = currentLength;
+      
+      // Verifica e atualiza o tracker
+      shoeTracker.checkAndUpdate(history);
+      
+      // Atualiza estatísticas
       const newStats = shoeTracker.getStats();
       setStats(newStats);
-      
-      if (selectedCard) {
-        const cardHistory = history
-          .filter((h: any) => (h.home === selectedCard || h.away === selectedCard) && !h.troca_de_baralho)
-          .slice(0, 10);
-        setCardHistory(cardHistory);
-      }
+      setShoeNumber(shoeTracker.getShoeNumber());
+    }
+
+    // Atualiza histórico da carta selecionada
+    if (selectedCard) {
+      const cardHistoryData = history
+        .filter((h: any) => (h.home === selectedCard || h.away === selectedCard) && !h.troca_de_baralho)
+        .slice(0, 10);
+      setCardHistory(cardHistoryData);
     }
   }, [history, selectedCard]);
 
+  // ✅ INICIALIZA O TRACKER COM O HISTÓRICO INICIAL
   useEffect(() => {
-    shoeTracker.reset();
-    setShoeNumber(shoeTracker.getShoeNumber());
-    const newStats = shoeTracker.getStats();
-    setStats(newStats);
+    if (history && history.length > 0) {
+      shoeTracker.processHistory(history);
+      const newStats = shoeTracker.getStats();
+      setStats(newStats);
+      setShoeNumber(shoeTracker.getShoeNumber());
+      processedRef.current = history.length;
+    } else {
+      shoeTracker.reset();
+      const newStats = shoeTracker.getStats();
+      setStats(newStats);
+      setShoeNumber(1);
+    }
   }, []);
 
   if (!stats) return null;
@@ -47,11 +65,11 @@ export function ShoeTracker({ history }: ShoeTrackerProps) {
   };
 
   const getCardRemaining = (rank: string): number => {
-    return stats.byRank[rank]?.remaining || 32;
+    return stats.byRank[rank]?.remaining || 4;
   };
 
   const getBarWidth = (count: number): string => {
-    const max = 32;
+    const max = 4;
     const percentage = (count / max) * 100;
     return `${Math.min(percentage, 100)}%`;
   };
@@ -73,44 +91,48 @@ export function ShoeTracker({ history }: ShoeTrackerProps) {
           ))}
         </div>
         
-        {ranks.map(rank => (
-          <div key={rank} className="grid grid-cols-4 gap-0.5">
-            {suits.map(suit => {
-              const count = getCardCount(rank);
-              const remaining = getCardRemaining(rank);
-              const barWidth = getBarWidth(count);
-              const cardFull = `${rank}${suit}`;
-              const isSelected = selectedCard === cardFull;
-              
-              return (
-                <button
-                  key={cardFull}
-                  onClick={() => {
-                    setSelectedCard(isSelected ? null : cardFull);
-                    if (!isSelected) {
-                      const historyCards = history
-                        .filter((h: any) => (h.home === cardFull || h.away === cardFull) && !h.troca_de_baralho)
-                        .slice(0, 10);
-                      setCardHistory(historyCards);
-                    }
-                  }}
-                  className={`relative p-1 rounded-lg text-center transition-all hover:bg-bg-tertiary ${
-                    isSelected ? 'ring-2 ring-accent-pink bg-bg-tertiary' : ''
-                  }`}
-                >
-                  <div className="text-[8px] font-bold text-text-primary">{rank}</div>
-                  <div className="h-1.5 rounded-full bg-bg-tertiary overflow-hidden">
-                    <div 
-                      className="h-full rounded-full bg-emerald-500/50 transition-all"
-                      style={{ width: barWidth }}
-                    />
-                  </div>
-                  <div className="text-[6px] text-text-muted">{remaining}</div>
-                </button>
-              );
-            })}
-          </div>
-        ))}
+        {ranks.map(rank => {
+          const count = getCardCount(rank);
+          const remaining = getCardRemaining(rank);
+          const barWidth = getBarWidth(count);
+          
+          return (
+            <div key={rank} className="grid grid-cols-4 gap-0.5">
+              {suits.map(suit => {
+                const cardFull = `${rank}${suit}`;
+                const isSelected = selectedCard === cardFull;
+                const cardCount = stats.observedCards?.filter((c: any) => c.full === cardFull).length || 0;
+                
+                return (
+                  <button
+                    key={cardFull}
+                    onClick={() => {
+                      setSelectedCard(isSelected ? null : cardFull);
+                      if (!isSelected) {
+                        const historyCards = history
+                          .filter((h: any) => (h.home === cardFull || h.away === cardFull) && !h.troca_de_baralho)
+                          .slice(0, 10);
+                        setCardHistory(historyCards);
+                      }
+                    }}
+                    className={`relative p-1 rounded-lg text-center transition-all hover:bg-bg-tertiary ${
+                      isSelected ? 'ring-2 ring-accent-pink bg-bg-tertiary' : ''
+                    }`}
+                  >
+                    <div className="text-[8px] font-bold text-text-primary">{rank}</div>
+                    <div className="h-1.5 rounded-full bg-bg-tertiary overflow-hidden">
+                      <div 
+                        className="h-full rounded-full bg-emerald-500/50 transition-all"
+                        style={{ width: barWidth }}
+                      />
+                    </div>
+                    <div className="text-[6px] text-text-muted">{remaining}</div>
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })}
       </div>
 
       {selectedCard && cardHistory.length > 0 && (

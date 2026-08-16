@@ -10,11 +10,12 @@ export interface ShoeStats {
   totalCards: number;
   cardsObserved: number;
   cardsRemaining: number;
+  shoeNumber: number;
   bySuit: {
-    '♠️': { total: number; observed: number; remaining: number; cards: Card[] };
-    '♥️': { total: number; observed: number; remaining: number; cards: Card[] };
-    '♦️': { total: number; observed: number; remaining: number; cards: Card[] };
-    '♣️': { total: number; observed: number; remaining: number; cards: Card[] };
+    '♠️': { total: number; observed: number; remaining: number };
+    '♥️': { total: number; observed: number; remaining: number };
+    '♦️': { total: number; observed: number; remaining: number };
+    '♣️': { total: number; observed: number; remaining: number };
   };
   byRank: Record<string, { total: number; observed: number; remaining: number }>;
 }
@@ -22,8 +23,17 @@ export interface ShoeStats {
 class ShoeTracker {
   private static instance: ShoeTracker;
   private shoeNumber: number = 1;
-  private cards: Card[] = [];
   private observedCards: Card[] = [];
+  private cardCounts: Record<string, number> = {};
+  private totalPerSuit: Record<string, number> = {
+    '♠️': 52,
+    '♥️': 52,
+    '♦️': 52,
+    '♣️': 52
+  };
+  private totalPerRank: Record<string, number> = {};
+  private suits: ('♠️' | '♥️' | '♦️' | '♣️')[] = ['♠️', '♥️', '♦️', '♣️'];
+  private ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 
   static getInstance(): ShoeTracker {
     if (!ShoeTracker.instance) {
@@ -32,72 +42,103 @@ class ShoeTracker {
     return ShoeTracker.instance;
   }
 
-  private generateDeck(): Card[] {
-    const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-    const suits: ('♠️' | '♥️' | '♦️' | '♣️')[] = ['♠️', '♥️', '♦️', '♣️'];
-    const deck: Card[] = [];
-    for (const suit of suits) {
-      for (const rank of ranks) {
-        deck.push({ rank, suit, full: `${rank}${suit}` });
-      }
+  constructor() {
+    this.reset();
+  }
+
+  reset() {
+    this.shoeNumber = 1;
+    this.observedCards = [];
+    this.cardCounts = {};
+    this.totalPerSuit = {
+      '♠️': 52,
+      '♥️': 52,
+      '♦️': 52,
+      '♣️': 52
+    };
+    this.totalPerRank = {};
+    for (const rank of this.ranks) {
+      this.totalPerRank[rank] = 4; // 4 de cada rank por baralho
     }
-    return deck;
   }
 
   startNewShoe() {
     this.shoeNumber++;
-    this.cards = [];
     this.observedCards = [];
-    const deck = this.generateDeck();
-    for (let i = 0; i < 8; i++) {
-      this.cards.push(...deck);
+    this.cardCounts = {};
+    this.totalPerSuit = {
+      '♠️': 52,
+      '♥️': 52,
+      '♦️': 52,
+      '♣️': 52
+    };
+    for (const rank of this.ranks) {
+      this.totalPerRank[rank] = 4;
     }
-    this.cards = this.shuffleArray(this.cards);
   }
 
-  private shuffleArray<T>(array: T[]): T[] {
-    for (let i = array.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [array[i], array[j]] = [array[j], array[i]];
-    }
-    return array;
+  // ✅ REGISTRA UMA CARTA OBSERVADA DO HISTÓRICO
+  observeCard(cardFull: string): boolean {
+    if (!cardFull) return false;
+    
+    // Extrai rank e suit
+    const rank = cardFull.slice(0, -1);
+    const suit = cardFull.slice(-1) as '♠️' | '♥️' | '♦️' | '♣️';
+    
+    // Verifica se é um naipe válido
+    if (!this.suits.includes(suit)) return false;
+    
+    // Incrementa contagem
+    const key = `${rank}${suit}`;
+    this.cardCounts[key] = (this.cardCounts[key] || 0) + 1;
+    
+    // Adiciona à lista de observadas
+    this.observedCards.push({ rank, suit, full: cardFull });
+    
+    return true;
   }
 
-  observeCard(cardFull: string) {
-    const card = this.cards.find(c => c.full === cardFull);
-    if (card) {
-      this.observedCards.push(card);
-      const index = this.cards.findIndex(c => c.full === cardFull);
-      if (index > -1) {
-        this.cards.splice(index, 1);
-      }
-      return true;
+  // ✅ PROCESSA TODO O HISTÓRICO
+  processHistory(history: any[]) {
+    if (!history || history.length === 0) return;
+    
+    // Verifica se houve troca de baralho
+    const shoeChange = history.find((h: any) => h.troca_de_baralho === true);
+    if (shoeChange) {
+      this.startNewShoe();
     }
-    return false;
+    
+    // Processa todas as cartas do histórico
+    const validRounds = history.filter((h: any) => !h.troca_de_baralho);
+    for (const round of validRounds) {
+      if (round.home) this.observeCard(round.home);
+      if (round.away) this.observeCard(round.away);
+    }
   }
 
   getStats(): ShoeStats {
-    const suits: ('♠️' | '♥️' | '♦️' | '♣️')[] = ['♠️', '♥️', '♦️', '♣️'];
-    const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-    
     const bySuit = {} as any;
-    for (const suit of suits) {
+    let totalObserved = 0;
+    
+    for (const suit of this.suits) {
       const observed = this.observedCards.filter(c => c.suit === suit).length;
+      const total = 52; // 1 baralho de 52 cartas por naipe
       bySuit[suit] = {
-        total: 52 * 8,
+        total,
         observed,
-        remaining: 52 * 8 - observed,
-        cards: this.observedCards.filter(c => c.suit === suit)
+        remaining: total - observed
       };
+      totalObserved += observed;
     }
 
     const byRank = {} as any;
-    for (const rank of ranks) {
+    for (const rank of this.ranks) {
       const observed = this.observedCards.filter(c => c.rank === rank).length;
+      const total = 4; // 4 cartas de cada rank por baralho
       byRank[rank] = {
-        total: 4 * 8,
+        total,
         observed,
-        remaining: 4 * 8 - observed
+        remaining: total - observed
       };
     }
 
@@ -105,6 +146,7 @@ class ShoeTracker {
       totalCards: 416,
       cardsObserved: this.observedCards.length,
       cardsRemaining: 416 - this.observedCards.length,
+      shoeNumber: this.shoeNumber,
       bySuit,
       byRank
     };
@@ -114,29 +156,38 @@ class ShoeTracker {
     return this.shoeNumber;
   }
 
-  checkShoeChange(history: any[]): boolean {
-    if (history.length === 0) return false;
-    const last = history[0];
-    if (last.troca_de_baralho) {
+  // ✅ VERIFICA E ATUALIZA COM BASE NO HISTÓRICO
+  checkAndUpdate(history: any[]): boolean {
+    if (!history || history.length === 0) return false;
+    
+    // Verifica troca de baralho
+    const shoeChange = history.find((h: any) => h.troca_de_baralho === true);
+    if (shoeChange) {
       this.startNewShoe();
-      return true;
     }
-    const lastCard = last.home || last.away;
-    if (lastCard) {
-      this.observeCard(lastCard);
+    
+    // Processa apenas as cartas novas
+    const validRounds = history.filter((h: any) => !h.troca_de_baralho);
+    let updated = false;
+    
+    for (const round of validRounds) {
+      if (round.home) {
+        const key = `${round.home}`;
+        if (!this.cardCounts[key] || this.cardCounts[key] === 0) {
+          this.observeCard(round.home);
+          updated = true;
+        }
+      }
+      if (round.away) {
+        const key = `${round.away}`;
+        if (!this.cardCounts[key] || this.cardCounts[key] === 0) {
+          this.observeCard(round.away);
+          updated = true;
+        }
+      }
     }
-    return false;
-  }
-
-  reset() {
-    this.shoeNumber = 1;
-    this.cards = [];
-    this.observedCards = [];
-    const deck = this.generateDeck();
-    for (let i = 0; i < 8; i++) {
-      this.cards.push(...deck);
-    }
-    this.cards = this.shuffleArray(this.cards);
+    
+    return updated;
   }
 }
 
