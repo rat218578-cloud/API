@@ -10,6 +10,7 @@ export function ShoeCatalog({ history }: ShoeCatalogProps) {
   const [stats, setStats] = useState<any>(null);
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const [cardHistory, setCardHistory] = useState<any[]>([]);
+  const [processedHistory, setProcessedHistory] = useState<string>('');
 
   useEffect(() => {
     if (!history || history.length === 0) {
@@ -18,6 +19,12 @@ export function ShoeCatalog({ history }: ShoeCatalogProps) {
       return;
     }
 
+    // ✅ SÓ PROCESSA SE O HISTÓRICO MUDOU
+    const historyKey = history.map((h: any) => h.horario).join(',');
+    if (historyKey === processedHistory) return;
+    setProcessedHistory(historyKey);
+
+    // ✅ PROCESSA O HISTÓRICO COMPLETO
     shoeCatalog.processHistory(history);
     const newStats = shoeCatalog.getStats();
     setStats(newStats);
@@ -37,25 +44,20 @@ export function ShoeCatalog({ history }: ShoeCatalogProps) {
 
   const getCardRemaining = (rank: string, suit: string): number => {
     const card = `${rank}${suit}`;
-    const cardData = stats.topCards.find((c: any) => c.card === card);
-    return cardData?.remaining || 32;
+    // ✅ USA O CARDCOUNTS DO STATS
+    const count = stats.cardCounts?.[card] || 0;
+    return 32 - count;
   };
 
+  const getCardCount = (rank: string, suit: string): number => {
+    const card = `${rank}${suit}`;
+    return stats.cardCounts?.[card] || 0;
+  };
 
   const getBarWidth = (count: number): string => {
     const max = 32;
     const percentage = (count / max) * 100;
     return `${Math.min(percentage, 100)}%`;
-  };
-
-  // ✅ Obtém a contagem correta por rank
-  const getRankCount = (rank: string): number => {
-    let total = 0;
-    for (const suit of suits) {
-      const card = `${rank}${suit}`;
-      total += stats.cardCounts?.[card] || 0;
-    }
-    return total;
   };
 
   return (
@@ -69,6 +71,7 @@ export function ShoeCatalog({ history }: ShoeCatalogProps) {
         </div>
       </div>
 
+      {/* Top Cartas */}
       <div className="space-y-1">
         <div className="grid grid-cols-3 text-[8px] text-text-muted uppercase py-0.5 border-b border-border-default text-center">
           <span>Carta</span>
@@ -104,6 +107,7 @@ export function ShoeCatalog({ history }: ShoeCatalogProps) {
         )}
       </div>
 
+      {/* Mapa de Cartas */}
       <div className="border-t border-border-default pt-3">
         <div className="grid grid-cols-4 text-[10px] text-text-muted text-center font-bold border-b border-border-default pb-1">
           {suits.map(suit => (
@@ -112,13 +116,18 @@ export function ShoeCatalog({ history }: ShoeCatalogProps) {
         </div>
         
         {ranks.map(rank => {
-          const rankTotal = getRankCount(rank);
-          const barWidth = getBarWidth(rankTotal);
+          // ✅ CALCULA O TOTAL DE CARTAS OBSERVADAS PARA ESTE RANK
+          let totalCount = 0;
+          for (const suit of suits) {
+            totalCount += getCardCount(rank, suit);
+          }
+          const barWidth = getBarWidth(totalCount);
           
           return (
             <div key={rank} className="grid grid-cols-4 gap-0.5">
               {suits.map(suit => {
                 const card = `${rank}${suit}`;
+                const count = getCardCount(rank, suit);
                 const remaining = getCardRemaining(rank, suit);
                 const isSelected = selectedCard === card;
                 

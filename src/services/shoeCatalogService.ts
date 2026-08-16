@@ -16,6 +16,7 @@ export interface ShoeCatalogStats {
   cardsRemaining: number;
   shoeNumber: number;
   topCards: CardData[];
+  cardCounts: Record<string, number>; // ✅ EXPORTA CARDCOUNTS
   bySuit: {
     '♠️': { total: number; observed: number; remaining: number };
     '♥️': { total: number; observed: number; remaining: number };
@@ -86,6 +87,7 @@ class ShoeCatalogService {
   processRound(round: any) {
     if (!round) return;
     
+    // ✅ RESETA NA TROCA DE BARALHO
     if (round.troca_de_baralho) {
       this.startNewShoe();
       return;
@@ -171,6 +173,7 @@ class ShoeCatalogService {
       cardsRemaining,
       shoeNumber: this.shoeNumber,
       topCards: topCards.slice(0, 8),
+      cardCounts: this.cardCounts, // ✅ EXPORTA CARDCOUNTS
       bySuit,
       byRank,
       totalRounds: this.totalRounds
