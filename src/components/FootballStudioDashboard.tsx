@@ -4,14 +4,12 @@ import { footballStudioService, ROLETAS_FOOTBALL } from '../services/footballStu
 import { LiveGameView } from './LiveGameView';
 import { ShoeCatalog } from './ShoeCatalog';
 import { Strategies } from './Strategies';
-import { ChevronDown, ChevronUp } from 'lucide-react';
 
 export function FootballStudioDashboard() {
   const [activeRoom, setActiveRoom] = useState(ROLETAS_FOOTBALL[0].id);
   const [history, setHistory] = useState<any[]>([]);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [showVideo, setShowVideo] = useState(false);
-  const [showCatalog, setShowCatalog] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [totalNumbers, setTotalNumbers] = useState(0);
   const [stats, setStats] = useState({ total: 0, wins: 0, losses: 0, draws: 0 });
@@ -105,19 +103,6 @@ export function FootballStudioDashboard() {
     return 'bg-bg-tertiary text-text-muted';
   };
 
-  const topCards = useMemo(() => {
-    if (!history || history.length === 0 || !temHistorico) return [];
-    const counts: Record<string, number> = {};
-    history.forEach((item: any) => {
-      if (item.home && !item.troca_de_baralho) counts[item.home] = (counts[item.home] || 0) + 1;
-      if (item.away && !item.troca_de_baralho) counts[item.away] = (counts[item.away] || 0) + 1;
-    });
-    return Object.entries(counts)
-      .map(([card, count]) => ({ card, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8);
-  }, [history, temHistorico]);
-
   const getLastThree = () => {
     if (!history || history.length === 0 || !temHistorico) return ['--', '--', '--'];
     const recentes = history.filter((item: any) => !item.troca_de_baralho).slice(0, 3);
@@ -189,7 +174,7 @@ export function FootballStudioDashboard() {
 
       {/* Grid Principal */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        {/* COLUNA ESQUERDA - Catálogo + ShoeCatalog + Strategies */}
+        {/* COLUNA ESQUERDA - ShoeCatalog + Strategies */}
         <div className="xl:col-span-3 space-y-4">
           {/* ShoeCatalog (já inclui o Catálogo) */}
           {isRealData && <ShoeCatalog history={history} />}
