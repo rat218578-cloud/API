@@ -75,11 +75,10 @@ export function Strategies({ history }: StrategiesProps) {
     return 'text-text-muted';
   };
 
-  const getBetType = (bet: string): 'casa' | 'visitante' | 'empate' | 'info' => {
+  const getBetType = (bet: string): 'casa' | 'visitante' | 'empate' => {
     if (bet === 'CASA') return 'casa';
     if (bet === 'VISITANTE') return 'visitante';
-    if (bet === 'EMPATE') return 'empate';
-    return 'info';
+    return 'empate';
   };
 
   useEffect(() => {
@@ -100,7 +99,6 @@ export function Strategies({ history }: StrategiesProps) {
     let foundPatterns: string[] = [];
     let bestNext = 'Aguardando';
     let bestConfidence = 0;
-    let bestType: 'casa' | 'visitante' | 'empate' = 'info';
 
     for (const strategy of currentStrategies) {
       const pattern = strategy.pattern;
@@ -115,11 +113,10 @@ export function Strategies({ history }: StrategiesProps) {
       if (match) {
         const nextSymbol = strategy.next;
         let nextName = 'Aguardando';
-        let type: 'casa' | 'visitante' | 'empate' = 'info';
         
-        if (nextSymbol === 'C') { nextName = 'CASA'; type = 'casa'; }
-        else if (nextSymbol === 'V') { nextName = 'VISITANTE'; type = 'visitante'; }
-        else if (nextSymbol === 'E') { nextName = 'EMPATE'; type = 'empate'; }
+        if (nextSymbol === 'C') { nextName = 'CASA'; }
+        else if (nextSymbol === 'V') { nextName = 'VISITANTE'; }
+        else if (nextSymbol === 'E') { nextName = 'EMPATE'; }
         
         const patternStr = pattern.map(s => s === 'C' ? 'CASA' : s === 'V' ? 'VISIT' : 'EMP').join(' → ');
         foundPatterns.push(`↔️ ${patternStr} → ${nextName} (${strategy.name})`);
@@ -128,13 +125,13 @@ export function Strategies({ history }: StrategiesProps) {
           const confidence = Math.max(100 - (foundPatterns.length * 2), 65);
           bestNext = nextName;
           bestConfidence = confidence;
-          bestType = type;
           
           if (confidence > 65 && notificationsEnabled) {
             const message = `${nextName} - ${confidence}% de confiança`;
             setSignalHistory(prev => [`${new Date().toLocaleTimeString()} - ${message}`, ...prev].slice(0, 20));
             
             if (soundEnabled) {
+              const type = nextSymbol === 'C' ? 'casa' : nextSymbol === 'V' ? 'visitante' : 'empate';
               notificationService.notify(message, type);
             }
             setLastSignal(`${nextName} (${confidence}%)`);
@@ -155,7 +152,6 @@ export function Strategies({ history }: StrategiesProps) {
         foundPatterns.push(`↔️ ${last3.join(' → ')} → ${nextName} (Alternância 3)`);
         bestNext = nextName;
         bestConfidence = 75;
-        bestType = type;
         if (notificationsEnabled && soundEnabled) {
           const message = `${nextName} - 75% de confiança`;
           notificationService.notify(message, type);
@@ -167,7 +163,6 @@ export function Strategies({ history }: StrategiesProps) {
         foundPatterns.push(`↔️ ${last3.join(' → ')} → CASA (3 Empates)`);
         bestNext = 'CASA';
         bestConfidence = 70;
-        bestType = 'casa';
         if (notificationsEnabled && soundEnabled) {
           notificationService.notify('CASA - 70% de confiança', 'casa');
           setLastSignal('CASA (70%)');
