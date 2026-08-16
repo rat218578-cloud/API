@@ -11,7 +11,6 @@ export function Strategies({ history }: StrategiesProps) {
   const [patterns, setPatterns] = useState<string[]>([]);
   const [nextBet, setNextBet] = useState<string>('Aguardando');
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [vibrationEnabled] = useState(true);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [activeStrategy, setActiveStrategy] = useState<'g1' | 'g2'>('g1');
   const [lastSignal, setLastSignal] = useState<string | null>(null);
@@ -22,7 +21,7 @@ export function Strategies({ history }: StrategiesProps) {
     notificationService.requestPermission();
   }, []);
 
-  // 🔵🔴 ESTRATÉGIAS G1
+  // ESTRATÉGIAS G1
   const strategiesG1 = [
     { id: 'g1_1', name: '1-2-1', pattern: ['E', 'C', 'C', 'E'], next: 'C' },
     { id: 'g1_2', name: '1-2-1', pattern: ['C', 'E', 'E', 'C'], next: 'C' },
@@ -43,7 +42,7 @@ export function Strategies({ history }: StrategiesProps) {
     { id: 'g1_17', name: 'Duas Casas', pattern: ['D', 'E', 'E', 'D'], next: 'D' },
   ];
 
-  // 🔵🔴 ESTRATÉGIAS G2 - TOP G2
+  // ESTRATÉGIAS G2
   const strategiesG2 = [
     { id: 'g2_1', name: 'TOP G2 #1', pattern: ['E', 'E', 'E', 'C'], next: 'C' },
     { id: 'g2_2', name: 'TOP G2 #2', pattern: ['E', 'C', 'E', 'V'], next: 'V' },
@@ -62,11 +61,10 @@ export function Strategies({ history }: StrategiesProps) {
     { id: 'g2_15', name: 'TOP G2 #15', pattern: ['C', 'V', 'V'], next: 'V' },
   ];
 
-  // Mapeia resultado para símbolo
   const getSymbol = (resultado: string): string => {
-    if (resultado === 'H') return 'C'; // Casa
-    if (resultado === 'A') return 'V'; // Visitante
-    if (resultado === 'D') return 'E'; // Empate
+    if (resultado === 'H') return 'C';
+    if (resultado === 'A') return 'V';
+    if (resultado === 'D') return 'E';
     return '';
   };
 
@@ -77,14 +75,11 @@ export function Strategies({ history }: StrategiesProps) {
     return 'text-text-muted';
   };
 
-  const notifySignal = (signal: string, confidence: number, type: 'casa' | 'visitante' | 'empate') => {
-    const message = `${signal} - ${confidence}% de confiança`;
-    setSignalHistory(prev => [`${new Date().toLocaleTimeString()} - ${message}`, ...prev].slice(0, 20));
-
-    if (notificationsEnabled) {
-      notificationService.notify(message, type);
-      setLastSignal(`${signal} (${confidence}%)`);
-    }
+  const getBetType = (bet: string): 'casa' | 'visitante' | 'empate' | 'info' => {
+    if (bet === 'CASA') return 'casa';
+    if (bet === 'VISITANTE') return 'visitante';
+    if (bet === 'EMPATE') return 'empate';
+    return 'info';
   };
 
   useEffect(() => {
@@ -99,7 +94,6 @@ export function Strategies({ history }: StrategiesProps) {
       return;
     }
 
-    // Pega os últimos 10 resultados
     const recentes = validRounds.slice(0, 10).map((h: any) => getSymbol(h.resultado));
     const currentStrategies = activeStrategy === 'g1' ? strategiesG1 : strategiesG2;
     
@@ -108,11 +102,8 @@ export function Strategies({ history }: StrategiesProps) {
     let bestConfidence = 0;
     let bestType: 'casa' | 'visitante' | 'empate' = 'info';
 
-    // Verifica cada estratégia
     for (const strategy of currentStrategies) {
       const pattern = strategy.pattern;
-      
-      // Verifica se a sequência atual contém o padrão no início
       let match = true;
       for (let i = 0; i < pattern.length && i < recentes.length; i++) {
         if (recentes[i] !== pattern[i]) {
@@ -140,27 +131,36 @@ export function Strategies({ history }: StrategiesProps) {
           bestType = type;
           
           if (confidence > 65 && notificationsEnabled) {
-            notifySignal(nextName, confidence, type);
+            const message = `${nextName} - ${confidence}% de confiança`;
+            setSignalHistory(prev => [`${new Date().toLocaleTimeString()} - ${message}`, ...prev].slice(0, 20));
+            
+            if (soundEnabled) {
+              notificationService.notify(message, type);
+            }
+            setLastSignal(`${nextName} (${confidence}%)`);
           }
         }
         break;
       }
     }
 
-    // Se não encontrou padrão, tenta com padrões menores (3 rodadas)
     if (foundPatterns.length === 0 && recentes.length >= 3) {
       const last3 = recentes.slice(0, 3);
       const last3Str = last3.join('');
       
-      // Padrões simples de 3
       if (last3Str === 'CVC' || last3Str === 'VCV') {
         const next = last3Str === 'CVC' ? 'C' : 'V';
         const nextName = next === 'C' ? 'CASA' : 'VISITANTE';
+        const type = next === 'C' ? 'casa' : 'visitante';
         foundPatterns.push(`↔️ ${last3.join(' → ')} → ${nextName} (Alternância 3)`);
         bestNext = nextName;
         bestConfidence = 75;
-        bestType = next === 'C' ? 'casa' : 'visitante';
-        if (notificationsEnabled) notifySignal(nextName, 75, bestType);
+        bestType = type;
+        if (notificationsEnabled && soundEnabled) {
+          const message = `${nextName} - 75% de confiança`;
+          notificationService.notify(message, type);
+          setLastSignal(`${nextName} (75%)`);
+        }
       }
       
       if (last3Str === 'EEE') {
@@ -168,7 +168,10 @@ export function Strategies({ history }: StrategiesProps) {
         bestNext = 'CASA';
         bestConfidence = 70;
         bestType = 'casa';
-        if (notificationsEnabled) notifySignal('CASA', 70, 'casa');
+        if (notificationsEnabled && soundEnabled) {
+          notificationService.notify('CASA - 70% de confiança', 'casa');
+          setLastSignal('CASA (70%)');
+        }
       }
     }
 
@@ -176,7 +179,7 @@ export function Strategies({ history }: StrategiesProps) {
     setNextBet(bestConfidence > 60 ? bestNext : 'Aguardando');
     setDebugInfo(`📊 ${validRounds.length} rodadas | Últimos: ${recentes.slice(0, 5).join(' ')}`);
     
-  }, [history, activeStrategy, notificationsEnabled]);
+  }, [history, activeStrategy, notificationsEnabled, soundEnabled]);
 
   return (
     <div className="bg-bg-card border border-border-default rounded-2xl p-4 space-y-3">
