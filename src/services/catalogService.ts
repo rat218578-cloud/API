@@ -78,7 +78,7 @@ class CatalogService {
     
     for (const [card, count] of sorted) {
       if (count > 0) {
-        const rank = card.slice(0, -1);
+        const rank = card.slice(0, -1); // usado
         const suit = card.slice(-1);
         topCards.push({
           card,

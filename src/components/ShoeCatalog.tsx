@@ -41,11 +41,6 @@ export function ShoeCatalog({ history }: ShoeCatalogProps) {
     return cardData?.remaining || 32;
   };
 
-  const getCardCount = (rank: string, suit: string): number => {
-    const card = `${rank}${suit}`;
-    const cardData = stats.topCards.find((c: any) => c.card === card);
-    return cardData?.count || 0;
-  };
 
   const getBarWidth = (count: number): string => {
     const max = 32;

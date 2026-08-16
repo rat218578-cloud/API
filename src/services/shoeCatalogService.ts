@@ -153,7 +153,7 @@ class ShoeCatalogService {
     for (const card of Object.keys(this.cardCounts)) {
       const count = this.cardCounts[card] || 0;
       if (count > 0) {
-        const rank = card.slice(0, -1);
+        const rank = card.slice(0, -1); // usado
         const suit = card.slice(-1) as '♠️' | '♥️' | '♦️' | '♣️';
         topCards.push({
           card,

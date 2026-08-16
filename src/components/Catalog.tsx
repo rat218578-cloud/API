@@ -34,20 +34,6 @@ export function Catalog({ history }: CatalogProps) {
     }
   }, [history, selectedCard]);
 
-  const suits: string[] = ['♠️', '♥️', '♦️', '♣️'];
-  const ranks: string[] = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-
-  const getCardCount = (rank: string, suit: string): number => {
-    const card = `${rank}${suit}`;
-    return catalogService.getCardCount(card);
-  };
-
-  const getCardPercentage = (rank: string, suit: string): string => {
-    const count = getCardCount(rank, suit);
-    if (totalRounds === 0) return '0.0';
-    return ((count / totalRounds) * 100).toFixed(1);
-  };
-
   const getBarWidth = (count: number): string => {
     const max = 32;
     const percentage = (count / max) * 100;
