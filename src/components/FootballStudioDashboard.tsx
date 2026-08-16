@@ -1,5 +1,5 @@
 // src/components/FootballStudioDashboard.tsx
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { footballStudioService, ROLETAS_FOOTBALL } from '../services/footballStudioService';
 import { LiveGameView } from './LiveGameView';
 import { ShoeCatalog } from './ShoeCatalog';
