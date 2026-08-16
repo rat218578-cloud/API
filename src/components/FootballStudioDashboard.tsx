@@ -2,8 +2,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { footballStudioService, ROLETAS_FOOTBALL } from '../services/footballStudioService';
 import { LiveGameView } from './LiveGameView';
+import { ShoeCatalog } from './ShoeCatalog';
 import { Strategies } from './Strategies';
-import { ShoeCatalog } from "./ShoeCatalog";
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
 export function FootballStudioDashboard() {
@@ -189,41 +189,10 @@ export function FootballStudioDashboard() {
 
       {/* Grid Principal */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        {/* COLUNA ESQUERDA - Catálogo + ShoeTracker + Strategies */}
+        {/* COLUNA ESQUERDA - Catálogo + ShoeCatalog + Strategies */}
         <div className="xl:col-span-3 space-y-4">
-          {/* Catálogo */}
-          <div className={`transition-all duration-300 ${showCatalog ? 'block' : 'hidden xl:block'}`}>
-            <div className="bg-bg-card border border-border-default rounded-2xl p-3">
-              <div className="flex items-center justify-between mb-3">
-          {/* ShoeCatalog */}
-          <ShoeCatalog history={history} />
-              <div className="space-y-1 max-h-[200px] overflow-y-auto">
-                <div className="grid grid-cols-3 text-[8px] text-text-muted uppercase py-1 border-b border-border-default text-center">
-                  <span>Carta</span><span>Total</span><span>%</span>
-                </div>
-                {topCards.length > 0 && isRealData ? (
-                  topCards.map((item) => {
-                    const cardInfo = getCardInfo(item.card);
-                    const totalRodadas = history.filter((h: any) => !h.troca_de_baralho).length || 1;
-                    const percentual = ((item.count / totalRodadas) * 100).toFixed(1);
-                    return (
-                      <div key={item.card} className="grid grid-cols-3 items-center py-1 text-[10px] border-b border-border-default/30 text-center">
-                        <span className={`font-bold ${cardInfo.color}`}>{cardInfo.number}{cardInfo.suit}</span>
-                        <span className="text-text-secondary">{item.count}</span>
-                        <span className="text-text-secondary">{percentual}%</span>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="text-center py-4 text-text-muted text-xs">
-                    {temHistorico ? '⏳ Aguardando cartas...' : '📊 Sem histórico'}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Shoe Tracker */}
+          {/* ShoeCatalog (já inclui o Catálogo) */}
+          {isRealData && <ShoeCatalog history={history} />}
 
           {/* Estratégias G1/G2 */}
           {isRealData && <Strategies history={history} />}

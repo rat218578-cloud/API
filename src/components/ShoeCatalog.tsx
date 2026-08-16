@@ -18,12 +18,10 @@ export function ShoeCatalog({ history }: ShoeCatalogProps) {
       return;
     }
 
-    // ✅ Processa o histórico completo
     shoeCatalog.processHistory(history);
     const newStats = shoeCatalog.getStats();
     setStats(newStats);
 
-    // Atualiza histórico da carta selecionada
     if (selectedCard) {
       const historyCards = history
         .filter((h: any) => (h.home === selectedCard || h.away === selectedCard) && !h.troca_de_baralho)
@@ -57,7 +55,6 @@ export function ShoeCatalog({ history }: ShoeCatalogProps) {
 
   return (
     <div className="bg-bg-card border border-border-default rounded-2xl p-4 space-y-4">
-      {/* Cabeçalho com SHOE e estatísticas */}
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-text-primary text-sm">🃏 SHOE #{stats.shoeNumber}</h3>
         <div className="flex items-center gap-2 text-[10px] text-text-muted">
@@ -67,7 +64,6 @@ export function ShoeCatalog({ history }: ShoeCatalogProps) {
         </div>
       </div>
 
-      {/* Top Cartas (Catálogo) */}
       <div className="space-y-1">
         <div className="grid grid-cols-3 text-[8px] text-text-muted uppercase py-0.5 border-b border-border-default text-center">
           <span>Carta</span>
@@ -103,7 +99,6 @@ export function ShoeCatalog({ history }: ShoeCatalogProps) {
         )}
       </div>
 
-      {/* Mapa de Cartas (Shoe) */}
       <div className="border-t border-border-default pt-3">
         <div className="grid grid-cols-4 text-[10px] text-text-muted text-center font-bold border-b border-border-default pb-1">
           {suits.map(suit => (
@@ -154,7 +149,6 @@ export function ShoeCatalog({ history }: ShoeCatalogProps) {
         })}
       </div>
 
-      {/* Detalhe da carta selecionada */}
       {selectedCard && cardHistory.length > 0 && (
         <div className="border-t border-border-default pt-2">
           <div className="flex items-center justify-between mb-1">
