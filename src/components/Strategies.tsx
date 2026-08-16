@@ -75,12 +75,6 @@ export function Strategies({ history }: StrategiesProps) {
     return 'text-text-muted';
   };
 
-  const getBetType = (bet: string): 'casa' | 'visitante' | 'empate' => {
-    if (bet === 'CASA') return 'casa';
-    if (bet === 'VISITANTE') return 'visitante';
-    return 'empate';
-  };
-
   useEffect(() => {
     if (!history || history.length === 0) {
       setDebugInfo('⏳ Aguardando histórico...');
