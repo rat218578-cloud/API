@@ -1,4 +1,3 @@
-// src/components/Strategies.tsx
 import { useState, useEffect } from 'react';
 import { Volume2, VolumeX, Bell, BellOff } from 'lucide-react';
 import { notificationService } from '../services/notificationService';
