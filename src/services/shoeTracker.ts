@@ -25,12 +25,6 @@ class ShoeTracker {
   private shoeNumber: number = 1;
   private observedCards: Card[] = [];
   private cardCounts: Record<string, number> = {};
-  private totalPerSuit: Record<string, number> = {
-    '♠️': 52,
-    '♥️': 52,
-    '♦️': 52,
-    '♣️': 52
-  };
   private totalPerRank: Record<string, number> = {};
   private suits: ('♠️' | '♥️' | '♦️' | '♣️')[] = ['♠️', '♥️', '♦️', '♣️'];
   private ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];

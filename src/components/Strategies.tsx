@@ -11,7 +11,7 @@ export function Strategies({ history, onNotify }: StrategiesProps) {
   const [patterns, setPatterns] = useState<string[]>([]);
   const [nextBet, setNextBet] = useState<string>('Aguardando');
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [vibrationEnabled, setVibrationEnabled] = useState(true);
+  const [vibrationEnabled] = useState(true);
   const [activeStrategy, setActiveStrategy] = useState<'g1' | 'g2'>('g1');
   const [lastSignal, setLastSignal] = useState<string | null>(null);
 

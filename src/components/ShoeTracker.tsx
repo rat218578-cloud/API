@@ -16,21 +16,17 @@ export function ShoeTracker({ history }: ShoeTrackerProps) {
   useEffect(() => {
     if (!history || history.length === 0) return;
 
-    // ✅ PROCESSO O HISTÓRICO QUANDO ELE MUDA
     const currentLength = history.length;
     if (currentLength !== processedRef.current) {
       processedRef.current = currentLength;
       
-      // Verifica e atualiza o tracker
       shoeTracker.checkAndUpdate(history);
       
-      // Atualiza estatísticas
       const newStats = shoeTracker.getStats();
       setStats(newStats);
       setShoeNumber(shoeTracker.getShoeNumber());
     }
 
-    // Atualiza histórico da carta selecionada
     if (selectedCard) {
       const cardHistoryData = history
         .filter((h: any) => (h.home === selectedCard || h.away === selectedCard) && !h.troca_de_baralho)
@@ -39,7 +35,6 @@ export function ShoeTracker({ history }: ShoeTrackerProps) {
     }
   }, [history, selectedCard]);
 
-  // ✅ INICIALIZA O TRACKER COM O HISTÓRICO INICIAL
   useEffect(() => {
     if (history && history.length > 0) {
       shoeTracker.processHistory(history);
@@ -101,7 +96,6 @@ export function ShoeTracker({ history }: ShoeTrackerProps) {
               {suits.map(suit => {
                 const cardFull = `${rank}${suit}`;
                 const isSelected = selectedCard === cardFull;
-                const cardCount = stats.observedCards?.filter((c: any) => c.full === cardFull).length || 0;
                 
                 return (
                   <button
