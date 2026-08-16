@@ -1,6 +1,6 @@
 // src/components/ShoeCatalog.tsx
 import { useState, useEffect } from 'react';
-import { shoeCatalog, CardData } from '../services/shoeCatalogService';
+import { shoeCatalog } from '../services/shoeCatalogService';
 
 interface ShoeCatalogProps {
   history: any[];

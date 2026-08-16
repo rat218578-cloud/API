@@ -195,11 +195,8 @@ export function FootballStudioDashboard() {
           <div className={`transition-all duration-300 ${showCatalog ? 'block' : 'hidden xl:block'}`}>
             <div className="bg-bg-card border border-border-default rounded-2xl p-3">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider">📊 Catálogo {isRealData ? '🔴' : '⏳'}</h3>
-                <button onClick={() => setShowCatalog(!showCatalog)} className="xl:hidden p-1 rounded-lg hover:bg-bg-tertiary">
-                  {showCatalog ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </button>
-              </div>
+          {/* ShoeCatalog */}
+          <ShoeCatalog history={history} />
               <div className="space-y-1 max-h-[200px] overflow-y-auto">
                 <div className="grid grid-cols-3 text-[8px] text-text-muted uppercase py-1 border-b border-border-default text-center">
                   <span>Carta</span><span>Total</span><span>%</span>
