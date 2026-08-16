@@ -72,9 +72,7 @@ export function Catalog({ history }: CatalogProps) {
                 }
               }}
             >
-              <span className={`font-bold ${
-                card.suit === '♥️' || card.suit === '♦️' ? 'text-red-400' : 'text-text-primary'
-              }`}>
+              <span className={`font-bold ${card.suit === '♥️' || card.suit === '♦️' ? 'text-red-400' : 'text-text-primary'}`}>
                 {card.card}
               </span>
               <span className="text-text-secondary">{card.count}</span>
@@ -96,9 +94,7 @@ export function Catalog({ history }: CatalogProps) {
         <div className="border-t border-border-default pt-2">
           <div className="flex items-center justify-between mb-1">
             <span className="font-bold text-text-primary text-xs">{selectedCard}</span>
-            <span className="text-[8px] text-text-muted">
-              {cardHistory.length} aparições
-            </span>
+            <span className="text-[8px] text-text-muted">{cardHistory.length} aparições</span>
           </div>
           <div className="flex gap-1 flex-wrap">
             {cardHistory.map((h: any, idx: number) => (
