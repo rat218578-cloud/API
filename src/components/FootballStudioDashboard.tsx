@@ -189,43 +189,52 @@ export function FootballStudioDashboard() {
 
       {/* Grid Principal */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        {/* Catálogo */}
-        <div className={`xl:col-span-2 transition-all duration-300 ${showCatalog ? 'block' : 'hidden xl:block'}`}>
-          <div className="bg-bg-card border border-border-default rounded-2xl p-3">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider">📊 Catálogo {isRealData ? '🔴' : '⏳'}</h3>
-              <button onClick={() => setShowCatalog(!showCatalog)} className="xl:hidden p-1 rounded-lg hover:bg-bg-tertiary">
-                {showCatalog ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </button>
-            </div>
-            <div className="space-y-1 max-h-[200px] overflow-y-auto">
-              <div className="grid grid-cols-3 text-[8px] text-text-muted uppercase py-1 border-b border-border-default text-center">
-                <span>Carta</span><span>Total</span><span>%</span>
+        {/* COLUNA ESQUERDA - Catálogo + ShoeTracker + Strategies */}
+        <div className="xl:col-span-3 space-y-4">
+          {/* Catálogo */}
+          <div className={`transition-all duration-300 ${showCatalog ? 'block' : 'hidden xl:block'}`}>
+            <div className="bg-bg-card border border-border-default rounded-2xl p-3">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider">📊 Catálogo {isRealData ? '🔴' : '⏳'}</h3>
+                <button onClick={() => setShowCatalog(!showCatalog)} className="xl:hidden p-1 rounded-lg hover:bg-bg-tertiary">
+                  {showCatalog ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
               </div>
-              {topCards.length > 0 && isRealData ? (
-                topCards.map((item) => {
-                  const cardInfo = getCardInfo(item.card);
-                  const totalRodadas = history.filter((h: any) => !h.troca_de_baralho).length || 1;
-                  const percentual = ((item.count / totalRodadas) * 100).toFixed(1);
-                  return (
-                    <div key={item.card} className="grid grid-cols-3 items-center py-1 text-[10px] border-b border-border-default/30 text-center">
-                      <span className={`font-bold ${cardInfo.color}`}>{cardInfo.number}{cardInfo.suit}</span>
-                      <span className="text-text-secondary">{item.count}</span>
-                      <span className="text-text-secondary">{percentual}%</span>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="text-center py-4 text-text-muted text-xs">
-                  {temHistorico ? '⏳ Aguardando cartas...' : '📊 Sem histórico'}
+              <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                <div className="grid grid-cols-3 text-[8px] text-text-muted uppercase py-1 border-b border-border-default text-center">
+                  <span>Carta</span><span>Total</span><span>%</span>
                 </div>
-              )}
+                {topCards.length > 0 && isRealData ? (
+                  topCards.map((item) => {
+                    const cardInfo = getCardInfo(item.card);
+                    const totalRodadas = history.filter((h: any) => !h.troca_de_baralho).length || 1;
+                    const percentual = ((item.count / totalRodadas) * 100).toFixed(1);
+                    return (
+                      <div key={item.card} className="grid grid-cols-3 items-center py-1 text-[10px] border-b border-border-default/30 text-center">
+                        <span className={`font-bold ${cardInfo.color}`}>{cardInfo.number}{cardInfo.suit}</span>
+                        <span className="text-text-secondary">{item.count}</span>
+                        <span className="text-text-secondary">{percentual}%</span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-4 text-text-muted text-xs">
+                    {temHistorico ? '⏳ Aguardando cartas...' : '📊 Sem histórico'}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
+
+          {/* Shoe Tracker */}
+          {isRealData && <ShoeTracker history={history} />}
+
+          {/* Estratégias G1/G2 */}
+          {isRealData && <Strategies history={history} />}
         </div>
 
-        {/* Vídeo */}
-        <div className="xl:col-span-7">
+        {/* COLUNA CENTRAL - Vídeo */}
+        <div className="xl:col-span-6">
           {showVideo && selectedSlug ? (
             <LiveGameView
               key={selectedSlug + activeRoom + mesaAtual.gameId}
@@ -243,7 +252,7 @@ export function FootballStudioDashboard() {
           )}
         </div>
 
-        {/* Grupos */}
+        {/* COLUNA DIREITA - Grupos + Assertividade */}
         <div className="xl:col-span-3 space-y-4">
           {isRealData ? (
             <>
@@ -300,12 +309,6 @@ export function FootballStudioDashboard() {
                   ))}
                 </div>
               </div>
-
-              {/* Shoe Tracker */}
-              <ShoeTracker history={history} />
-
-              {/* Estratégias G1 */}
-              <Strategies history={history} />
             </>
           ) : (
             <div className="bg-bg-card border border-border-default rounded-2xl p-4 text-center">

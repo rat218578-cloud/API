@@ -12,9 +12,11 @@ export function Strategies({ history, onNotify }: StrategiesProps) {
   const [nextBet, setNextBet] = useState<string>('Aguardando');
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
+  const [activeStrategy, setActiveStrategy] = useState<'g1' | 'g2'>('g1');
+  const [lastSignal, setLastSignal] = useState<string | null>(null);
 
-  // 🔵🔴 Estratégias G1
-  const strategies = [
+  // 🔵🔴 ESTRATÉGIAS G1
+  const strategiesG1 = [
     { id: 'g1_1', name: '1-2-1', pattern: ['E', 'C', 'C', 'E'], next: 'C' },
     { id: 'g1_2', name: '1-2-1', pattern: ['C', 'E', 'E', 'C'], next: 'C' },
     { id: 'g1_3', name: '1-3-1', pattern: ['E', 'C', 'C', 'C', 'E'], next: 'E' },
@@ -34,6 +36,25 @@ export function Strategies({ history, onNotify }: StrategiesProps) {
     { id: 'g1_17', name: 'Duas Casas', pattern: ['D', 'E', 'E', 'D'], next: 'D' },
   ];
 
+  // 🔵🔴 ESTRATÉGIAS G2 - TOP G2
+  const strategiesG2 = [
+    { id: 'g2_1', name: 'TOP G2 #1', pattern: ['E', 'E', 'E', 'C'], next: 'C' },
+    { id: 'g2_2', name: 'TOP G2 #2', pattern: ['E', 'C', 'E', 'V'], next: 'V' },
+    { id: 'g2_3', name: 'TOP G2 #3', pattern: ['E', 'E', 'V', 'V'], next: 'V' },
+    { id: 'g2_4', name: 'TOP G2 #4', pattern: ['E', 'E', 'C', 'C'], next: 'C' },
+    { id: 'g2_5', name: 'TOP G2 #5', pattern: ['V', 'E', 'C', 'C'], next: 'C' },
+    { id: 'g2_6', name: 'TOP G2 #6', pattern: ['E', 'V', 'V'], next: 'V' },
+    { id: 'g2_7', name: 'TOP G2 #7', pattern: ['V', 'V', 'C', 'C'], next: 'C' },
+    { id: 'g2_8', name: 'TOP G2 #8', pattern: ['C', 'C', 'V', 'V'], next: 'V' },
+    { id: 'g2_9', name: 'TOP G2 #9', pattern: ['C', 'E', 'E', 'C'], next: 'C' },
+    { id: 'g2_10', name: 'TOP G2 #10', pattern: ['V', 'E', 'V', 'V'], next: 'V' },
+    { id: 'g2_11', name: 'TOP G2 #11', pattern: ['V', 'C', 'C'], next: 'C' },
+    { id: 'g2_12', name: 'TOP G2 #12', pattern: ['E', 'C', 'C'], next: 'C' },
+    { id: 'g2_13', name: 'TOP G2 #13', pattern: ['C', 'E', 'C', 'V'], next: 'V' },
+    { id: 'g2_14', name: 'TOP G2 #14', pattern: ['V', 'E', 'V', 'C'], next: 'C' },
+    { id: 'g2_15', name: 'TOP G2 #15', pattern: ['C', 'V', 'V'], next: 'V' },
+  ];
+
   // Mapeia resultado para símbolo
   const getSymbol = (resultado: string): string => {
     if (resultado === 'H') return 'C'; // Casa
@@ -42,13 +63,21 @@ export function Strategies({ history, onNotify }: StrategiesProps) {
     return '';
   };
 
+  // Obtém a cor para o tipo de aposta
+  const getBetColor = (bet: string): string => {
+    if (bet === 'CASA') return 'text-emerald-400';
+    if (bet === 'VISITANTE') return 'text-red-400';
+    if (bet === 'EMPATE') return 'text-yellow-400';
+    return 'text-text-muted';
+  };
+
   // Verifica padrões
   useEffect(() => {
     if (!history || history.length === 0) return;
 
     const recentes = history
       .filter((h: any) => !h.troca_de_baralho)
-      .slice(0, 10)
+      .slice(0, 15)
       .map((h: any) => getSymbol(h.resultado));
 
     if (recentes.length < 3) return;
@@ -56,14 +85,15 @@ export function Strategies({ history, onNotify }: StrategiesProps) {
     const foundPatterns: string[] = [];
     let bestNext = 'Aguardando';
     let bestConfidence = 0;
+    const currentStrategies = activeStrategy === 'g1' ? strategiesG1 : strategiesG2;
 
-    for (const strategy of strategies) {
+    for (const strategy of currentStrategies) {
       const pattern = strategy.pattern;
       const lastN = recentes.slice(0, pattern.length);
       
       // Verifica se o padrão bate
       let match = true;
-      for (let i = 0; i < pattern.length; i++) {
+      for (let i = 0; i < pattern.length && i < lastN.length; i++) {
         if (lastN[i] !== pattern[i]) {
           match = false;
           break;
@@ -71,20 +101,29 @@ export function Strategies({ history, onNotify }: StrategiesProps) {
       }
 
       if (match) {
-        foundPatterns.push(`↔️ ${pattern.join(' → ')} → ${strategy.next}`);
-        if (strategy.next === 'C') bestNext = 'CASA';
-        else if (strategy.next === 'V') bestNext = 'VISITANTE';
-        else if (strategy.next === 'E') bestNext = 'EMPATE';
-        bestConfidence = 100 - (foundPatterns.length * 5);
+        const nextSymbol = strategy.next;
+        let nextName = 'Aguardando';
+        if (nextSymbol === 'C') nextName = 'CASA';
+        else if (nextSymbol === 'V') nextName = 'VISITANTE';
+        else if (nextSymbol === 'E') nextName = 'EMPATE';
         
-        // Notifica se encontrou padrão
-        if (onNotify && soundEnabled) {
-          const type = strategy.next === 'C' ? 'casa' : strategy.next === 'V' ? 'visitante' : 'empate';
-          onNotify(`🎯 Sinal: ${strategy.next}`, type);
+        const patternStr = pattern.join(' → ');
+        foundPatterns.push(`↔️ ${patternStr} → ${nextName} (${strategy.name})`);
+        
+        if (nextName !== 'Aguardando') {
+          bestNext = nextName;
+          bestConfidence = 100 - (foundPatterns.length * 3);
           
-          // Vibração
-          if (vibrationEnabled && navigator.vibrate) {
-            navigator.vibrate([200, 100, 200]);
+          // Notifica se encontrou padrão
+          if (onNotify && soundEnabled && bestConfidence > 70) {
+            const type = nextSymbol === 'C' ? 'casa' : nextSymbol === 'V' ? 'visitante' : 'empate';
+            onNotify(`🎯 Sinal: ${nextName} (${bestConfidence}%)`, type);
+            setLastSignal(`${nextName} (${bestConfidence}%)`);
+            
+            // Vibração
+            if (vibrationEnabled && navigator.vibrate) {
+              navigator.vibrate([200, 100, 200]);
+            }
           }
         }
         break;
@@ -92,14 +131,37 @@ export function Strategies({ history, onNotify }: StrategiesProps) {
     }
 
     setPatterns(foundPatterns);
-    setNextBet(bestConfidence > 50 ? bestNext : 'Aguardando');
-  }, [history]);
+    setNextBet(bestConfidence > 60 ? bestNext : 'Aguardando');
+  }, [history, activeStrategy, soundEnabled, vibrationEnabled, onNotify]);
 
   return (
     <div className="bg-bg-card border border-border-default rounded-2xl p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="font-bold text-text-primary text-sm">🎯 Estratégias G1</h3>
+        <h3 className="font-bold text-text-primary text-sm">🎯 Estratégias</h3>
         <div className="flex items-center gap-2">
+          {/* ✅ BOTÕES G1 / G2 */}
+          <div className="flex rounded-lg overflow-hidden border border-border-default">
+            <button
+              onClick={() => setActiveStrategy('g1')}
+              className={`px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                activeStrategy === 'g1' 
+                  ? 'bg-accent-pink text-white' 
+                  : 'bg-bg-tertiary text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              G1
+            </button>
+            <button
+              onClick={() => setActiveStrategy('g2')}
+              className={`px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                activeStrategy === 'g2' 
+                  ? 'bg-accent-pink text-white' 
+                  : 'bg-bg-tertiary text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              G2
+            </button>
+          </div>
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
             className={`p-1.5 rounded-lg transition-colors ${
@@ -108,27 +170,24 @@ export function Strategies({ history, onNotify }: StrategiesProps) {
           >
             {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
-          <button
-            onClick={() => setVibrationEnabled(!vibrationEnabled)}
-            className={`p-1.5 rounded-lg transition-colors text-xs ${
-              vibrationEnabled ? 'text-emerald-400' : 'text-text-muted'
-            }`}
-          >
-            {vibrationEnabled ? '🔔' : '🔕'}
-          </button>
         </div>
       </div>
 
       {/* Próxima entrada */}
       <div className="p-3 rounded-xl bg-gradient-to-r from-accent-pink/10 to-violet-500/10 border border-accent-pink/20 text-center">
         <div className="text-[10px] text-text-muted">Próxima entrada</div>
-        <div className="text-xl font-bold text-accent-pink">
+        <div className={`text-xl font-bold ${getBetColor(nextBet)}`}>
           {nextBet}
         </div>
+        {lastSignal && (
+          <div className="text-[8px] text-text-muted mt-1">
+            Último sinal: {lastSignal}
+          </div>
+        )}
       </div>
 
       {/* Padrões detectados */}
-      <div className="space-y-1 max-h-[200px] overflow-y-auto">
+      <div className="space-y-1 max-h-[150px] overflow-y-auto">
         {patterns.length > 0 ? (
           patterns.map((p, idx) => (
             <div key={idx} className="text-[10px] text-text-secondary py-1 px-2 rounded-lg bg-bg-tertiary/50">
