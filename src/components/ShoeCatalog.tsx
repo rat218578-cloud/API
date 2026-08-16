@@ -53,6 +53,16 @@ export function ShoeCatalog({ history }: ShoeCatalogProps) {
     return `${Math.min(percentage, 100)}%`;
   };
 
+  // ✅ Obtém a contagem correta por rank
+  const getRankCount = (rank: string): number => {
+    let total = 0;
+    for (const suit of suits) {
+      const card = `${rank}${suit}`;
+      total += stats.cardCounts?.[card] || 0;
+    }
+    return total;
+  };
+
   return (
     <div className="bg-bg-card border border-border-default rounded-2xl p-4 space-y-4">
       <div className="flex items-center justify-between">
@@ -107,8 +117,8 @@ export function ShoeCatalog({ history }: ShoeCatalogProps) {
         </div>
         
         {ranks.map(rank => {
-          const count = getCardCount(rank, suits[0]);
-          const barWidth = getBarWidth(count);
+          const rankTotal = getRankCount(rank);
+          const barWidth = getBarWidth(rankTotal);
           
           return (
             <div key={rank} className="grid grid-cols-4 gap-0.5">

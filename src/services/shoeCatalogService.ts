@@ -4,10 +4,10 @@ export interface CardData {
   card: string;
   rank: string;
   suit: string;
-  count: number;        // Quantas vezes apareceu
-  remaining: number;    // Quantas cópias restantes
-  total: number;        // Total de cópias inicial
-  percentage: number;   // Porcentagem de aparição
+  count: number;
+  remaining: number;
+  total: number;
+  percentage: number;
 }
 
 export interface ShoeCatalogStats {
@@ -29,12 +29,11 @@ export interface ShoeCatalogStats {
 class ShoeCatalogService {
   private static instance: ShoeCatalogService;
   private shoeNumber: number = 1;
-  private observedCards: CardData[] = [];
   private cardCounts: Record<string, number> = {};
   private totalRounds: number = 0;
   private suits: ('♠️' | '♥️' | '♦️' | '♣️')[] = ['♠️', '♥️', '♦️', '♣️'];
   private ranks: string[] = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-  private copiesPerCard: number = 32; // 8 baralhos × 4 naipes
+  private copiesPerCard: number = 32;
 
   static getInstance(): ShoeCatalogService {
     if (!ShoeCatalogService.instance) {
@@ -49,11 +48,9 @@ class ShoeCatalogService {
 
   reset() {
     this.shoeNumber = 1;
-    this.observedCards = [];
     this.cardCounts = {};
     this.totalRounds = 0;
     
-    // Inicializa todos os ranks e naipes
     for (const suit of this.suits) {
       for (const rank of this.ranks) {
         const card = `${rank}${suit}`;
@@ -64,7 +61,6 @@ class ShoeCatalogService {
 
   startNewShoe() {
     this.shoeNumber++;
-    this.observedCards = [];
     this.cardCounts = {};
     this.totalRounds = 0;
     
@@ -76,7 +72,6 @@ class ShoeCatalogService {
     }
   }
 
-  // Registra uma carta observada
   observeCard(cardFull: string): boolean {
     if (!cardFull) return false;
     
@@ -85,32 +80,14 @@ class ShoeCatalogService {
     
     if (!this.suits.includes(suit)) return false;
     
-    // Incrementa contagem
     this.cardCounts[cardFull] = (this.cardCounts[cardFull] || 0) + 1;
-    
-    // Adiciona à lista de observadas
-    const existing = this.observedCards.find(c => c.card === cardFull);
-    if (existing) {
-      existing.count = this.cardCounts[cardFull];
-    } else {
-      this.observedCards.push({
-        card: cardFull,
-        rank,
-        suit,
-        count: this.cardCounts[cardFull],
-        remaining: this.copiesPerCard - this.cardCounts[cardFull],
-        total: this.copiesPerCard,
-        percentage: 0
-      });
-    }
-    
     return true;
   }
 
-  // Processa uma rodada completa
   processRound(round: any) {
-    if (!round || round.troca_de_baralho) {
-      // Se houve troca de baralho, reseta
+    if (!round) return;
+    
+    if (round.troca_de_baralho) {
       this.startNewShoe();
       return;
     }
@@ -121,7 +98,6 @@ class ShoeCatalogService {
     if (round.away) this.observeCard(round.away);
   }
 
-  // Processa histórico completo
   processHistory(history: any[]) {
     if (!history || history.length === 0) return;
     
@@ -132,52 +108,73 @@ class ShoeCatalogService {
     }
   }
 
-  // ✅ Obtém estatísticas completas
   getStats(): ShoeCatalogStats {
-    const totalCards = this.copiesPerCard * 52; // 32 * 52 = 1664
-    const cardsObserved = Object.values(this.cardCounts).reduce((a, b) => a + b, 0);
+    const totalCards = this.copiesPerCard * 52;
+    let cardsObserved = 0;
+    
+    for (const card of Object.keys(this.cardCounts)) {
+      cardsObserved += this.cardCounts[card] || 0;
+    }
+    
     const cardsRemaining = totalCards - cardsObserved;
     
-    // Calcula por naipe
+    // Por naipe
     const bySuit = {} as any;
     for (const suit of this.suits) {
-      const observed = this.observedCards.filter(c => c.suit === suit).reduce((acc, c) => acc + c.count, 0);
-      const total = this.copiesPerCard * 13; // 32 * 13 = 416 por naipe
+      let observed = 0;
+      for (const rank of this.ranks) {
+        const card = `${rank}${suit}`;
+        observed += this.cardCounts[card] || 0;
+      }
       bySuit[suit] = {
-        total,
+        total: this.copiesPerCard * 13,
         observed,
-        remaining: total - observed
+        remaining: (this.copiesPerCard * 13) - observed
       };
     }
 
-    // Calcula por rank
+    // Por rank
     const byRank = {} as any;
     for (const rank of this.ranks) {
-      const observed = this.observedCards.filter(c => c.rank === rank).reduce((acc, c) => acc + c.count, 0);
-      const total = this.copiesPerCard * 4; // 32 * 4 = 128 por rank
+      let observed = 0;
+      for (const suit of this.suits) {
+        const card = `${rank}${suit}`;
+        observed += this.cardCounts[card] || 0;
+      }
       byRank[rank] = {
-        total,
+        total: this.copiesPerCard * 4,
         observed,
-        remaining: total - observed
+        remaining: (this.copiesPerCard * 4) - observed
       };
     }
 
-    // Top cartas (mais frequentes)
-    const topCards = [...this.observedCards]
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8)
-      .map(c => ({
-        ...c,
-        remaining: this.copiesPerCard - c.count,
-        percentage: this.totalRounds > 0 ? (c.count / this.totalRounds) * 100 : 0
-      }));
+    // Top cartas
+    const topCards: CardData[] = [];
+    for (const card of Object.keys(this.cardCounts)) {
+      const count = this.cardCounts[card] || 0;
+      if (count > 0) {
+        const rank = card.slice(0, -1);
+        const suit = card.slice(-1) as '♠️' | '♥️' | '♦️' | '♣️';
+        topCards.push({
+          card,
+          rank,
+          suit,
+          count,
+          remaining: this.copiesPerCard - count,
+          total: this.copiesPerCard,
+          percentage: this.totalRounds > 0 ? (count / this.totalRounds) * 100 : 0
+        });
+      }
+    }
+    
+    topCards.sort((a, b) => b.count - a.count);
 
     return {
       totalCards,
       cardsObserved,
       cardsRemaining,
       shoeNumber: this.shoeNumber,
-      topCards,
+      topCards: topCards.slice(0, 8),
       bySuit,
       byRank,
       totalRounds: this.totalRounds
