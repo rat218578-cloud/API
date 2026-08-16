@@ -127,7 +127,6 @@ export function ShoeCatalog({ history }: ShoeCatalogProps) {
             <div key={rank} className="grid grid-cols-4 gap-0.5">
               {suits.map(suit => {
                 const card = `${rank}${suit}`;
-                const count = getCardCount(rank, suit);
                 const remaining = getCardRemaining(rank, suit);
                 const isSelected = selectedCard === card;
                 
