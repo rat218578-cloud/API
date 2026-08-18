@@ -2,8 +2,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { footballStudioService, ROLETAS_FOOTBALL } from '../services/footballStudioService';
 import { LiveGameView } from './LiveGameView';
-import { Catalog } from "./Catalog";
-import { GruposUnificado } from "./GruposUnificado";
+import { Catalog } from './Catalog';
+import { GruposUnificado } from './GruposUnificado';
 
 export function FootballStudioDashboard() {
   const [activeRoom, setActiveRoom] = useState(ROLETAS_FOOTBALL[0].id);
@@ -22,7 +22,6 @@ export function FootballStudioDashboard() {
   const mesaAtual = ROLETAS_FOOTBALL.find(m => m.id === activeRoom) || ROLETAS_FOOTBALL[0];
   const temHistorico = mesaAtual.temHistorico || false;
 
-  // Abre o vídeo automaticamente na primeira mesa
   useEffect(() => {
     if (isFirstLoad.current && !showVideo) {
       isFirstLoad.current = false;
@@ -103,26 +102,6 @@ export function FootballStudioDashboard() {
     return 'bg-bg-tertiary text-text-muted';
   };
 
-  const getLastThree = () => {
-    if (!history || history.length === 0 || !temHistorico) return ['--', '--', '--'];
-    const recentes = history.filter((item: any) => !item.troca_de_baralho).slice(0, 3);
-    return recentes.map((item: any) => {
-      if (item.resultado === 'H') return 'C';
-      if (item.resultado === 'A') return 'V';
-      if (item.resultado === 'D') return 'E';
-      return '--';
-    });
-  };
-
-  const getLastResult = () => {
-    if (!history || history.length === 0 || !temHistorico) return 'Aguardando...';
-    const last = history.find((item: any) => !item.troca_de_baralho);
-    if (!last) return 'Aguardando...';
-    return getResultadoDisplay(last.resultado);
-  };
-
-  const lastThree = getLastThree();
-  const lastResult = getLastResult();
   const isRealData = history.length > 0 && temHistorico;
 
   return (
@@ -174,14 +153,9 @@ export function FootballStudioDashboard() {
 
       {/* Grid Principal */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        {/* COLUNA ESQUERDA - ShoeCatalog + Strategies */}
+        {/* COLUNA ESQUERDA - Catálogo */}
         <div className="xl:col-span-3 space-y-4">
-          {/* ShoeCatalog (já inclui o Catálogo) */}
           {isRealData && <Catalog history={history} />}
-          {isRealData && <GruposUnificado history={history} stats={stats} />}
-
-          {/* Estratégias G1/G2 */}
-          {isRealData && <Strategies history={history} />}
         </div>
 
         {/* COLUNA CENTRAL - Vídeo */}
@@ -203,25 +177,10 @@ export function FootballStudioDashboard() {
           )}
         </div>
 
-        {/* COLUNA DIREITA - Grupos + Assertividade */}
+        {/* COLUNA DIREITA - Grupos Unificado */}
         <div className="xl:col-span-3 space-y-4">
           {isRealData ? (
-            <>
-              <div className="bg-bg-card border border-border-default rounded-2xl p-4">
-                  ].map((s) => (
-                    <div key={s.id}>
-                      <div className="flex items-center justify-between text-xs mb-1">
-                        <span className="text-text-secondary">{s.name}</span>
-                        <span className="font-bold" style={{ color: s.color }}>{s.value}%</span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-bg-tertiary overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${s.value}%`, backgroundColor: s.color }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
+            <GruposUnificado history={history} stats={stats} />
           ) : (
             <div className="bg-bg-card border border-border-default rounded-2xl p-4 text-center">
               <div className="text-4xl mb-2">🎥</div>
