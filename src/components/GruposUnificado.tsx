@@ -502,7 +502,7 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
           <span className="w-2 h-2 rounded-full bg-emerald-500" /> C = Casa
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-red-500" /> V = Visitante
+          <span className="w-2 h-2 rounded-full bg-red-500" /> C = Casa
         </span>
         <span className="flex items-center gap-1">
           <span className="w-2 h-2 rounded-full bg-yellow-500" /> E = Empate

@@ -96,8 +96,8 @@ export function FootballStudioDashboard() {
   };
 
   const getResultadoColor = (resultado: string) => {
-    if (resultado === 'H') return 'bg-emerald-500/20 text-emerald-400';
-    if (resultado === 'A') return 'bg-red-500/20 text-red-400';
+    if (resultado === 'H') return 'bg-blue-500/20 text-blue-400';
+    if (resultado === 'A') return 'bg-blue-500/20 text-blue-400';
     if (resultado === 'D') return 'bg-yellow-500/20 text-yellow-400';
     return 'bg-bg-tertiary text-text-muted';
   };
@@ -142,7 +142,7 @@ export function FootballStudioDashboard() {
             <span className={`w-2 h-2 rounded-full ${activeRoom === r.id ? 'bg-emerald-500 animate-pulse' : 'bg-text-muted'}`} />
             {r.nome}
             {r.temHistorico && isRealData && activeRoom === r.id && (
-              <span className="text-[8px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">HIST</span>
+              <span className="text-[8px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full">HIST</span>
             )}
             {!r.temHistorico && (
               <span className="text-[8px] bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded-full">VIDEO</span>
