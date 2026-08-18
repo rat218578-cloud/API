@@ -1,5 +1,11 @@
-import { useState, useEffect } from 'react';
-import type { User } from '../types';
+import { useState, useEffect, useRef } from 'react';
+
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  plan: string;
+}
 
 interface AuthState {
   user: User | null;
@@ -15,9 +21,12 @@ export function useAuth() {
     error: null,
     isAuthenticated: false
   });
+  
+  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isRefreshingRef = useRef(false);
 
-  // Restaura usuário do localStorage
-  const restoreUserFromStorage = (): User | null => {
+  // ✅ BUSCA USUÁRIO DO LOCALSTORAGE
+  const getUserFromStorage = (): User | null => {
     try {
       const name = localStorage.getItem('user_name');
       const plan = localStorage.getItem('user_plan');
@@ -38,7 +47,7 @@ export function useAuth() {
     }
   };
 
-  // Salva usuário no localStorage
+  // ✅ SALVA USUÁRIO NO LOCALSTORAGE
   const saveUserToStorage = (user: User) => {
     localStorage.setItem('user_name', user.name || 'Usuário');
     localStorage.setItem('user_plan', user.plan || 'pro');
@@ -46,16 +55,24 @@ export function useAuth() {
     localStorage.setItem('user_id', user.id || '');
   };
 
-  const refreshToken = async (refreshToken: string): Promise<string | null> => {
+  // ✅ REFRESH TOKEN
+  const refreshToken = async (): Promise<string | null> => {
+    const refreshTokenStored = localStorage.getItem('refresh_token');
+    if (!refreshTokenStored) return null;
+
     try {
       const response = await fetch('/api/auth/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refreshToken })
+        body: JSON.stringify({ refresh_token: refreshTokenStored })
       });
+
       if (response.ok) {
         const data = await response.json();
         localStorage.setItem('access_token', data.access_token);
+        if (data.refresh_token) {
+          localStorage.setItem('refresh_token', data.refresh_token);
+        }
         return data.access_token;
       }
       return null;
@@ -64,20 +81,10 @@ export function useAuth() {
     }
   };
 
+  // ✅ VALIDA TOKEN
   const validateToken = async (): Promise<boolean> => {
     const accessToken = localStorage.getItem('access_token');
-    const refreshTokenStored = localStorage.getItem('refresh_token');
     
-    const storedUser = restoreUserFromStorage();
-    if (storedUser && accessToken) {
-      setState(prev => ({ 
-        ...prev, 
-        user: storedUser,
-        isAuthenticated: true,
-        loading: false 
-      }));
-    }
-
     if (!accessToken) {
       setState(prev => ({ ...prev, loading: false, isAuthenticated: false }));
       return false;
@@ -90,36 +97,28 @@ export function useAuth() {
 
       if (response.ok) {
         const data = await response.json();
-        const userName = data.name || storedUser?.name || localStorage.getItem('user_name') || 'Usuário';
-        const userPlan = data.plan || storedUser?.plan || localStorage.getItem('user_plan') || 'pro';
+        const storedUser = getUserFromStorage();
         
-        const user: User = {
-          id: data.user_id || storedUser?.id || '1',
-          email: data.email || storedUser?.email || '',
-          name: userName,
-          plan: userPlan as 'free' | 'pro' | 'enterprise'
-        };
-        
-        saveUserToStorage(user);
-        setState(prev => ({ 
-          ...prev, 
-          user: user,
-          isAuthenticated: true,
-          loading: false 
-        }));
-        return true;
-      }
-
-      if (refreshTokenStored) {
-        const newAccessToken = await refreshToken(refreshTokenStored);
-        if (newAccessToken) {
-          return await validateToken();
+        if (storedUser) {
+          setState(prev => ({
+            ...prev,
+            user: storedUser,
+            isAuthenticated: true,
+            loading: false
+          }));
+          return true;
         }
+        return false;
       }
 
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      setState(prev => ({ ...prev, loading: false, isAuthenticated: false }));
+      // ✅ SE O TOKEN EXPIRAR, TENTA RENOVAR
+      const newToken = await refreshToken();
+      if (newToken) {
+        return await validateToken();
+      }
+
+      // ✅ SE NÃO CONSEGUIR RENOVAR, FAZ LOGOUT
+      logout();
       return false;
 
     } catch {
@@ -128,6 +127,7 @@ export function useAuth() {
     }
   };
 
+  // ✅ LOGIN
   const login = async (email: string, password: string): Promise<boolean> => {
     setState(prev => ({ ...prev, loading: true, error: null }));
 
@@ -157,6 +157,9 @@ export function useAuth() {
         loading: false
       }));
 
+      // ✅ INICIA O REFRESH AUTOMÁTICO
+      startAutoRefresh();
+
       return true;
 
     } catch {
@@ -165,6 +168,7 @@ export function useAuth() {
     }
   };
 
+  // ✅ LOGOUT
   const logout = async (): Promise<void> => {
     const accessToken = localStorage.getItem('access_token');
     if (accessToken) {
@@ -183,6 +187,11 @@ export function useAuth() {
     localStorage.removeItem('user_email');
     localStorage.removeItem('user_id');
     
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+      refreshTimeoutRef.current = null;
+    }
+    
     setState({
       user: null,
       loading: false,
@@ -191,8 +200,62 @@ export function useAuth() {
     });
   };
 
+  // ✅ REFRESH AUTOMÁTICO (a cada 5 minutos)
+  const startAutoRefresh = () => {
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+    }
+
+    // ✅ TENTA RENOVAR O TOKEN A CADA 5 MINUTOS
+    refreshTimeoutRef.current = setInterval(async () => {
+      if (isRefreshingRef.current) return;
+      isRefreshingRef.current = true;
+
+      try {
+        const accessToken = localStorage.getItem('access_token');
+        if (!accessToken) {
+          isRefreshingRef.current = false;
+          return;
+        }
+
+        // Verifica se o token ainda é válido
+        const response = await fetch('/api/auth/validate', {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+
+        if (!response.ok) {
+          // Token expirado, tenta renovar
+          const newToken = await refreshToken();
+          if (newToken) {
+            console.log('✅ Token renovado automaticamente!');
+          } else {
+            console.log('❌ Falha ao renovar token, fazendo logout...');
+            logout();
+          }
+        }
+      } catch (error) {
+        console.error('❌ Erro no refresh automático:', error);
+      } finally {
+        isRefreshingRef.current = false;
+      }
+    }, 5 * 60 * 1000); // 5 minutos
+  };
+
+  // ✅ INICIALIZAÇÃO
   useEffect(() => {
-    validateToken();
+    validateToken().then(() => {
+      // Se estiver autenticado, inicia refresh automático
+      if (state.isAuthenticated) {
+        startAutoRefresh();
+      }
+    });
+
+    return () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+        refreshTimeoutRef.current = null;
+      }
+    };
   }, []);
 
   return {
