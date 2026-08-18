@@ -1,22 +1,16 @@
 // src/components/Catalog.tsx
 import { useState, useEffect } from 'react';
 
-
 export function Catalog({ history }: { history: any[] }) {
   const [cardCounts, setCardCounts] = useState<Record<string, number>>({});
   const [totalRounds, setTotalRounds] = useState(0);
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const [cardHistory, setCardHistory] = useState<any[]>([]);
 
-  // 8 baralhos = 416 cartas
-  // Cada valor (A, 2, 3... K) = 32 cópias
-  // Cada naipe = 104 cartas (13 valores × 8)
   const suits = ['♠️', '♥️', '♦️', '♣️'];
   const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 
   useEffect(() => {
-    console.log('📊 Catalog - Atualizando com', history?.length || 0, 'rodadas');
-
     if (!history || history.length === 0) {
       const empty: Record<string, number> = {};
       for (const suit of suits) {
@@ -38,7 +32,6 @@ export function Catalog({ history }: { history: any[] }) {
 
     let rounds = 0;
     for (const round of history) {
-      // Reseta na troca de baralho
       if (round.troca_de_baralho) {
         for (const suit of suits) {
           for (const rank of ranks) {
@@ -69,7 +62,6 @@ export function Catalog({ history }: { history: any[] }) {
     }
   }, [history, selectedCard]);
 
-  // Ordena por contagem (mais frequentes primeiro)
   const sortedCards = Object.entries(cardCounts)
     .filter(([_, count]) => count > 0)
     .sort((a, b) => b[1] - a[1])
@@ -81,7 +73,6 @@ export function Catalog({ history }: { history: any[] }) {
 
   return (
     <div className="bg-bg-card border border-border-default rounded-2xl p-4 space-y-4">
-      {/* Cabeçalho */}
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-text-primary text-sm">📊 Catálogo {sortedCards.length > 0 ? '🔴' : '⏳'}</h3>
         <div className="flex items-center gap-2 text-[10px] text-text-muted">
@@ -90,7 +81,6 @@ export function Catalog({ history }: { history: any[] }) {
         </div>
       </div>
 
-      {/* Lista de cartas */}
       <div className="space-y-1 max-h-[400px] overflow-y-auto">
         <div className="grid grid-cols-4 text-[8px] text-text-muted uppercase py-0.5 border-b border-border-default text-center sticky top-0 bg-bg-card">
           <span>Carta</span>
@@ -103,7 +93,7 @@ export function Catalog({ history }: { history: any[] }) {
           sortedCards.map((card) => {
             const suit = card.card.slice(-1);
             const color = suit === '♥️' || suit === '♦️' ? 'text-red-400' : 'text-text-primary';
-            const remaining = 32 - card.count; // 32 cópias por carta
+            const remaining = 32 - card.count;
             
             return (
               <div
@@ -136,7 +126,6 @@ export function Catalog({ history }: { history: any[] }) {
         )}
       </div>
 
-      {/* Legenda */}
       <div className="border-t border-border-default pt-2 flex items-center justify-between text-[8px] text-text-muted">
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1">
@@ -149,7 +138,6 @@ export function Catalog({ history }: { history: any[] }) {
         <span>416 cartas por shoe • 32 cópias por carta</span>
       </div>
 
-      {/* Detalhe da carta selecionada */}
       {selectedCard && cardHistory.length > 0 && (
         <div className="border-t border-border-default pt-2">
           <div className="flex items-center justify-between mb-1">
