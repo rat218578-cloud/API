@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Volume2, VolumeX, Bell, BellOff } from 'lucide-react';
 import { notificationService } from '../services/notificationService';
+import { strategiesG1 } from './StrategiesG1';
 
 interface GruposUnificadoProps {
   history: any[];
@@ -29,23 +30,7 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
     notificationService.requestPermission();
   }, []);
 
-  // ✅ ESTRATÉGIAS G1
-  const strategiesG1 = [
-    { id: 'g1_1', name: '1-2-1', pattern: ['E', 'C', 'C', 'E'], next: 'C', size: 4 },
-    { id: 'g1_2', name: '1-2-1', pattern: ['C', 'E', 'E', 'C'], next: 'C', size: 4 },
-    { id: 'g1_3', name: '1-3-1', pattern: ['E', 'C', 'C', 'C', 'E'], next: 'E', size: 5 },
-    { id: 'g1_4', name: '1-3-1', pattern: ['C', 'E', 'E', 'E', 'C'], next: 'C', size: 5 },
-    { id: 'g1_5', name: 'Alternância', pattern: ['E', 'C', 'E'], next: 'C', size: 3 },
-    { id: 'g1_6', name: 'Alternância', pattern: ['C', 'E', 'C'], next: 'E', size: 3 },
-    { id: 'g1_7', name: 'Predominância', pattern: ['E', 'C', 'C', 'C', 'C'], next: 'C', size: 5 },
-    { id: 'g1_8', name: 'Predominância', pattern: ['C', 'E', 'E', 'E', 'E'], next: 'E', size: 5 },
-    { id: 'g1_9', name: 'Surf pós quebra', pattern: ['C', 'C', 'C', 'C', 'E', 'C'], next: 'C', size: 6 },
-    { id: 'g1_10', name: 'Surf pós quebra', pattern: ['E', 'E', 'E', 'E', 'C', 'E'], next: 'E', size: 6 },
-    { id: 'g1_11', name: 'Vermelha após Empate', pattern: ['D', 'C', 'C', 'C'], next: 'C', size: 4 },
-    { id: 'g1_12', name: 'Azul após Empate', pattern: ['D', 'E', 'E', 'E'], next: 'E', size: 4 },
-  ];
-
-  // ✅ ESTRATÉGIAS G2
+  // ESTRATÉGIAS G2
   const strategiesG2 = [
     { id: 'g2_1', name: 'TOP G2 #1', pattern: ['E', 'E', 'E', 'C'], next: 'C', size: 4 },
     { id: 'g2_2', name: 'TOP G2 #2', pattern: ['E', 'C', 'E', 'V'], next: 'V', size: 4 },
@@ -71,14 +56,22 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
     return '';
   };
 
+  // ✅ CORES CORRETAS: VERMELHO = CASA, AZUL = VISITANTE
   const getBetColor = (bet: string): string => {
-    if (bet === 'CASA') return 'text-emerald-400';
-    if (bet === 'VISITANTE') return 'text-red-400';
+    if (bet === 'CASA') return 'text-red-400';
+    if (bet === 'VISITANTE') return 'text-blue-400';
     if (bet === 'EMPATE') return 'text-yellow-400';
     return 'text-text-muted';
   };
 
-  // ✅ MENTALISTA - ANALISA O SHOE
+  const getResultadoColor = (resultado: string) => {
+    if (resultado === 'CASA') return 'bg-red-500/20 text-red-400';
+    if (resultado === 'VISITANTE') return 'bg-blue-500/20 text-blue-400';
+    if (resultado === 'EMPATE') return 'bg-yellow-500/20 text-yellow-400';
+    return 'bg-bg-tertiary text-text-muted';
+  };
+
+  // ✅ MENTALISTA
   const analyzeShoe = (history: any[]) => {
     if (!history || history.length === 0) return { topCards: [] };
 
@@ -119,7 +112,6 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
 
     const totalRemaining = totalShoeCards - cards;
     
-    // ✅ RANKING POR DISPONIBILIDADE
     const ranked = Object.entries(counts)
       .filter(([_, count]) => count > 0)
       .map(([card, count]) => ({
@@ -206,7 +198,6 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
       return;
     }
 
-    // ✅ 1. ANALISA PADRÕES G1/G2
     const recentes = validRounds.slice(0, 10).map((h: any) => getSymbol(h.resultado));
     const currentStrategies = activeStrategy === 'g1' ? strategiesG1 : strategiesG2;
     
@@ -249,11 +240,9 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
       }
     }
 
-    // ✅ 2. ANALISA O SHOE (MENTALISTA)
     const mentalistaData = analyzeShoe(history);
     setMentalistaTop(mentalistaData.topCards);
 
-    // ✅ 3. COMBINA OS SCORES
     const combined = calculateCombinedScore(nextName, bestConfidence, mentalistaData);
     
     setPrediction(combined.prediction);
@@ -261,7 +250,6 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
     setPatternStrength(strength);
     setPatternMax(maxSize);
 
-    // ✅ NOTIFICA SE ENCONTROU PADRÃO
     if (combined.confidence > 70 && combined.prediction !== 'AGUARDAR') {
       const type = combined.prediction === 'CASA' ? 'casa' : 
                    combined.prediction === 'VISITANTE' ? 'visitante' : 'empate';
@@ -304,18 +292,11 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
   const nomesSequencia = ['Último', 'Penúlt', 'Antep', '2º Antep'];
   const strengthPercent = patternMax > 0 ? (patternStrength / patternMax) * 100 : 0;
 
-  const getResultadoColor = (resultado: string) => {
-    if (resultado === 'CASA') return 'bg-emerald-500/20 text-emerald-400';
-    if (resultado === 'VISITANTE') return 'bg-red-500/20 text-red-400';
-    if (resultado === 'EMPATE') return 'bg-yellow-500/20 text-yellow-400';
-    return 'bg-bg-tertiary text-text-muted';
-  };
-
   return (
     <div className="bg-bg-card border border-border-default rounded-2xl p-4 space-y-4">
       <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">📈 Grupos</h3>
       
-      {/* ✅ SEQUÊNCIA ATUAL */}
+      {/* SEQUÊNCIA ATUAL */}
       <div className="text-[10px] text-text-muted uppercase mb-2">Sequência atual</div>
       <div className="p-3 rounded-xl bg-gradient-to-r from-bg-tertiary to-bg-secondary border border-border-default text-center mb-3">
         <div className="text-xs font-bold text-text-primary">
@@ -328,14 +309,14 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
         </div>
       </div>
       
-      {/* ✅ ÚLTIMOS 4 RESULTADOS */}
+      {/* ÚLTIMOS 4 RESULTADOS */}
       <div className="flex items-center justify-center gap-3 text-center">
         {lastFour.map((num, idx) => (
           <div key={idx} className="text-center">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
               num !== '--' ? (
-                num === 'C' ? 'bg-emerald-500/20 text-emerald-400' :
-                num === 'V' ? 'bg-red-500/20 text-red-400' :
+                num === 'C' ? 'bg-red-500/20 text-red-400' :
+                num === 'V' ? 'bg-blue-500/20 text-blue-400' :
                 'bg-yellow-500/20 text-yellow-400'
               ) : 'bg-bg-tertiary text-text-muted'
             }`}>{num}</div>
@@ -349,10 +330,10 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
         <div className="text-sm font-bold text-emerald-400">⬆ Forte</div>
       </div>
 
-      {/* ✅ DIVISOR */}
+      {/* DIVISOR */}
       <div className="border-t border-border-default my-3"></div>
 
-      {/* ✅ ESTRATÉGIAS G1/G2 */}
+      {/* ESTRATÉGIAS G1/G2 */}
       <div className="flex items-center justify-between">
         <h4 className="font-bold text-text-primary text-xs uppercase tracking-wider">🎯 Estratégias</h4>
         <div className="flex items-center gap-1">
@@ -397,10 +378,10 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
         </div>
       </div>
 
-      {/* ✅ PREVISÃO COMBINADA */}
+      {/* PREVISÃO COMBINADA */}
       <div className={`p-3 rounded-xl text-center border ${
         prediction !== 'AGUARDAR' 
-          ? 'bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border-emerald-500/30' 
+          ? 'bg-gradient-to-r from-red-500/20 to-blue-500/20 border-red-500/30' 
           : 'bg-bg-tertiary border-border-default'
       }`}>
         <div className="text-[10px] text-text-muted">
@@ -416,7 +397,7 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
         )}
       </div>
 
-      {/* ✅ FORÇA DO PADRÃO + MENTALISTA */}
+      {/* FORÇA DO PADRÃO + MENTALISTA */}
       {prediction !== 'AGUARDAR' && (
         <div className="space-y-2">
           <div>
@@ -426,13 +407,13 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
             </div>
             <div className="h-2 rounded-full bg-bg-tertiary overflow-hidden">
               <div 
-                className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-cyan-400 transition-all duration-500"
+                className="h-full rounded-full bg-gradient-to-r from-red-500 to-blue-500 transition-all duration-500"
                 style={{ width: `${strengthPercent}%` }}
               />
             </div>
           </div>
           
-          {/* ✅ MENTALISTA - TOP 3 CARTAS */}
+          {/* MENTALISTA - TOP 3 CARTAS */}
           <div className="bg-bg-tertiary/50 rounded-lg p-2">
             <div className="text-[8px] text-text-muted mb-1">🧠 Mentalista — Top 3 disponíveis</div>
             <div className="flex gap-2">
@@ -447,7 +428,7 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
         </div>
       )}
 
-      {/* ✅ PADRÕES DETECTADOS */}
+      {/* PADRÕES DETECTADOS */}
       <div className="space-y-1 max-h-[120px] overflow-y-auto">
         {patterns.length > 0 ? (
           patterns.map((p, idx) => (
@@ -462,7 +443,7 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
         )}
       </div>
 
-      {/* ✅ HISTÓRICO DE SINAIS */}
+      {/* HISTÓRICO DE SINAIS */}
       {signalHistory.length > 0 && (
         <div className="border-t border-border-default pt-2">
           <div className="text-[8px] text-text-muted mb-1">📋 Últimos sinais:</div>
@@ -474,14 +455,14 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
         </div>
       )}
 
-      {/* ✅ ASSERTIVIDADE DENTRO DE GRUPOS */}
+      {/* ASSERTIVIDADE */}
       <div className="border-t border-border-default pt-3">
         <h4 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-2">🎯 Assertividade</h4>
         <div className="space-y-2">
           {[
-            { id: 'casa', name: 'CASA', value: stats.total > 0 ? ((stats.wins / stats.total) * 100).toFixed(1) : 0, color: '#10b981' },
+            { id: 'casa', name: 'CASA', value: stats.total > 0 ? ((stats.wins / stats.total) * 100).toFixed(1) : 0, color: '#ef4444' },
             { id: 'empate', name: 'EMPATE', value: stats.total > 0 ? ((stats.draws / stats.total) * 100).toFixed(1) : 0, color: '#f59e0b' },
-            { id: 'visitante', name: 'VISITANTE', value: stats.total > 0 ? ((stats.losses / stats.total) * 100).toFixed(1) : 0, color: '#ef4444' }
+            { id: 'visitante', name: 'VISITANTE', value: stats.total > 0 ? ((stats.losses / stats.total) * 100).toFixed(1) : 0, color: '#3b82f6' }
           ].map((s) => (
             <div key={s.id}>
               <div className="flex items-center justify-between text-xs mb-1">
@@ -499,10 +480,10 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
       {/* LEGENDA */}
       <div className="flex items-center justify-center gap-3 text-[8px] text-text-muted border-t border-border-default pt-2">
         <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-emerald-500" /> C = Casa
+          <span className="w-2 h-2 rounded-full bg-red-500" /> C = Casa
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-red-500" /> C = Casa
+          <span className="w-2 h-2 rounded-full bg-blue-500" /> V = Visitante
         </span>
         <span className="flex items-center gap-1">
           <span className="w-2 h-2 rounded-full bg-yellow-500" /> E = Empate
