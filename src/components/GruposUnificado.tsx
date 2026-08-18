@@ -20,6 +20,11 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
   const [patternMax, setPatternMax] = useState(5);
   const [prediction, setPrediction] = useState<string>('AGUARDAR');
   const [mentalistaTop, setMentalistaTop] = useState<any[]>([]);
+  
+  // ✅ NOVO: Estado para os últimos 4 resultados
+  const [lastFourResults, setLastFourResults] = useState<string[]>(['--', '--', '--', '--']);
+  const [lastResult, setLastResult] = useState<string>('Aguardando...');
+  const [shoeNumber, setShoeNumber] = useState(1);
 
   const suits = ['♠️', '♥️', '♦️', '♣️'];
   const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
@@ -56,6 +61,13 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
     return '';
   };
 
+  const getSymbolFull = (resultado: string): string => {
+    if (resultado === 'H') return 'CASA';
+    if (resultado === 'A') return 'VISITANTE';
+    if (resultado === 'D') return 'EMPATE';
+    return '--';
+  };
+
   // ✅ CORES CORRETAS: VERMELHO = CASA, AZUL = VISITANTE
   const getBetColor = (bet: string): string => {
     if (bet === 'CASA') return 'text-red-400';
@@ -68,6 +80,13 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
     if (resultado === 'CASA') return 'bg-red-500/20 text-red-400';
     if (resultado === 'VISITANTE') return 'bg-blue-500/20 text-blue-400';
     if (resultado === 'EMPATE') return 'bg-yellow-500/20 text-yellow-400';
+    return 'bg-bg-tertiary text-text-muted';
+  };
+
+  const getResultadoBg = (letra: string) => {
+    if (letra === 'C') return 'bg-red-500/20 text-red-400';
+    if (letra === 'V') return 'bg-blue-500/20 text-blue-400';
+    if (letra === 'E') return 'bg-yellow-500/20 text-yellow-400';
     return 'bg-bg-tertiary text-text-muted';
   };
 
@@ -181,8 +200,23 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
     return { prediction: bestName, confidence: Math.round(Math.min(bestScore, 95)) };
   };
 
-  // ✅ PROCESSA DADOS
+  // ✅ PROCESSA DADOS - RESETA NA TROCA DE BARALHO
   useEffect(() => {
+    // ✅ VERIFICA SE HOUVE TROCA DE BARALHO
+    const hasShoeChange = history.some((h: any) => h.troca_de_baralho === true);
+    if (hasShoeChange) {
+      // ✅ RESETA GRUPOS NA TROCA DE BARALHO
+      setLastFourResults(['--', '--', '--', '--']);
+      setLastResult('Aguardando...');
+      setPatterns([]);
+      setPrediction('AGUARDAR');
+      setPatternStrength(0);
+      setPatternMax(5);
+      setLastSignal(null);
+      setShoeNumber(prev => prev + 1);
+      console.log('🔄 GRUPOS RESETADOS - TROCA DE BARALHO #', shoeNumber + 1);
+    }
+
     if (!history || history.length === 0) {
       setPrediction('AGUARDAR');
       setPatternStrength(0);
@@ -190,7 +224,26 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
       return;
     }
 
+    // ✅ FILTRA RODADAS VÁLIDAS (IGNORA TROCAS DE BARALHO)
     const validRounds = history.filter((h: any) => !h.troca_de_baralho);
+    if (validRounds.length === 0) {
+      setPrediction('AGUARDAR');
+      setPatternStrength(0);
+      setPatternMax(5);
+      return;
+    }
+
+    // ✅ ATUALIZA ÚLTIMOS 4 RESULTADOS
+    const recentes = validRounds.slice(0, 4);
+    const symbols = recentes.map((h: any) => getSymbol(h.resultado));
+    setLastFourResults(symbols.length === 4 ? symbols : ['--', '--', '--', '--']);
+
+    // ✅ ATUALIZA ÚLTIMO RESULTADO
+    if (validRounds.length > 0) {
+      const last = validRounds[0];
+      setLastResult(getSymbolFull(last.resultado));
+    }
+
     if (validRounds.length < 3) {
       setPrediction('AGUARDAR');
       setPatternStrength(0);
@@ -198,7 +251,8 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
       return;
     }
 
-    const recentes = validRounds.slice(0, 10).map((h: any) => getSymbol(h.resultado));
+    // ✅ ANALISA PADRÕES (USA AS ÚLTIMAS 10 RODADAS VÁLIDAS)
+    const last10 = validRounds.slice(0, 10).map((h: any) => getSymbol(h.resultado));
     const currentStrategies = activeStrategy === 'g1' ? strategiesG1 : strategiesG2;
     
     let foundPatterns: string[] = [];
@@ -211,9 +265,9 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
       const pattern = strategy.pattern;
       const size = strategy.size;
       
-      if (recentes.length < size) continue;
+      if (last10.length < size) continue;
       
-      const lastN = recentes.slice(0, size);
+      const lastN = last10.slice(0, size);
       let match = true;
       for (let i = 0; i < size; i++) {
         if (lastN[i] !== pattern[i]) {
@@ -229,7 +283,7 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
         else if (nextSymbol === 'E') nextName = 'EMPATE';
         
         bestConfidence = Math.max(100 - (size * 2), 70);
-        strength = Math.min(recentes.length, size);
+        strength = Math.min(last10.length, size);
         maxSize = size;
         
         const patternStr = pattern.map(s => 
@@ -240,9 +294,11 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
       }
     }
 
+    // ✅ MENTALISTA
     const mentalistaData = analyzeShoe(history);
     setMentalistaTop(mentalistaData.topCards);
 
+    // ✅ COMBINA
     const combined = calculateCombinedScore(nextName, bestConfidence, mentalistaData);
     
     setPrediction(combined.prediction);
@@ -265,36 +321,15 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
 
   }, [history, activeStrategy, notificationsEnabled, soundEnabled]);
 
-  // ✅ PEGA OS ÚLTIMOS 4 RESULTADOS
-  const getLastFour = () => {
-    if (!history || history.length === 0) return ['--', '--', '--', '--'];
-    const recentes = history.filter((h: any) => !h.troca_de_baralho).slice(0, 4);
-    return recentes.map((item: any) => {
-      if (item.resultado === 'H') return 'C';
-      if (item.resultado === 'A') return 'V';
-      if (item.resultado === 'D') return 'E';
-      return '--';
-    });
-  };
-
-  const getLastResult = () => {
-    if (!history || history.length === 0) return 'Aguardando...';
-    const last = history.find((h: any) => !h.troca_de_baralho);
-    if (!last) return 'Aguardando...';
-    if (last.resultado === 'H') return 'CASA';
-    if (last.resultado === 'A') return 'VISITANTE';
-    if (last.resultado === 'D') return 'EMPATE';
-    return '--';
-  };
-
-  const lastFour = getLastFour();
-  const lastResult = getLastResult();
   const nomesSequencia = ['Último', 'Penúlt', 'Antep', '2º Antep'];
   const strengthPercent = patternMax > 0 ? (patternStrength / patternMax) * 100 : 0;
 
   return (
     <div className="bg-bg-card border border-border-default rounded-2xl p-4 space-y-4">
-      <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">📈 Grupos</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider">📈 Grupos</h3>
+        <span className="text-[10px] text-text-muted">Shoe #{shoeNumber}</span>
+      </div>
       
       {/* SEQUÊNCIA ATUAL */}
       <div className="text-[10px] text-text-muted uppercase mb-2">Sequência atual</div>
@@ -311,14 +346,10 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
       
       {/* ÚLTIMOS 4 RESULTADOS */}
       <div className="flex items-center justify-center gap-3 text-center">
-        {lastFour.map((num, idx) => (
+        {lastFourResults.map((num, idx) => (
           <div key={idx} className="text-center">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
-              num !== '--' ? (
-                num === 'C' ? 'bg-red-500/20 text-red-400' :
-                num === 'V' ? 'bg-blue-500/20 text-blue-400' :
-                'bg-yellow-500/20 text-yellow-400'
-              ) : 'bg-bg-tertiary text-text-muted'
+              num !== '--' ? getResultadoBg(num) : 'bg-bg-tertiary text-text-muted'
             }`}>{num}</div>
             <div className="text-[7px] text-text-muted mt-0.5">{nomesSequencia[idx]}</div>
           </div>
@@ -480,13 +511,13 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
       {/* LEGENDA */}
       <div className="flex items-center justify-center gap-3 text-[8px] text-text-muted border-t border-border-default pt-2">
         <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-red-500" /> C = Casa
+          <span className="w-2 h-2 rounded-full bg-red-500" /> C = CASA
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-blue-500" /> V = Visitante
+          <span className="w-2 h-2 rounded-full bg-blue-500" /> V = VISITANTE
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-yellow-500" /> E = Empate
+          <span className="w-2 h-2 rounded-full bg-yellow-500" /> E = EMPATE
         </span>
       </div>
     </div>
