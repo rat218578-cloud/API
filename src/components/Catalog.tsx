@@ -1,11 +1,6 @@
 // src/components/Catalog.tsx
 import { useState, useEffect } from 'react';
 
-interface CardData {
-  card: string;
-  count: number;
-  percentage: number;
-}
 
 export function Catalog({ history }: { history: any[] }) {
   const [cardCounts, setCardCounts] = useState<Record<string, number>>({});
