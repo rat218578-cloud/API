@@ -2,7 +2,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { footballStudioService, ROLETAS_FOOTBALL } from '../services/footballStudioService';
 import { LiveGameView } from './LiveGameView';
-import { ShoeCatalog } from './ShoeCatalog';
 import { Catalog } from "./Catalog";
 import { Strategies } from './Strategies';
 
@@ -178,7 +177,6 @@ export function FootballStudioDashboard() {
         {/* COLUNA ESQUERDA - ShoeCatalog + Strategies */}
         <div className="xl:col-span-3 space-y-4">
           {/* ShoeCatalog (já inclui o Catálogo) */}
-          {isRealData && <ShoeCatalog history={history} />}
           {isRealData && <Catalog history={history} />}
 
           {/* Estratégias G1/G2 */}
