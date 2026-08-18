@@ -437,3 +437,153 @@ def get_football_history_db():
     except Exception as e:
         print(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
+
+# ========== SISTEMA DE RENOVAÇÃO DE TOKEN ==========
+class EvolutionTokenManager:
+    def __init__(self):
+        self.tokens = {}
+    
+    def generate_token(self, user_id: str, slug: str) -> dict:
+        try:
+            external_token = session.headers.get('Authorization')
+            if not external_token:
+                return {'error': 'Token externo não encontrado'}
+            
+            response = session.get(
+                f'{API_BASE}/api/start-game-v2',
+                params={
+                    'slug': slug,
+                    'platform': 'WEB',
+                    'use_demo': 0,
+                    'source': 'watchIsAuthenticated'
+                },
+                timeout=15
+            )
+            
+            if response.status_code != 200:
+                return {'error': f'Erro na API: {response.status_code}'}
+            
+            data = response.json()
+            game_url = data.get('iframe_url') or data.get('gameURL')
+            
+            if not game_url:
+                return {'error': 'URL do jogo não encontrada'}
+            
+            import re
+            match = re.search(r'EVOSESSIONID=([^&]+)', game_url)
+            evo_session_id = match.group(1) if match else None
+            
+            expires_at = datetime.now() + timedelta(minutes=15)
+            
+            cursor.execute("""
+                INSERT INTO evolution_tokens 
+                (user_id, evo_session_id, game_url, expires_at, slug)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (user_id) 
+                DO UPDATE SET 
+                    evo_session_id = EXCLUDED.evo_session_id,
+                    game_url = EXCLUDED.game_url,
+                    expires_at = EXCLUDED.expires_at,
+                    updated_at = CURRENT_TIMESTAMP
+            """, (user_id, evo_session_id, game_url, expires_at, slug))
+            
+            conn.commit()
+            
+            return {
+                'success': True,
+                'evo_session_id': evo_session_id,
+                'game_url': game_url,
+                'expires_at': expires_at.isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao gerar token: {e}")
+            return {'error': str(e)}
+    
+    def refresh_token(self, user_id: str, slug: str) -> dict:
+        cursor.execute("""
+            SELECT evo_session_id, game_url, expires_at 
+            FROM evolution_tokens 
+            WHERE user_id = %s
+        """, (user_id,))
+        
+        row = cursor.fetchone()
+        
+        if row:
+            expires_at = row[2]
+            if expires_at and datetime.now() < expires_at:
+                return {
+                    'success': True,
+                    'evo_session_id': row[0],
+                    'game_url': row[1],
+                    'expires_at': expires_at.isoformat()
+                }
+        
+        return self.generate_token(user_id, slug)
+
+token_manager = EvolutionTokenManager()
+
+@app.route('/api/evolution/refresh-token', methods=['POST'])
+def refresh_evolution_token():
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return jsonify({'error': 'Token não encontrado'}), 401
+        
+        token = auth_header.replace('Bearer ', '')
+        payload = jwt_manager.verify_token(token)
+        
+        if not payload:
+            return jsonify({'error': 'Token inválido'}), 401
+        
+        user_id = payload.get('user_id')
+        data = request.json
+        slug = data.get('slug', 'evolution/lightning-roulette')
+        
+        result = token_manager.refresh_token(user_id, slug)
+        
+        if result.get('success'):
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 500
+            
+    except Exception as e:
+        logger.error(f"❌ Erro: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/evolution/status', methods=['GET'])
+def get_evolution_status():
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            return jsonify({'error': 'Token não encontrado'}), 401
+        
+        token = auth_header.replace('Bearer ', '')
+        payload = jwt_manager.verify_token(token)
+        
+        if not payload:
+            return jsonify({'error': 'Token inválido'}), 401
+        
+        user_id = payload.get('user_id')
+        
+        cursor.execute("""
+            SELECT evo_session_id, game_url, expires_at, slug, updated_at
+            FROM evolution_tokens 
+            WHERE user_id = %s
+        """, (user_id,))
+        
+        row = cursor.fetchone()
+        
+        if row:
+            return jsonify({
+                'success': True,
+                'has_token': bool(row[0]),
+                'slug': row[3],
+                'expires_at': row[2].isoformat() if row[2] else None,
+                'updated_at': row[4].isoformat() if row[4] else None
+            }), 200
+        
+        return jsonify({'success': True, 'has_token': False}), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
