@@ -10,7 +10,6 @@ interface GruposUnificadoProps {
 
 export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
   const [patterns, setPatterns] = useState<string[]>([]);
-  const [nextBet, setNextBet] = useState<string>('AGUARDAR');
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [activeStrategy, setActiveStrategy] = useState<'g1' | 'g2'>('g1');
@@ -20,7 +19,6 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
   const [patternMax, setPatternMax] = useState(5);
   const [prediction, setPrediction] = useState<string>('AGUARDAR');
   const [mentalistaTop, setMentalistaTop] = useState<any[]>([]);
-  const [mentalistaScore, setMentalistaScore] = useState<number>(0);
 
   const suits = ['♠️', '♥️', '♦️', '♣️'];
   const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
@@ -82,7 +80,7 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
 
   // ✅ MENTALISTA - ANALISA O SHOE
   const analyzeShoe = (history: any[]) => {
-    if (!history || history.length === 0) return { topCards: [], score: 0 };
+    if (!history || history.length === 0) return { topCards: [] };
 
     const counts: Record<string, number> = {};
     for (const suit of suits) {
@@ -132,23 +130,19 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
       .sort((a, b) => b.remaining - a.remaining);
 
     const top5 = ranked.slice(0, 5);
-    const score = totalRemaining > 0 ? (cards / totalShoeCards) * 100 : 0;
 
-    return { topCards: top5, score };
+    return { topCards: top5 };
   };
 
   // ✅ CALCULA O SCORE COMBINADO
   const calculateCombinedScore = (patternNext: string, patternConfidence: number, mentalistaData: any) => {
-    // Pesos: 60% padrão, 40% mentalista
     const patternWeight = 0.6;
     const mentalistaWeight = 0.4;
 
-    // Mapeia a previsão do mentalista para CASA/VISITANTE/EMPATE
     let mentalistaPrediction = 'AGUARDAR';
     let mentalistaScore = 0;
 
     if (mentalistaData.topCards && mentalistaData.topCards.length > 0) {
-      // Conta quantas cartas de cada tipo estão no top 5
       let casaCount = 0, visitanteCount = 0, empateCount = 0;
       for (const card of mentalistaData.topCards) {
         const rank = card.card.slice(0, -1);
@@ -174,8 +168,6 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
       }
     }
 
-    // Combina os scores
-    let combined = {};
     let bestName = 'AGUARDAR';
     let bestScore = 0;
 
@@ -260,14 +252,12 @@ export function GruposUnificado({ history, stats }: GruposUnificadoProps) {
     // ✅ 2. ANALISA O SHOE (MENTALISTA)
     const mentalistaData = analyzeShoe(history);
     setMentalistaTop(mentalistaData.topCards);
-    setMentalistaScore(mentalistaData.score);
 
     // ✅ 3. COMBINA OS SCORES
     const combined = calculateCombinedScore(nextName, bestConfidence, mentalistaData);
     
     setPrediction(combined.prediction);
     setPatterns(foundPatterns);
-    setNextBet(combined.prediction !== 'AGUARDAR' ? combined.prediction : 'AGUARDAR');
     setPatternStrength(strength);
     setPatternMax(maxSize);
 
