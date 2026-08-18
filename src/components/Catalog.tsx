@@ -8,44 +8,32 @@ export function Catalog({ history }: { history: any[] }) {
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const [cardHistory, setCardHistory] = useState<any[]>([]);
   const [shoeNumber, setShoeNumber] = useState(1);
-  const [lastProcessed, setLastProcessed] = useState<string>('');
 
   const suits = ['♠️', '♥️', '♦️', '♣️'];
   const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
   const totalShoeCards = 416;
   const copiesPerCard = 8;
 
-  // ✅ RESETA O CATÁLOGO
-  const resetCatalog = (newShoeNumber?: number) => {
-    const empty: Record<string, number> = {};
-    for (const suit of suits) {
-      for (const rank of ranks) {
-        empty[`${rank}${suit}`] = 0;
-      }
-    }
-    setCardCounts(empty);
-    setTotalRounds(0);
-    setTotalCards(0);
-    if (newShoeNumber !== undefined) {
-      setShoeNumber(newShoeNumber);
-    }
-  };
-
   useEffect(() => {
-    console.log('📊 Catalog - Atualizando com', history?.length || 0, 'rodadas');
-
-    // ✅ SE NÃO TEM HISTÓRICO, MOSTRA VAZIO
+    console.log('📊 Catalog - RECEBEU history:', history?.length || 0, 'rodadas');
+    
     if (!history || history.length === 0) {
-      resetCatalog(1);
+      console.log('⚠️ Catalog - SEM HISTÓRICO');
+      const empty: Record<string, number> = {};
+      for (const suit of suits) {
+        for (const rank of ranks) {
+          empty[`${rank}${suit}`] = 0;
+        }
+      }
+      setCardCounts(empty);
+      setTotalRounds(0);
+      setTotalCards(0);
+      setShoeNumber(1);
       return;
     }
 
-    // ✅ PREVINE PROCESSAMENTO DUPLICADO
-    const historyKey = history.map((h: any) => h.horario).join(',');
-    if (historyKey === lastProcessed) {
-      return;
-    }
-    setLastProcessed(historyKey);
+    // ✅ MOSTRA AS ÚLTIMAS 5 RODADAS PARA DEBUG
+    console.log('📋 Últimas 5 rodadas:', history.slice(0, 5));
 
     const counts: Record<string, number> = {};
     for (const suit of suits) {
@@ -57,15 +45,13 @@ export function Catalog({ history }: { history: any[] }) {
     let rounds = 0;
     let cards = 0;
     let shoeNum = 1;
-    let foundShoeChange = false;
 
     // ✅ PROCESSA DO MAIS RECENTE PARA O MAIS ANTIGO
     const reversedHistory = [...history].reverse();
     
     for (const round of reversedHistory) {
-      // ✅ SE ENCONTROU TROCA DE BARALHO, ZERA E PARA
+      // ✅ SE ENCONTROU TROCA DE BARALHO, ZERA E INCREMENTA
       if (round.troca_de_baralho) {
-        foundShoeChange = true;
         shoeNum++;
         console.log('🔄 TROCA DE BARALHO #', shoeNum);
         // Reseta contagens
@@ -79,23 +65,22 @@ export function Catalog({ history }: { history: any[] }) {
         continue;
       }
 
-      // ✅ SÓ CONTA SE NÃO TIVER TROCA DE BARALHO DEPOIS
-      if (!foundShoeChange) {
-        rounds++;
-        
-        if (round.home && counts[round.home] !== undefined) {
-          counts[round.home] = (counts[round.home] || 0) + 1;
-          cards++;
-        }
-        
-        if (round.away && counts[round.away] !== undefined) {
-          counts[round.away] = (counts[round.away] || 0) + 1;
-          cards++;
-        }
+      // ✅ CONTA AS CARTAS
+      rounds++;
+      
+      if (round.home && counts[round.home] !== undefined) {
+        counts[round.home] = (counts[round.home] || 0) + 1;
+        cards++;
+      }
+      
+      if (round.away && counts[round.away] !== undefined) {
+        counts[round.away] = (counts[round.away] || 0) + 1;
+        cards++;
       }
     }
 
     console.log('📊 Catalog - SHOE #', shoeNum, '|', cards, 'cartas em', rounds, 'rodadas');
+    console.log('📊 Catalog - Cartas com contagem > 0:', Object.keys(counts).filter(k => counts[k] > 0).length);
     
     setShoeNumber(shoeNum);
     setCardCounts(counts);
@@ -110,6 +95,7 @@ export function Catalog({ history }: { history: any[] }) {
     }
   }, [history, selectedCard]);
 
+  // ✅ CARDS COM CONTAGEM > 0
   const sortedCards = Object.entries(cardCounts)
     .filter(([_, count]) => count > 0)
     .sort((a, b) => {
