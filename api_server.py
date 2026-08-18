@@ -5,7 +5,9 @@ import logging
 import os
 import urllib.parse
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from db import db
 from jwt_helper import jwt_manager
 from session_service import session_service
@@ -55,6 +57,13 @@ SLUG_SOURCE_MAP = {
 PLAYTECH_MAP = {
     'rol;rol_brazilianrol': 'playtech/roulette',
 }
+
+# ========== CONEXÃO COM O BANCO ==========
+def get_db_connection():
+    DATABASE_URL = os.getenv('DATABASE_URL')
+    if not DATABASE_URL:
+        DATABASE_URL = f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
+    return psycopg2.connect(DATABASE_URL)
 
 @app.route('/api/auth/login', methods=['POST'])
 def api_login():
@@ -142,9 +151,6 @@ def api_start_game():
         if not payload:
             return jsonify({'error': 'Token invalido'}), 401
 
-        # ======================================================
-        # 🔥 1. SE FOR PLAYTECH, GERA O LINK DE VIDEO MANUALMENTE
-        # ======================================================
         if slug == 'playtech/roulette' or slug == 'rol;rol_brazilianrol':
             print(f"   Playtech detectado. Gerando link de video...")
             
@@ -173,9 +179,6 @@ def api_start_game():
                 'iframe_url': game_url
             }), 200
 
-        # ======================================================
-        # 🔥 2. SE FOR EVOLUTION, USA A API NORMAL
-        # ======================================================
         auth_header_externo = session.headers.get('Authorization')
         if not auth_header_externo:
             return jsonify({'error': 'Token externo nao encontrado'}), 401
@@ -256,116 +259,54 @@ def get_live_numbers():
         print(f"Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
+# ============================================================
+# 🎯 ROTAS DO FOOTBALL STUDIO COM BANCO DE DADOS
+# ============================================================
 
-# ============================================================
-# 🎯 ROTA DO FOOTBALL STUDIO - HISTORICO
-# ============================================================
 @app.route('/api/football-studio/history', methods=['GET'])
-def get_football_studio_history():
+def get_football_history_db():
+    """Retorna o histórico do banco de dados"""
     try:
-        logger.info("📊 Buscando historico do Football Studio...")
-        response = requests.get('https://app.domcroupier.com/inc/historico.php', timeout=10)
+        limit = int(request.args.get('limit', 500))
         
-        if response.status_code == 200:
-            data = response.json()
-            logger.info(f"✅ {len(data)} registros encontrados")
-            return jsonify({
-                'success': True,
-                'total': len(data),
-                'history': data,
-                'timestamp': datetime.now().isoformat()
-            }), 200
-        else:
-            logger.error(f"❌ Erro na API externa: {response.status_code}")
-            return jsonify({'error': 'Falha ao buscar dados'}), 500
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cursor.execute("""
+            SELECT horario, home, away, resultado, troca_de_baralho
+            FROM football_history
+            ORDER BY horario DESC
+            LIMIT %s
+        """, (limit,))
+        
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        history = []
+        for row in rows:
+            history.append({
+                'horario': row['horario'].isoformat() if hasattr(row['horario'], 'isoformat') else str(row['horario']),
+                'home': row['home'],
+                'away': row['away'],
+                'resultado': row['resultado'],
+                'troca_de_baralho': row['troca_de_baralho']
+            })
+        
+        return jsonify({
+            'success': True,
+            'total': len(history),
+            'history': history,
+            'timestamp': datetime.now().isoformat()
+        }), 200
+        
     except Exception as e:
-        logger.error(f"❌ Erro no Football Studio: {e}")
+        logger.error(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
-
-@app.route('/api/auth/validate', methods=['GET'])
-def api_validate():
-    try:
-        auth_header = request.headers.get('Authorization')
-        if auth_header:
-            return jsonify({'valid': True}), 200
-        return jsonify({'valid': False}), 200
-    except:
-        return jsonify({'valid': False}), 200
-
-
-@app.route('/api/auth/logout', methods=['POST'])
-def api_logout():
-    apigames.stop_polling()
-    try:
-        auth_header = request.headers.get('Authorization')
-        if auth_header:
-            token = auth_header.replace('Bearer ', '')
-            payload = jwt_manager.verify_token(token)
-            if payload:
-                session_service.deactivate_session(payload.get('user_id'))
-    except:
-        pass
-    return jsonify({'success': True}), 200
-
-
-@app.route('/api/auth/refresh', methods=['POST'])
-def api_refresh():
-    try:
-        data = request.json
-        refresh_token = data.get('refresh_token')
-        if not refresh_token:
-            return jsonify({'error': 'Refresh token nao fornecido'}), 400
-        result = session_service.refresh_access_token(refresh_token)
-        if not result:
-            return jsonify({'error': 'Refresh token invalido'}), 401
-        return jsonify(result), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
-def serve_frontend(path):
-    if path.startswith('api/'):
-        return jsonify({'error': 'Not found'}), 404
-    if path and os.path.exists(os.path.join('dist', path)):
-        return send_from_directory('dist', path)
-    return send_from_directory('dist', 'index.html')
-
-
-if __name__ == '__main__':
-    print("=" * 70)
-    print("API PROXY - PLAYTECH FIX + FOOTBALL STUDIO")
-    print("=" * 70)
-    print(f"API Base: {API_BASE}")
-    print(f"Polling: 2 segundos")
-    print(f"Rodando em: http://localhost:5000")
-    print("=" * 70)
-    print("Mapeamento Playtech:")
-    for gamecode, slug in PLAYTECH_MAP.items():
-        print(f"   {gamecode} -> {slug}")
-    print("=" * 70)
-    print("Rotas disponiveis:")
-    print("   /api/auth/login")
-    print("   /api/start-game-v2")
-    print("   /api/roulette/live")
-    print("   /api/football-studio/history  🆕")
-    print("   /api/auth/validate")
-    print("   /api/auth/logout")
-    print("   /api/auth/refresh")
-    print("=" * 70)
-    
-    try:
-        session_service.cleanup_expired()
-    except:
-        pass
-    
-    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
-
-# ========== ROTAS DO FOOTBALL STUDIO COM BANCO ==========
 @app.route('/api/football-studio/save', methods=['POST'])
 def save_football_history():
+    """Salva o histórico no banco de dados"""
     try:
         data = request.json
         history = data.get('history', [])
@@ -373,9 +314,11 @@ def save_football_history():
         if not history:
             return jsonify({'error': 'Sem dados'}), 400
         
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
         saved = 0
         for round in history:
-            # Verifica duplicata
             cursor.execute("""
                 SELECT id FROM football_history 
                 WHERE horario = %s AND home = %s AND away = %s
@@ -396,194 +339,133 @@ def save_football_history():
                 saved += 1
         
         conn.commit()
-        print(f"✅ {saved} rodadas salvas no banco")
+        cursor.close()
+        conn.close()
+        
+        logger.info(f"✅ {saved} rodadas salvas no banco")
         
         return jsonify({'success': True, 'saved': saved}), 200
         
     except Exception as e:
-        print(f"❌ Erro: {e}")
+        logger.error(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/football-studio/history', methods=['GET'])
-def get_football_history_db():
+@app.route('/api/football-studio/populate', methods=['POST'])
+def populate_football_history():
+    """Busca da API externa e salva no banco"""
     try:
-        limit = int(request.args.get('limit', 500))
+        response = requests.get('https://app.domcroupier.com/inc/historico.php', timeout=10)
         
-        cursor.execute("""
-            SELECT horario, home, away, resultado, troca_de_baralho
-            FROM football_history
-            ORDER BY horario DESC
-            LIMIT %s
-        """, (limit,))
+        if response.status_code != 200:
+            return jsonify({'error': 'Falha ao buscar dados externos'}), 500
         
-        rows = cursor.fetchall()
+        data = response.json()
         
-        history = []
-        for row in rows:
-            history.append({
-                'horario': row[0],
-                'home': row[1],
-                'away': row[2],
-                'resultado': row[3],
-                'troca_de_baralho': row[4]
-            })
+        if not data or len(data) == 0:
+            return jsonify({'error': 'Sem dados da API externa'}), 404
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        saved = 0
+        for round in data:
+            cursor.execute("""
+                SELECT id FROM football_history 
+                WHERE horario = %s AND home = %s AND away = %s
+            """, (round['horario'], round['home'], round['away']))
+            
+            if not cursor.fetchone():
+                cursor.execute("""
+                    INSERT INTO football_history 
+                    (horario, home, away, resultado, troca_de_baralho)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (
+                    round['horario'],
+                    round['home'],
+                    round['away'],
+                    round.get('resultado'),
+                    round.get('troca_de_baralho', False)
+                ))
+                saved += 1
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
         
         return jsonify({
             'success': True,
-            'total': len(history),
-            'history': history
+            'saved': saved,
+            'total': len(data),
+            'message': f'{saved} rodadas salvas no banco'
         }), 200
         
-    except Exception as e:
-        print(f"❌ Erro: {e}")
-        return jsonify({'error': str(e)}), 500
-
-# ========== SISTEMA DE RENOVAÇÃO DE TOKEN ==========
-class EvolutionTokenManager:
-    def __init__(self):
-        self.tokens = {}
-    
-    def generate_token(self, user_id: str, slug: str) -> dict:
-        try:
-            external_token = session.headers.get('Authorization')
-            if not external_token:
-                return {'error': 'Token externo não encontrado'}
-            
-            response = session.get(
-                f'{API_BASE}/api/start-game-v2',
-                params={
-                    'slug': slug,
-                    'platform': 'WEB',
-                    'use_demo': 0,
-                    'source': 'watchIsAuthenticated'
-                },
-                timeout=15
-            )
-            
-            if response.status_code != 200:
-                return {'error': f'Erro na API: {response.status_code}'}
-            
-            data = response.json()
-            game_url = data.get('iframe_url') or data.get('gameURL')
-            
-            if not game_url:
-                return {'error': 'URL do jogo não encontrada'}
-            
-            import re
-            match = re.search(r'EVOSESSIONID=([^&]+)', game_url)
-            evo_session_id = match.group(1) if match else None
-            
-            expires_at = datetime.now() + timedelta(minutes=15)
-            
-            cursor.execute("""
-                INSERT INTO evolution_tokens 
-                (user_id, evo_session_id, game_url, expires_at, slug)
-                VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (user_id) 
-                DO UPDATE SET 
-                    evo_session_id = EXCLUDED.evo_session_id,
-                    game_url = EXCLUDED.game_url,
-                    expires_at = EXCLUDED.expires_at,
-                    updated_at = CURRENT_TIMESTAMP
-            """, (user_id, evo_session_id, game_url, expires_at, slug))
-            
-            conn.commit()
-            
-            return {
-                'success': True,
-                'evo_session_id': evo_session_id,
-                'game_url': game_url,
-                'expires_at': expires_at.isoformat()
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ Erro ao gerar token: {e}")
-            return {'error': str(e)}
-    
-    def refresh_token(self, user_id: str, slug: str) -> dict:
-        cursor.execute("""
-            SELECT evo_session_id, game_url, expires_at 
-            FROM evolution_tokens 
-            WHERE user_id = %s
-        """, (user_id,))
-        
-        row = cursor.fetchone()
-        
-        if row:
-            expires_at = row[2]
-            if expires_at and datetime.now() < expires_at:
-                return {
-                    'success': True,
-                    'evo_session_id': row[0],
-                    'game_url': row[1],
-                    'expires_at': expires_at.isoformat()
-                }
-        
-        return self.generate_token(user_id, slug)
-
-token_manager = EvolutionTokenManager()
-
-@app.route('/api/evolution/refresh-token', methods=['POST'])
-def refresh_evolution_token():
-    try:
-        auth_header = request.headers.get('Authorization')
-        if not auth_header:
-            return jsonify({'error': 'Token não encontrado'}), 401
-        
-        token = auth_header.replace('Bearer ', '')
-        payload = jwt_manager.verify_token(token)
-        
-        if not payload:
-            return jsonify({'error': 'Token inválido'}), 401
-        
-        user_id = payload.get('user_id')
-        data = request.json
-        slug = data.get('slug', 'evolution/lightning-roulette')
-        
-        result = token_manager.refresh_token(user_id, slug)
-        
-        if result.get('success'):
-            return jsonify(result), 200
-        else:
-            return jsonify(result), 500
-            
     except Exception as e:
         logger.error(f"❌ Erro: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/evolution/status', methods=['GET'])
-def get_evolution_status():
+# ============================================================
+# ROTAS DE AUTENTICAÇÃO
+# ============================================================
+
+@app.route('/api/auth/validate', methods=['GET'])
+def api_validate():
     try:
         auth_header = request.headers.get('Authorization')
-        if not auth_header:
-            return jsonify({'error': 'Token não encontrado'}), 401
-        
-        token = auth_header.replace('Bearer ', '')
-        payload = jwt_manager.verify_token(token)
-        
-        if not payload:
-            return jsonify({'error': 'Token inválido'}), 401
-        
-        user_id = payload.get('user_id')
-        
-        cursor.execute("""
-            SELECT evo_session_id, game_url, expires_at, slug, updated_at
-            FROM evolution_tokens 
-            WHERE user_id = %s
-        """, (user_id,))
-        
-        row = cursor.fetchone()
-        
-        if row:
-            return jsonify({
-                'success': True,
-                'has_token': bool(row[0]),
-                'slug': row[3],
-                'expires_at': row[2].isoformat() if row[2] else None,
-                'updated_at': row[4].isoformat() if row[4] else None
-            }), 200
-        
-        return jsonify({'success': True, 'has_token': False}), 200
-        
+        if auth_header:
+            return jsonify({'valid': True}), 200
+        return jsonify({'valid': False}), 200
+    except:
+        return jsonify({'valid': False}), 200
+
+@app.route('/api/auth/logout', methods=['POST'])
+def api_logout():
+    apigames.stop_polling()
+    try:
+        auth_header = request.headers.get('Authorization')
+        if auth_header:
+            token = auth_header.replace('Bearer ', '')
+            payload = jwt_manager.verify_token(token)
+            if payload:
+                session_service.deactivate_session(payload.get('user_id'))
+    except:
+        pass
+    return jsonify({'success': True}), 200
+
+@app.route('/api/auth/refresh', methods=['POST'])
+def api_refresh():
+    try:
+        data = request.json
+        refresh_token = data.get('refresh_token')
+        if not refresh_token:
+            return jsonify({'error': 'Refresh token nao fornecido'}), 400
+        result = session_service.refresh_access_token(refresh_token)
+        if not result:
+            return jsonify({'error': 'Refresh token invalido'}), 401
+        return jsonify(result), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_frontend(path):
+    if path.startswith('api/'):
+        return jsonify({'error': 'Not found'}), 404
+    if path and os.path.exists(os.path.join('dist', path)):
+        return send_from_directory('dist', path)
+    return send_from_directory('dist', 'index.html')
+
+if __name__ == '__main__':
+    print("=" * 70)
+    print("API PROXY - PLAYTECH FIX + FOOTBALL STUDIO + BANCO")
+    print("=" * 70)
+    print(f"API Base: {API_BASE}")
+    print(f"Polling: 2 segundos")
+    print(f"Rodando em: http://localhost:5000")
+    print("=" * 70)
+    
+    try:
+        session_service.cleanup_expired()
+    except:
+        pass
+    
+    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
