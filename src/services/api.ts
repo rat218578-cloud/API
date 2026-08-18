@@ -205,25 +205,6 @@ class ApiClient {
 
   async getGameLink(slug: string): Promise<string | null> {
     // ✅ INTERCEPTOR PARA RENOVAR TOKEN
-    const refreshToken = async () => {
-      const refresh = localStorage.getItem("refresh_token");
-      if (!refresh) return null;
-      try {
-        const response = await fetch("/api/auth/refresh", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ refresh_token: refresh })
-        });
-        if (response.ok) {
-          const data = await response.json();
-          localStorage.setItem("access_token", data.access_token);
-          return data.access_token;
-        }
-        return null;
-      } catch {
-        return null;
-      }
-    };
     console.log('🎮 Buscando link para:', slug);
     console.log('🔑 Token atual:', this.accessToken ? this.accessToken.substring(0, 30) + '...' : 'Nenhum');
     
