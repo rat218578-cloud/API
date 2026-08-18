@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Loader2, RefreshCw, X, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
+import { RefreshCw, X, Maximize2, Minimize2, ExternalLink } from 'lucide-react';
 import { gameLinkService, ROLETAS } from '../services/gameLinkService';
 
 interface LiveGameViewProps {
