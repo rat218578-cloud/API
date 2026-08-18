@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { footballStudioService, ROLETAS_FOOTBALL } from '../services/footballStudioService';
 import { LiveGameView } from './LiveGameView';
 import { Catalog } from "./Catalog";
-import { Strategies } from './Strategies';
+import { GruposUnificado } from "./GruposUnificado";
 
 export function FootballStudioDashboard() {
   const [activeRoom, setActiveRoom] = useState(ROLETAS_FOOTBALL[0].id);
@@ -178,6 +178,7 @@ export function FootballStudioDashboard() {
         <div className="xl:col-span-3 space-y-4">
           {/* ShoeCatalog (já inclui o Catálogo) */}
           {isRealData && <Catalog history={history} />}
+          {isRealData && <GruposUnificado history={history} stats={stats} />}
 
           {/* Estratégias G1/G2 */}
           {isRealData && <Strategies history={history} />}
@@ -207,45 +208,6 @@ export function FootballStudioDashboard() {
           {isRealData ? (
             <>
               <div className="bg-bg-card border border-border-default rounded-2xl p-4">
-                <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">📈 Grupos</h3>
-                <div className="text-[10px] text-text-muted uppercase mb-2">Sequência atual</div>
-                <div className="p-3 rounded-xl bg-gradient-to-r from-bg-tertiary to-bg-secondary border border-border-default text-center mb-3">
-                  <div className="text-xs font-bold text-text-primary">
-                    <span className="flex items-center justify-center gap-2">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getResultadoColor(history.find((h: any) => !h.troca_de_baralho)?.resultado || '')}`}>
-                        {lastResult}
-                      </span>
-                      <span className="text-[8px] text-emerald-400">● REAL</span>
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-center gap-3 text-center">
-                  {lastThree.map((num, idx) => (
-                    <div key={idx} className="text-center">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
-                        num !== '--' ? (
-                          num === 'C' ? 'bg-emerald-500/20 text-emerald-400' :
-                          num === 'V' ? 'bg-red-500/20 text-red-400' :
-                          'bg-yellow-500/20 text-yellow-400'
-                        ) : 'bg-bg-tertiary text-text-muted'
-                      }`}>{num}</div>
-                      <div className="text-[8px] text-text-muted mt-0.5">{idx === 0 ? 'Último' : idx === 1 ? 'Penúlt' : 'Antep'}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3 p-2 rounded-lg bg-bg-tertiary border border-border-default text-center">
-                  <div className="text-[10px] text-text-muted">Tendência</div>
-                  <div className="text-sm font-bold text-emerald-400">⬆ Forte</div>
-                </div>
-              </div>
-
-              <div className="bg-bg-card border border-border-default rounded-2xl p-4">
-                <h3 className="font-bold text-text-primary text-xs uppercase tracking-wider mb-3">🎯 Assertividade</h3>
-                <div className="space-y-3">
-                  {[
-                    { id: 'casa', name: 'CASA', value: stats.total > 0 ? ((stats.wins / stats.total) * 100).toFixed(1) : 0, color: '#10b981' },
-                    { id: 'empate', name: 'EMPATE', value: stats.total > 0 ? ((stats.draws / stats.total) * 100).toFixed(1) : 0, color: '#f59e0b' },
-                    { id: 'visitante', name: 'VISITANTE', value: stats.total > 0 ? ((stats.losses / stats.total) * 100).toFixed(1) : 0, color: '#ef4444' }
                   ].map((s) => (
                     <div key={s.id}>
                       <div className="flex items-center justify-between text-xs mb-1">
