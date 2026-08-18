@@ -8,6 +8,7 @@ export function Catalog({ history }: { history: any[] }) {
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const [cardHistory, setCardHistory] = useState<any[]>([]);
   const [shoeNumber, setShoeNumber] = useState(1);
+  const [lastProcessed, setLastProcessed] = useState<string>('');
 
   const suits = ['♠️', '♥️', '♦️', '♣️'];
   const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
@@ -15,7 +16,7 @@ export function Catalog({ history }: { history: any[] }) {
   const copiesPerCard = 8;
 
   // ✅ RESETA O CATÁLOGO
-  const resetCatalog = () => {
+  const resetCatalog = (newShoeNumber?: number) => {
     const empty: Record<string, number> = {};
     for (const suit of suits) {
       for (const rank of ranks) {
@@ -25,17 +26,26 @@ export function Catalog({ history }: { history: any[] }) {
     setCardCounts(empty);
     setTotalRounds(0);
     setTotalCards(0);
-    setShoeNumber(prev => prev + 1);
-    console.log('🔄 CATÁLOGO ZERADO - SHOE #', shoeNumber + 1);
+    if (newShoeNumber !== undefined) {
+      setShoeNumber(newShoeNumber);
+    }
   };
 
   useEffect(() => {
     console.log('📊 Catalog - Atualizando com', history?.length || 0, 'rodadas');
 
+    // ✅ SE NÃO TEM HISTÓRICO, MOSTRA VAZIO
     if (!history || history.length === 0) {
-      resetCatalog();
+      resetCatalog(1);
       return;
     }
+
+    // ✅ PREVINE PROCESSAMENTO DUPLICADO
+    const historyKey = history.map((h: any) => h.horario).join(',');
+    if (historyKey === lastProcessed) {
+      return;
+    }
+    setLastProcessed(historyKey);
 
     const counts: Record<string, number> = {};
     for (const suit of suits) {
@@ -46,17 +56,19 @@ export function Catalog({ history }: { history: any[] }) {
 
     let rounds = 0;
     let cards = 0;
+    let shoeNum = 1;
     let foundShoeChange = false;
 
     // ✅ PROCESSA DO MAIS RECENTE PARA O MAIS ANTIGO
     const reversedHistory = [...history].reverse();
     
     for (const round of reversedHistory) {
-      // ✅ SE ENCONTROU TROCA DE BARALHO, ZERA E PARA DE CONTAR
+      // ✅ SE ENCONTROU TROCA DE BARALHO, ZERA E PARA
       if (round.troca_de_baralho) {
         foundShoeChange = true;
-        console.log('🔄 TROCA DE BARALHO DETECTADA - ZERANDO CONTAGEM');
-        // Reseta contagens e para de processar
+        shoeNum++;
+        console.log('🔄 TROCA DE BARALHO #', shoeNum);
+        // Reseta contagens
         for (const suit of suits) {
           for (const rank of ranks) {
             counts[`${rank}${suit}`] = 0;
@@ -64,8 +76,7 @@ export function Catalog({ history }: { history: any[] }) {
         }
         rounds = 0;
         cards = 0;
-        setShoeNumber(prev => prev + 1);
-        break; // ✅ PARA DE PROCESSAR QUANDO ENCONTRA TROCA
+        continue;
       }
 
       // ✅ SÓ CONTA SE NÃO TIVER TROCA DE BARALHO DEPOIS
@@ -84,8 +95,9 @@ export function Catalog({ history }: { history: any[] }) {
       }
     }
 
-    console.log('📊 Catalog - SHOE #', shoeNumber, '|', cards, 'cartas em', rounds, 'rodadas');
+    console.log('📊 Catalog - SHOE #', shoeNum, '|', cards, 'cartas em', rounds, 'rodadas');
     
+    setShoeNumber(shoeNum);
     setCardCounts(counts);
     setTotalRounds(rounds);
     setTotalCards(cards);
