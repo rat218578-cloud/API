@@ -362,3 +362,78 @@ if __name__ == '__main__':
         pass
     
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+
+# ========== ROTAS DO FOOTBALL STUDIO COM BANCO ==========
+@app.route('/api/football-studio/save', methods=['POST'])
+def save_football_history():
+    try:
+        data = request.json
+        history = data.get('history', [])
+        
+        if not history:
+            return jsonify({'error': 'Sem dados'}), 400
+        
+        saved = 0
+        for round in history:
+            # Verifica duplicata
+            cursor.execute("""
+                SELECT id FROM football_history 
+                WHERE horario = %s AND home = %s AND away = %s
+            """, (round['horario'], round['home'], round['away']))
+            
+            if not cursor.fetchone():
+                cursor.execute("""
+                    INSERT INTO football_history 
+                    (horario, home, away, resultado, troca_de_baralho)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (
+                    round['horario'],
+                    round['home'],
+                    round['away'],
+                    round.get('resultado'),
+                    round.get('troca_de_baralho', False)
+                ))
+                saved += 1
+        
+        conn.commit()
+        print(f"✅ {saved} rodadas salvas no banco")
+        
+        return jsonify({'success': True, 'saved': saved}), 200
+        
+    except Exception as e:
+        print(f"❌ Erro: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/football-studio/history', methods=['GET'])
+def get_football_history_db():
+    try:
+        limit = int(request.args.get('limit', 500))
+        
+        cursor.execute("""
+            SELECT horario, home, away, resultado, troca_de_baralho
+            FROM football_history
+            ORDER BY horario DESC
+            LIMIT %s
+        """, (limit,))
+        
+        rows = cursor.fetchall()
+        
+        history = []
+        for row in rows:
+            history.append({
+                'horario': row[0],
+                'home': row[1],
+                'away': row[2],
+                'resultado': row[3],
+                'troca_de_baralho': row[4]
+            })
+        
+        return jsonify({
+            'success': True,
+            'total': len(history),
+            'history': history
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Erro: {e}")
+        return jsonify({'error': str(e)}), 500
