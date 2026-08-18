@@ -32,16 +32,6 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
-    // ✅ VERIFICA AUTENTICAÇÃO A CADA 30 SEGUNDOS
-    const authInterval = setInterval(() => {
-      if (isAuthenticated) {
-        const token = localStorage.getItem("access_token");
-        if (!token) {
-          window.location.reload();
-        }
-      }
-    }, 30000);
-    return () => clearInterval(authInterval);
     if (user) {
       localStorage.setItem('user_name', user.name || 'Usuário');
       localStorage.setItem('user_plan', user.plan || 'pro');

@@ -1,11 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  plan: string;
-}
+import type { User } from '../types';
 
 interface AuthState {
   user: User | null;
@@ -96,7 +90,6 @@ export function useAuth() {
       });
 
       if (response.ok) {
-        const data = await response.json();
         const storedUser = getUserFromStorage();
         
         if (storedUser) {
@@ -148,11 +141,18 @@ export function useAuth() {
       localStorage.setItem('access_token', data.access_token);
       localStorage.setItem('refresh_token', data.refresh_token);
       
-      saveUserToStorage(data.user);
+      const user: User = {
+        id: String(data.user.id),
+        email: data.user.email,
+        name: data.user.name,
+        plan: data.user.plan || 'pro'
+      };
+      
+      saveUserToStorage(user);
       
       setState(prev => ({
         ...prev,
-        user: data.user,
+        user: user,
         isAuthenticated: true,
         loading: false
       }));
@@ -206,7 +206,6 @@ export function useAuth() {
       clearTimeout(refreshTimeoutRef.current);
     }
 
-    // ✅ TENTA RENOVAR O TOKEN A CADA 5 MINUTOS
     refreshTimeoutRef.current = setInterval(async () => {
       if (isRefreshingRef.current) return;
       isRefreshingRef.current = true;
@@ -218,13 +217,11 @@ export function useAuth() {
           return;
         }
 
-        // Verifica se o token ainda é válido
         const response = await fetch('/api/auth/validate', {
           headers: { 'Authorization': `Bearer ${accessToken}` }
         });
 
         if (!response.ok) {
-          // Token expirado, tenta renovar
           const newToken = await refreshToken();
           if (newToken) {
             console.log('✅ Token renovado automaticamente!');
@@ -238,13 +235,12 @@ export function useAuth() {
       } finally {
         isRefreshingRef.current = false;
       }
-    }, 5 * 60 * 1000); // 5 minutos
+    }, 5 * 60 * 1000);
   };
 
   // ✅ INICIALIZAÇÃO
   useEffect(() => {
     validateToken().then(() => {
-      // Se estiver autenticado, inicia refresh automático
       if (state.isAuthenticated) {
         startAutoRefresh();
       }
